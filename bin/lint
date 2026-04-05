@@ -8,10 +8,24 @@
 #      commands/*.md
 set -uo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source-path=SCRIPTDIR
-# shellcheck source=../scripts/lib/shell-helpers.sh
-source "$SCRIPT_DIR/../scripts/lib/shell-helpers.sh"
+strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
+
+cd_repo_root() {
+    local root
+    if root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+        cd "$root" || exit 1
+    elif [ -n "${BASH_SOURCE[1]:-}" ]; then
+        cd "$(dirname "${BASH_SOURCE[1]}")/.." || exit 1
+    else
+        cd "$PWD" || exit 1
+    fi
+}
+
+has_closed_frontmatter() {
+    local file="$1"
+    [ "$(head -n1 "$file")" = "---" ] || return 1
+    awk 'FNR>1 && /^---$/ {found=1; exit} END{exit !found}' "$file"
+}
 
 cd_repo_root
 
