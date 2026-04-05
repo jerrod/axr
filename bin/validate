@@ -194,12 +194,16 @@ else
             fi
         fi
 
-        # 3d. plugin-local validate hook — containment-check the file itself
-        # (not just the plugin directory) to prevent symlink escape.
+        # 3d. plugin-local validate hook — refuse symlinks entirely, then
+        # containment-check the resolved parent dir. Rejecting symlinked
+        # validate files eliminates the symlink-escape bypass and also
+        # narrows the TOCTOU window by doing -L + exec back-to-back.
         plugin_validate="$plugin_dir/bin/validate"
-        if [ -f "$plugin_validate" ] && [ -x "$plugin_validate" ]; then
-            pv_real="$(cd "$(dirname "$plugin_validate")" 2>/dev/null && pwd -P)/$(basename "$plugin_validate")" || pv_real=""
-            case "$pv_real" in
+        if [ -L "$plugin_validate" ]; then
+            fail "$plugin_name: bin/validate is a symlink — refusing to execute"
+        elif [ -f "$plugin_validate" ] && [ -x "$plugin_validate" ]; then
+            pv_parent_real="$(cd "$(dirname "$plugin_validate")" 2>/dev/null && pwd -P)" || pv_parent_real=""
+            case "$pv_parent_real" in
                 "$REPO_ROOT_REAL"/*)
                     if "$plugin_validate"; then
                         pass "$plugin_name: plugin-local validate passed"
@@ -208,7 +212,7 @@ else
                     fi
                     ;;
                 *)
-                    fail "$plugin_name: bin/validate resolves outside repo root — skipping"
+                    fail "$plugin_name: bin/validate parent dir resolves outside repo root — skipping"
                     ;;
             esac
         fi
