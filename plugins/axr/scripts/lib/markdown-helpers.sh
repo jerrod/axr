@@ -15,9 +15,12 @@
 # sanitize_evidence <string> — strip NUL + non-printable ASCII control chars
 # from text extracted from target-repo files before embedding in evidence.
 # Preserves tab (0x09), newline (0x0A), carriage return (0x0D).
+# Also strips { and } so target-repo content cannot inject {{template_token}}
+# strings that would trigger infinite substitution loops in aggregate.sh's
+# report renderer.
 # ---------------------------------------------------------------------------
 sanitize_evidence() {
-    printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037'
+    printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037{}'
 }
 
 # ---------------------------------------------------------------------------

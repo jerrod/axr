@@ -1,60 +1,73 @@
 ---
-description: Score the current repo's Agent eXecution Readiness against the AXR rubric.
+description: Score the current repository against the AXR rubric (all 8 dimensions).
 allowed-tools: Bash, Read
 ---
 
-You are the `/axr` orchestrator for the axr plugin. In **Phase 1**, the orchestrator proves the scripts-first architecture end-to-end by scoring **one** dimension (`docs_context`) and printing a summary. When Phase 2 lands, this command runs all 8 dimension checkers and writes `.axr/latest.{json,md}`.
-
-## Strict DO NOT list
-
-- DO NOT run the other 7 dimension checkers. They do not exist yet.
-- DO NOT write `.axr/latest.json` or `.axr/latest.md`. Those land in Phase 2.
-- DO NOT invent scores, synthesise evidence, or fill in judgment criteria yourself.
-- DO NOT edit the rubric or any script while running.
+You are the `/axr` orchestrator. Score the current working directory (target repo) against the AXR rubric and write the results to `.axr/latest.{json,md}`.
 
 ## Steps
 
-1. **Read the rubric.** `Read ${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v1.json`. Extract `version` and the `docs_context` dimension (its `name`, `weight`, and the 5 criteria: id + name + checker_type).
+1. **Verify prerequisites.** Confirm `${CLAUDE_PLUGIN_ROOT}` is set and `${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v1.json` exists. If missing, abort with a clear error.
 
 2. **Detect stack.** Run:
    ```bash
    bash -c 'source "${CLAUDE_PLUGIN_ROOT}/scripts/lib/common.sh" && axr_detect_stack'
    ```
-   The path is double-quoted inside the `bash -c` body so a `CLAUDE_PLUGIN_ROOT` value containing spaces or shell metacharacters does not break the source command. Capture the JSON array.
+   Capture the JSON array of stack tags.
 
-3. **Run the one Phase-1 checker.** From the user's repo root (the current working directory), run:
+3. **Prepare output dirs.** `mkdir -p .axr/tmp .axr/history`.
+
+4. **Run all 8 dimension checkers in parallel.** Each writes its JSON output to `.axr/tmp/<dimension_id>.json` (stdout only) and stderr to a separate file so checker warnings do not corrupt the JSON:
+
    ```bash
-   "${CLAUDE_PLUGIN_ROOT}/scripts/check-docs-context.sh"
-   ```
-   The script path is double-quoted for the same reason. The script emits a single JSON object to stdout. Capture it.
-
-4. **Merge against the rubric.** For each of the 5 criteria in the rubric's `docs_context` dimension, look up the matching criterion in the script output by `id`. Every mechanical criterion must have a non-null integer `score` (0–4). Every judgment criterion must have `score: null` and `deferred: true`.
-
-5. **Compute the partial dimension score.** Sum only the mechanical criterion scores. Max possible for this dimension in Phase 1 = `(mechanical_count × 4)`. Partial dimension score = `(sum / max) × weight`. Report it as "partial (mechanical-only)" — the full score requires judgment criteria, which Phase 1 does not resolve.
-
-6. **Print the summary.** Format:
-   ```
-   AXR Phase 1 — docs_context only
-   Rubric version: <version>
-   Detected stack: <stack JSON>
-   Dimension: docs_context (weight <N>)
-
-   ID                 | Name                          | Score | Evidence | Notes
-   -------------------+-------------------------------+-------+----------+------
-   docs_context.1     | <name>                        | <s>   | <count>  | <notes>
-   docs_context.2     | <name>                        | <s>   | <count>  | <notes>
-   docs_context.3     | <name>                        | DEFER | -        | deferred to judgment
-   docs_context.4     | <name>                        | <s>   | <count>  | <notes>
-   docs_context.5     | <name>                        | DEFER | -        | deferred to judgment
-
-   Mechanical score: <sum>/<max> → partial dimension score: <X.Y>/<weight>
-   PHASE 1: one dimension scored; 7 remaining for Phase 2
+   for checker in "${CLAUDE_PLUGIN_ROOT}"/scripts/check-*.sh; do
+       dim=$(basename "$checker" | sed -E 's/^check-(.+)\.sh$/\1/' | tr - _)
+       "$checker" > ".axr/tmp/$dim.json" 2> ".axr/tmp/$dim.stderr" &
+   done
+   wait
    ```
 
-7. **Stop.** Do not archive, commit, or write output files.
+   After `wait` completes, verify each `.axr/tmp/<dim>.json` is valid JSON:
+   ```bash
+   for f in .axr/tmp/*.json; do
+       jq empty "$f" || { echo "FAIL: $f is invalid JSON" >&2; echo "--- stderr: ---"; cat "${f%.json}.stderr"; echo "--- stdout: ---"; cat "$f"; exit 1; }
+   done
+   ```
+
+   Any non-empty stderr files should be surfaced in the summary but do not fail the run.
+
+5. **Aggregate.** Run:
+   ```bash
+   "${CLAUDE_PLUGIN_ROOT}/scripts/aggregate.sh" .axr/tmp .axr
+   ```
+
+6. **Print summary.** Read `.axr/latest.json` and print:
+   ```
+   AXR Score: <total_score>/100 · <band_label>
+   Rubric: v<rubric_version> · Scored: <scored_at>
+   Phase 2 mechanical-only: 18 of 40 criteria defaulted to 1 (Phase 3 judgment subagents will replace)
+
+   Top 3 blockers:
+   1. <blocker 1>
+   2. <blocker 2>
+   3. <blocker 3>
+
+   Full report: .axr/latest.md
+   Machine-readable: .axr/latest.json
+   ```
+
+7. **Clean up.** `rm -rf .axr/tmp`.
+
+## Notes on Phase 2 scoring
+
+Judgment criteria (18 of 40) are defaulted to score 1 per the "unknown defaults to 1" rubric rule and flagged `defaulted_from_deferred: true`. Phase 3 judgment subagents will replace these defaults with agent-draft scores. A Phase 2 score is a conservative lower-bound estimate.
+
+Phase 2 `/axr` IS the mechanical-only fast path — until Phase 3 adds judgment dispatch, no `--fast` flag is needed because judgment criteria are already defaulted rather than dispatched.
+
+The orchestrator MUST print this disclaimer in its summary output: `"Phase 2 mechanical-only: 18 of 40 criteria defaulted to 1 (Phase 3 judgment subagents will replace)"`.
 
 ## Failure modes
 
-- Script exits non-zero → print stderr verbatim, stop.
-- Script output fails `jq empty` → print raw output, stop.
-- A mechanical criterion is missing from the output, or a judgment criterion is missing the `deferred: true` flag → flag it in the summary under a `SCHEMA VIOLATION` line and still print the rest.
+- Checker script exits non-zero → capture stderr, report in summary, do not fail the run (partial score).
+- Checker JSON fails schema invariants → treat as score 1 for all its criteria, note dimension as incomplete.
+- `aggregate.sh` fails → print its stderr, exit non-zero.

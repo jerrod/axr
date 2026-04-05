@@ -130,6 +130,16 @@ axr_detect_stack() {
 }
 
 # ---------------------------------------------------------------------------
+# axr_has_stack_tag <tag> — check whether the current stack JSON (from a
+# prior axr_detect_stack call stored in $STACK_JSON) contains the given tag.
+# Checker scripts that need stack-conditional logic should set STACK_JSON
+# once at script top, then call axr_has_stack_tag repeatedly.
+# ---------------------------------------------------------------------------
+axr_has_stack_tag() {
+    jq -e --arg t "$1" 'any(.[]; . == $t)' <<<"${STACK_JSON:-[]}" >/dev/null 2>&1
+}
+
+# ---------------------------------------------------------------------------
 # axr_init_output <dimension_id> <reviewer>
 # ---------------------------------------------------------------------------
 axr_init_output() {
