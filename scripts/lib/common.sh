@@ -7,10 +7,15 @@
 #
 # Usage:
 #   source scripts/lib/common.sh
-#   axr_init_output docs_context script:check-docs-context.sh
-#   axr_emit_criterion "docs_context.1" 3 "..." "evidence one" "evidence two"
-#   axr_defer_criterion "docs_context.3" "deferred to judgment"
+#   axr_init_output docs_context "script:check-docs-context.sh"
+#   axr_emit_criterion "docs_context.1" "Root CLAUDE.md" 3 "..." "evidence one"
+#   axr_defer_criterion "docs_context.3" "Local READMEs" "deferred to judgment"
 #   axr_finalize_output   # prints the assembled JSON to stdout
+#
+# Per-criterion reviewer defaults to "script" for mechanical checkers. Judgment
+# subagents that source this lib can override by setting _AXR_CRITERION_REVIEWER
+# before calling axr_emit_criterion, e.g.:
+#   _AXR_CRITERION_REVIEWER="agent-draft" axr_emit_criterion ...
 #
 # Intentionally does NOT set -e. Callers decide their own error discipline.
 
@@ -21,6 +26,7 @@ _AXR_DIMENSION_ID=""
 _AXR_REVIEWER=""
 _AXR_STACK_JSON="[]"
 _AXR_CRITERIA_JSON="[]"
+_AXR_CRITERION_REVIEWER="${_AXR_CRITERION_REVIEWER:-script}"
 
 # ---------------------------------------------------------------------------
 # axr_repo_root — echo the repo root, falling back to $PWD.
@@ -35,33 +41,35 @@ axr_repo_root() {
 }
 
 # ---------------------------------------------------------------------------
-# axr_detect_stack — print a JSON array of stack tags detected from markers
-# in $PWD. Recognised tags: python, node, kotlin, ruby, rust, go, markdown.
+# axr_detect_stack — print a JSON array of stack tags detected from marker
+# files in the repo root. Recognised tags: python, node, kotlin, ruby, rust,
+# go, markdown. The markdown tag is only added when no other tags match (so
+# polyglot repos don't carry a weak tag).
 # ---------------------------------------------------------------------------
 axr_detect_stack() {
+    local root
+    root="$(axr_repo_root)"
     local tags=()
-    if [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f setup.py ] || [ -f Pipfile ]; then
+    if [ -f "$root/pyproject.toml" ] || [ -f "$root/requirements.txt" ] || [ -f "$root/setup.py" ] || [ -f "$root/Pipfile" ]; then
         tags+=("python")
     fi
-    if [ -f package.json ]; then
+    if [ -f "$root/package.json" ]; then
         tags+=("node")
     fi
-    if [ -f build.gradle ] || [ -f build.gradle.kts ] || [ -f settings.gradle.kts ]; then
+    if [ -f "$root/build.gradle" ] || [ -f "$root/build.gradle.kts" ] || [ -f "$root/settings.gradle.kts" ]; then
         tags+=("kotlin")
     fi
-    if [ -f Gemfile ] || [ -f "$(printf '%s' "*.gemspec")" ] 2>/dev/null; then
-        if [ -f Gemfile ] || ls ./*.gemspec >/dev/null 2>&1; then
-            tags+=("ruby")
-        fi
+    if [ -f "$root/Gemfile" ] || compgen -G "$root/*.gemspec" >/dev/null 2>&1; then
+        tags+=("ruby")
     fi
-    if [ -f Cargo.toml ]; then
+    if [ -f "$root/Cargo.toml" ]; then
         tags+=("rust")
     fi
-    if [ -f go.mod ]; then
+    if [ -f "$root/go.mod" ]; then
         tags+=("go")
     fi
-    # Markdown is a weak default when the repo is primarily docs.
-    if [ -f README.md ] || [ -f CLAUDE.md ] || [ -f AGENTS.md ]; then
+    # Markdown is a fallback tag — only when no other stack was detected.
+    if [ ${#tags[@]} -eq 0 ] && { [ -f "$root/README.md" ] || [ -f "$root/CLAUDE.md" ] || [ -f "$root/AGENTS.md" ]; }; then
         tags+=("markdown")
     fi
 
@@ -69,7 +77,6 @@ axr_detect_stack() {
         printf '[]\n'
         return 0
     fi
-    # Build JSON array via jq.
     printf '%s\n' "${tags[@]}" | jq -R . | jq -sc .
 }
 
@@ -84,11 +91,17 @@ axr_init_output() {
 }
 
 # ---------------------------------------------------------------------------
-# axr_emit_criterion <id> <score> <notes> [evidence...]
+# axr_emit_criterion <id> <name> <score> <notes> [evidence...]
+#
+# reviewer field defaults to $_AXR_CRITERION_REVIEWER ("script" unless
+# overridden by the caller).
 # ---------------------------------------------------------------------------
 axr_emit_criterion() {
-    local id="$1"; local score="$2"; local notes="$3"
-    shift 3
+    local id="$1"
+    local name="$2"
+    local score="$3"
+    local notes="$4"
+    shift 4
     local evidence_json
     if [ "$#" -eq 0 ]; then
         evidence_json="[]"
@@ -97,23 +110,27 @@ axr_emit_criterion() {
     fi
     _AXR_CRITERIA_JSON="$(jq -c \
         --arg id "$id" \
+        --arg name "$name" \
         --argjson score "$score" \
         --arg notes "$notes" \
         --argjson evidence "$evidence_json" \
-        '. + [{id:$id, score:$score, evidence:$evidence, notes:$notes, reviewer:"script"}]' \
+        --arg reviewer "$_AXR_CRITERION_REVIEWER" \
+        '. + [{id:$id, name:$name, score:$score, evidence:$evidence, notes:$notes, reviewer:$reviewer}]' \
         <<<"$_AXR_CRITERIA_JSON")"
 }
 
 # ---------------------------------------------------------------------------
-# axr_defer_criterion <id> [notes]
+# axr_defer_criterion <id> <name> [notes]
 # ---------------------------------------------------------------------------
 axr_defer_criterion() {
     local id="$1"
-    local notes="${2:-Deferred to judgment subagent}"
+    local name="$2"
+    local notes="${3:-Deferred to judgment subagent}"
     _AXR_CRITERIA_JSON="$(jq -c \
         --arg id "$id" \
+        --arg name "$name" \
         --arg notes "$notes" \
-        '. + [{id:$id, score:null, deferred:true, reviewer:"judgment", notes:$notes}]' \
+        '. + [{id:$id, name:$name, score:null, evidence:[], notes:$notes, reviewer:"judgment", deferred:true}]' \
         <<<"$_AXR_CRITERIA_JSON")"
 }
 
