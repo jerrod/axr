@@ -1,7 +1,7 @@
 {
   "name": "axr",
   "version": "0.1.0",
-  "description": "Agent eXecution Readiness scoring. Scores a repository against the AXR rubric and produces machine-readable and human-readable reports.",
+  "description": "Agent eXecution Readiness scoring. Grades a repository against a 100-point rubric across 8 dimensions with deterministic bash checkers and judgment subagents.",
   "author": {
     "name": "jerrod"
   },
@@ -13,33 +13,5 @@
     "code-quality",
     "rubric",
     "claude-code"
-  ],
-  "commands": [
-    {
-      "name": "axr",
-      "description": "Run a full AXR assessment on the current repository",
-      "file": "commands/axr.md"
-    },
-    {
-      "name": "axr-check",
-      "description": "Run AXR assessment for a single dimension — scheduled for Phase 2, stub in Phase 1",
-      "file": "commands/axr-check.md"
-    },
-    {
-      "name": "axr-diff",
-      "description": "Compare current AXR score to the previous run — scheduled for Phase 4, stub in Phase 1",
-      "file": "commands/axr-diff.md"
-    }
-  ],
-  "config": {
-    "rubric_path": "rubric/rubric.v1.json",
-    "output_dir": ".axr",
-    "history_dir": ".axr/history",
-    "timebox_minutes": 20,
-    "evidence_required_above_score": 1
-  },
-  "requirements": {
-    "tools": ["view", "bash_tool", "str_replace", "create_file"],
-    "external": ["gh", "git"]
-  }
+  ]
 }

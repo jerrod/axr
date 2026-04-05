@@ -6,7 +6,10 @@
 #   2. .claude-plugin/marketplace.json has name + owner + plugins[] with
 #      name/description/source/category on every entry, relative sources.
 #   3. For each plugin under plugins/*/ (containment-checked against repo root):
-#        a. .claude-plugin/plugin.json has name, version, description, commands.
+#        a. .claude-plugin/plugin.json has name, version, description (Claude
+#           Code auto-discovers commands from commands/*.md — no manifest
+#           registration needed, and including a `commands` field fails
+#           Claude Code's plugin-install schema validation).
 #        b. commands/ directory present with at least one *.md, each having
 #           closed YAML frontmatter with description:.
 #        c. scripts/ directory present with at least one *.sh, all executable.
@@ -136,7 +139,7 @@ else
         if [ ! -f "$plugin_json" ]; then
             fail "$plugin_name: $plugin_json missing"
         else
-            for field in name version description commands; do
+            for field in name version description; do
                 if jq -e --arg f "$field" 'has($f)' "$plugin_json" >/dev/null 2>&1; then
                     pass "$plugin_name: plugin.json has .$field"
                 else
