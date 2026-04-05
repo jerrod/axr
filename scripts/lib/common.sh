@@ -28,8 +28,20 @@ _AXR_STACK_JSON="[]"
 _AXR_CRITERIA_JSON="[]"
 _AXR_CRITERION_REVIEWER="${_AXR_CRITERION_REVIEWER:-script}"
 
+# Plugin root = scripts/lib/../../ = two levels up from this file. Used to
+# locate rubric/rubric.v1.json regardless of target repo CWD.
+_AXR_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+_AXR_RUBRIC_PATH="$_AXR_PLUGIN_ROOT/rubric/rubric.v1.json"
+_AXR_RUBRIC_NAMES_LOADED=0
+declare -gA _AXR_CRITERION_NAME_BY_ID
+
 # ---------------------------------------------------------------------------
-# axr_repo_root — echo the repo root, falling back to $PWD.
+# axr_repo_root — echo the TARGET repo root (the repo being scored), falling
+# back to $PWD. For the PLUGIN root, see $_AXR_PLUGIN_ROOT.
+#
+# Note: a parallel cd_repo_root helper exists in scripts/lib/shell-helpers.sh
+# for bin/ gate scripts that do not source common.sh. If detection strategy
+# changes, update both.
 # ---------------------------------------------------------------------------
 axr_repo_root() {
     local root
@@ -38,6 +50,32 @@ axr_repo_root() {
     else
         printf '%s\n' "$PWD"
     fi
+}
+
+# ---------------------------------------------------------------------------
+# axr_criterion_name <criterion_id> — return the canonical criterion name
+# from the rubric. Rubric is read once and cached in _AXR_CRITERION_NAME_BY_ID.
+# Exits non-zero if the rubric is missing or the id is not found.
+# ---------------------------------------------------------------------------
+axr_criterion_name() {
+    local id="$1"
+    if [ "$_AXR_RUBRIC_NAMES_LOADED" != "1" ]; then
+        if [ ! -f "$_AXR_RUBRIC_PATH" ]; then
+            printf 'axr_criterion_name: rubric not found at %s\n' "$_AXR_RUBRIC_PATH" >&2
+            return 1
+        fi
+        local k v
+        while IFS=$'\t' read -r k v; do
+            _AXR_CRITERION_NAME_BY_ID["$k"]="$v"
+        done < <(jq -r '.dimensions[].criteria[] | [.id, .name] | @tsv' "$_AXR_RUBRIC_PATH")
+        _AXR_RUBRIC_NAMES_LOADED=1
+    fi
+    local name="${_AXR_CRITERION_NAME_BY_ID[$id]:-}"
+    if [ -z "$name" ]; then
+        printf 'axr_criterion_name: no criterion with id=%s in rubric\n' "$id" >&2
+        return 1
+    fi
+    printf '%s\n' "$name"
 }
 
 # ---------------------------------------------------------------------------
