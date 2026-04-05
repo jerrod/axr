@@ -107,10 +107,12 @@ count_setup_commands() {
             line=$0
             sub(/^[[:space:]]+/, "", line)
             if (line == "") next
-            # A markdown heading that wandered into a shell fence is not a
-            # shell command — skip lines starting with ## (not #, which is a
-            # valid bash comment we already skip via the leading-## check).
-            if (line ~ /^##/) next
+            # Skip any line that starts with #. This covers both bash
+            # comments (# install deps) and markdown headings that wandered
+            # into a fence (## heading). Trailing-comment lines like
+            # `npm install # note` still count because they do not start
+            # with #.
+            if (line ~ /^#/) next
             count++
             next
         }
