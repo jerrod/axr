@@ -4,9 +4,9 @@
 
 ## Context
 
-Building `axr`, a Claude Code plugin that scores a repository's **Agent eXecution Readiness (AXR)** against a defined rubric.  v1 of a larger initiative — a GitHub App will follow later, so scoring logic should be extractable.
+Building `axr`, a Claude Code plugin that scores a repository's **Agent eXecution Readiness (AXR)** against a defined rubric. v1 of a larger initiative — a GitHub App will follow later, so scoring logic should be extractable.
 
-The plugin must work today for a single repo, run from inside a Claude Code web session, and produce both a human-readable report and a machine-readable JSON artifact. Do not build the GitHub App, a shared `axr-core` library, or a dashboard in this phase. Inline the logic; premature abstraction is the enemy.
+The plugin must work today for a single repo, run from inside a Claude Code session, and produce both a human-readable report and a machine-readable JSON artifact. Do not build the GitHub App, a shared `axr-core` library, or a dashboard in this phase. Inline the logic; premature abstraction is the enemy.
 
 ## The Rubric (v1.0, finalized)
 
@@ -199,7 +199,7 @@ Before running, detect the repo's stack to pick the right tools:
 - **Ruby:** `Gemfile`
 - **Multi-language:** detect all, run appropriate checkers per subtree
 
- Fall back to language-agnostic checks on unsupported stacks and note the limitation.
+Fall back to language-agnostic checks on unsupported stacks and note the limitation in the report.
 
 ## Operational rules (enforced by command prompts)
 

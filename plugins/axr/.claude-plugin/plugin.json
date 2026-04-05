@@ -1,19 +1,18 @@
 {
   "name": "axr",
   "version": "0.1.0",
-  "description": "Agent eXecution Readiness scoring for repositories. Scores a repo against the AXR rubric and produces machine-readable and human-readable reports.",
+  "description": "Agent eXecution Readiness scoring. Scores a repository against the AXR rubric and produces machine-readable and human-readable reports.",
   "author": {
-    "name": "jerrod",
-    "email": "jerrodblavos@mac.com"
+    "name": "jerrod"
   },
   "homepage": "https://github.com/jerrod/axr",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "keywords": [
-    
     "axr",
     "agent-readiness",
     "code-quality",
-    "rubric"
+    "rubric",
+    "claude-code"
   ],
   "commands": [
     {
