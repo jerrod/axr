@@ -12,10 +12,15 @@
 #   axr_defer_criterion "docs_context.3" "Local READMEs" "deferred to judgment"
 #   axr_finalize_output   # prints the assembled JSON to stdout
 #
-# The reviewer field ("script", "agent-draft", etc.) is an explicit positional
-# argument on every axr_emit_criterion call — no shell-global state, no
-# leakage between criteria. Judgment subagents pass "agent-draft" at each
-# call site.
+# Two reviewer fields exist in the output:
+#   1. Dimension-level: top-level envelope `reviewer`, set once via
+#      axr_init_output (typically "script:check-foo.sh"). Identifies which
+#      checker produced the envelope.
+#   2. Per-criterion: each criterion's `reviewer` field, passed as explicit
+#      positional arg to every axr_emit_criterion call ("script",
+#      "agent-draft", etc.). No shell-global state; each call carries its
+#      own. Identifies how that SPECIFIC criterion was scored so
+#      mixed-provenance outputs stay auditable.
 #
 # Intentionally does NOT set -e. Callers decide their own error discipline.
 
@@ -181,7 +186,9 @@ axr_defer_criterion() {
 }
 
 # ---------------------------------------------------------------------------
-# axr_finalize_output — print the assembled JSON object.
+# axr_finalize_output — print the assembled JSON object. The top-level
+# `reviewer` is the dimension-level identifier (set by axr_init_output);
+# per-criterion reviewers were attached at emit time.
 # ---------------------------------------------------------------------------
 axr_finalize_output() {
     jq -n \
