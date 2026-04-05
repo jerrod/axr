@@ -1,0 +1,46 @@
+{
+  "name": "rq-axr",
+  "version": "0.1.0",
+  "description": "Agent eXecution Readiness scoring for ARQU repositories. Scores a repo against the AXR rubric and produces machine-readable and human-readable reports.",
+  "author": {
+    "name": "ARQU Engineering",
+    "email": "engineering@arqu.com"
+  },
+  "homepage": "https://github.com/arqu/rq-axr",
+  "license": "UNLICENSED",
+  "keywords": [
+    "arqu",
+    "axr",
+    "agent-readiness",
+    "code-quality",
+    "rubric"
+  ],
+  "commands": [
+    {
+      "name": "axr",
+      "description": "Run a full AXR assessment on the current repository",
+      "file": "commands/axr.md"
+    },
+    {
+      "name": "axr-check",
+      "description": "Run AXR assessment for a single dimension — scheduled for Phase 2, stub in Phase 1",
+      "file": "commands/axr-check.md"
+    },
+    {
+      "name": "axr-diff",
+      "description": "Compare current AXR score to the previous run — scheduled for Phase 4, stub in Phase 1",
+      "file": "commands/axr-diff.md"
+    }
+  ],
+  "config": {
+    "rubric_path": "rubric/rubric.v1.json",
+    "output_dir": ".axr",
+    "history_dir": ".axr/history",
+    "timebox_minutes": 20,
+    "evidence_required_above_score": 1
+  },
+  "requirements": {
+    "tools": ["view", "bash_tool", "str_replace", "create_file"],
+    "external": ["gh", "git"]
+  }
+}

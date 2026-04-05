@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# bin/lint — silent on success; failures only in file:line:message format.
+#
+# Checks:
+#   1. shellcheck on all executable bash scripts (bin/, scripts/)
+#   2. jq parse on all *.json files
+#   3. YAML frontmatter (opening + closing ---, contains description:) on
+#      commands/*.md
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=../scripts/lib/shell-helpers.sh
+source "$SCRIPT_DIR/../scripts/lib/shell-helpers.sh"
+
+cd_repo_root
+
+FAIL=0
+
+# 1. shellcheck on all bash scripts.
+while IFS= read -r -d '' f; do
+    if ! shellcheck -f gcc -x "$f" 2>&1 | strip_ansi; then
+        FAIL=1
+    fi
+done < <(find bin scripts -type f \( -name '*.sh' -o -perm -u+x \) -print0 2>/dev/null)
+
+# 2. jq parse on all JSON.
+while IFS= read -r -d '' f; do
+    if ! err="$(jq empty "$f" 2>&1)"; then
+        printf '%s:1: %s\n' "$f" "$err" | strip_ansi
+        FAIL=1
+    fi
+done < <(find . -type f -name '*.json' \
+             -not -path './.git/*' \
+             -not -path './.axr/*' \
+             -not -path './.quality/*' \
+             -not -path './.therapist/*' \
+             -print0 2>/dev/null)
+
+# 3. YAML frontmatter on commands/*.md.
+if [ -d commands ]; then
+    for f in commands/*.md; do
+        [ -f "$f" ] || continue
+        if ! has_closed_frontmatter "$f"; then
+            printf '%s:1: missing or unclosed YAML frontmatter (expected opening and closing ---)\n' "$f"
+            FAIL=1
+            continue
+        fi
+        FM="$(awk 'NR==1 && /^---$/ {inside=1; next} inside && /^---$/ {exit} inside {print}' "$f")"
+        if ! printf '%s\n' "$FM" | grep -Eq '^[[:space:]]*description:[[:space:]]*.+'; then
+            printf '%s:1: frontmatter missing description: field\n' "$f"
+            FAIL=1
+        fi
+    done
+fi
+
+exit $FAIL

@@ -1,0 +1,11 @@
+{
+  "thresholds": {
+    "max_file_lines": 300,
+    "max_function_lines": 50,
+    "max_complexity": 8,
+    "min_coverage": 95
+  },
+  "extensions": {
+    "md": { "max_file_lines": 600 }
+  }
+}
