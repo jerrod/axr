@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# plugins/axr/bin/validate — plugin-local validator for axr.
+#
+# Invoked by marketplace bin/validate (which walks plugins/*/bin/validate).
+# Validates axr-specific invariants that don't apply to every plugin:
+#   - Rubric file exists at rubric/rubric.v1.json
+#   - Rubric integrity: total_points=100, 8 dimensions, weights sum to 100,
+#     5 criteria per dimension, checker_type ∈ {mechanical, judgment},
+#     evidence_hints[] ≥ 1
+#
+# Runs from the plugin directory (cwd = plugins/axr/ when invoked by
+# marketplace validate). Exit 0 on success, non-zero with failures only.
+
+set -uo pipefail
+
+PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+cd "$PLUGIN_DIR" || exit 1
+
+ERRORS=()
+
+# sanitize — strip shell/ANSI-unsafe chars from strings flowing into output.
+sanitize() { printf '%s' "$1" | tr -d "\$()\`\033"; }
+
+pass() { printf '  ✓ axr: %s\n' "$1"; }
+fail() { printf '  ✗ axr: %s\n' "$1"; ERRORS+=("$1"); }
+
+RUBRIC="rubric/rubric.v1.json"
+
+if [ ! -f "$RUBRIC" ]; then
+    fail "$RUBRIC missing"
+else
+    TOTAL_POINTS=$(jq -r '.total_points // empty' "$RUBRIC")
+    if [ "$TOTAL_POINTS" = "100" ]; then
+        pass "rubric.total_points == 100"
+    else
+        fail "rubric.total_points != 100 (got: ${TOTAL_POINTS:-missing})"
+    fi
+
+    DIM_COUNT=$(jq -r '.dimensions | length' "$RUBRIC")
+    if [ "$DIM_COUNT" = "8" ]; then
+        pass "rubric has 8 dimensions"
+    else
+        fail "rubric has $DIM_COUNT dimensions (expected 8)"
+    fi
+
+    WEIGHT_SUM=$(jq -r '(.dimensions | map(.weight) | add) // empty' "$RUBRIC")
+    if [ "$WEIGHT_SUM" = "100" ]; then
+        pass "rubric weights sum to 100"
+    else
+        fail "rubric weights sum to ${WEIGHT_SUM:-missing} (expected 100)"
+    fi
+
+    BAD_DIMS=$(sanitize "$(jq -r '[.dimensions[] | select((.criteria | length) != 5) | .id] | join(",")' "$RUBRIC")")
+    if [ -z "$BAD_DIMS" ]; then
+        pass "every dimension has 5 criteria"
+    else
+        fail "dimensions without 5 criteria: $BAD_DIMS"
+    fi
+
+    BAD_CRIT=$(sanitize "$(jq -r '[.dimensions[].criteria[] | select((has("id")|not) or (has("name")|not) or (has("description")|not) or (has("checker_type")|not) or ((.checker_type=="mechanical" or .checker_type=="judgment")|not)) | .id // "<missing-id>"] | join(",")' "$RUBRIC")")
+    if [ -z "$BAD_CRIT" ]; then
+        pass "every criterion has required fields and valid checker_type"
+    else
+        fail "criteria with missing/invalid core fields: $BAD_CRIT"
+    fi
+
+    BAD_HINTS=$(sanitize "$(jq -r '[.dimensions[].criteria[] | select((.evidence_hints | type) != "array" or (.evidence_hints | length) < 1) | .id] | join(",")' "$RUBRIC")")
+    if [ -z "$BAD_HINTS" ]; then
+        pass "every criterion has evidence_hints[] ≥ 1"
+    else
+        fail "criteria with empty/missing evidence_hints: $BAD_HINTS"
+    fi
+fi
+
+if [ ${#ERRORS[@]} -eq 0 ]; then
+    exit 0
+else
+    exit 1
+fi

@@ -8,21 +8,46 @@
 #      commands/*.md
 set -uo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source-path=SCRIPTDIR
-# shellcheck source=../scripts/lib/shell-helpers.sh
-source "$SCRIPT_DIR/../scripts/lib/shell-helpers.sh"
+strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
+
+cd_repo_root() {
+    local root
+    if root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+        cd "$root" || exit 1
+    else
+        cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
+    fi
+}
+
+has_closed_frontmatter() {
+    local file="$1"
+    [ "$(head -n1 "$file")" = "---" ] || return 1
+    awk 'FNR>1 && /^---$/ {found=1; exit} END{exit !found}' "$file"
+}
 
 cd_repo_root
 
+REPO_ROOT_REAL="$(pwd -P)" || { printf 'bin/lint: fatal: pwd -P failed\n' >&2; exit 1; }
+[ -n "$REPO_ROOT_REAL" ] || { printf 'bin/lint: fatal: REPO_ROOT_REAL is empty\n' >&2; exit 1; }
+
 FAIL=0
 
-# 1. shellcheck on all bash scripts.
+# 1. shellcheck on all bash scripts — bin/ plus every plugins/*/scripts
+#    and plugins/*/bin dir that exists. Containment-check each candidate
+#    so a symlinked external directory isn't added to SH_ROOTS.
+SH_ROOTS=(bin)
+for p in plugins/*/scripts plugins/*/bin; do
+    [ -d "$p" ] || continue
+    p_real="$(cd "$p" 2>/dev/null && pwd -P)" || continue
+    case "$p_real" in
+        "$REPO_ROOT_REAL"/*) SH_ROOTS+=("$p") ;;
+    esac
+done
 while IFS= read -r -d '' f; do
     if ! shellcheck -f gcc -x "$f" 2>&1 | strip_ansi; then
         FAIL=1
     fi
-done < <(find bin scripts -type f \( -name '*.sh' -o -perm -u+x \) -print0 2>/dev/null)
+done < <(find -P "${SH_ROOTS[@]}" -type f -not -type l \( -name '*.sh' -o -perm -u+x \) -print0 2>/dev/null)
 
 # 2. jq parse on all JSON.
 while IFS= read -r -d '' f; do
@@ -30,16 +55,18 @@ while IFS= read -r -d '' f; do
         printf '%s:1: %s\n' "$f" "$err" | strip_ansi
         FAIL=1
     fi
-done < <(find . -type f -name '*.json' \
+done < <(find -P . -type f -name '*.json' \
              -not -path './.git/*' \
              -not -path './.axr/*' \
              -not -path './.quality/*' \
              -not -path './.therapist/*' \
+             -not -path './node_modules/*' \
              -print0 2>/dev/null)
 
 # 3. YAML frontmatter on commands/*.md.
-if [ -d commands ]; then
-    for f in commands/*.md; do
+for plugin_cmd_dir in plugins/*/commands; do
+    [ -d "$plugin_cmd_dir" ] || continue
+    for f in "$plugin_cmd_dir"/*.md; do
         [ -f "$f" ] || continue
         if ! has_closed_frontmatter "$f"; then
             printf '%s:1: missing or unclosed YAML frontmatter (expected opening and closing ---)\n' "$f"
@@ -52,6 +79,6 @@ if [ -d commands ]; then
             FAIL=1
         fi
     done
-fi
+done
 
 exit $FAIL
