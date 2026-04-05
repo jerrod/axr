@@ -1,0 +1,15 @@
+{
+  "name": "axr",
+  "description": "Tools for agent-operated software engineering — readiness scoring, workflow automation, and quality gates.",
+  "owner": {
+    "name": "jerrod"
+  },
+  "plugins": [
+    {
+      "name": "axr",
+      "description": "Agent eXecution Readiness scoring — 100-point rubric across 8 dimensions with deterministic bash checkers and judgment subagents.",
+      "source": "./plugins/axr",
+      "category": "development"
+    }
+  ]
+}

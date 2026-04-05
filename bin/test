@@ -51,7 +51,7 @@ SCHEMA_FILTER='
     and ([.criteria[] | select(.deferred == true and .score != null)] | length == 0)
 '
 
-for checker in scripts/check-*.sh; do
+for checker in plugins/*/scripts/check-*.sh; do
     [ -f "$checker" ] || continue
     if ! JSON_OUT="$("$checker" 2>&1)"; then
         printf '%s:1: script exited non-zero\n' "$checker"
