@@ -6,10 +6,8 @@
 # Emits a single JSON object to stdout conforming to the schema documented in
 # docs/plugin-brief.md.
 #
-# CWD must be the target repo root. The script sources scripts/lib/common.sh
-# via its own directory (resolved from BASH_SOURCE). Criterion names are
-# looked up from the rubric at runtime via axr_criterion_name — no hardcoded
-# duplication.
+# CWD must be the target repo root. Criterion names are looked up from the
+# rubric at runtime via axr_criterion_name — no hardcoded duplication.
 
 set -euo pipefail
 
@@ -17,52 +15,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source-path=SCRIPTDIR
 # shellcheck source=lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib/markdown-helpers.sh
+source "$SCRIPT_DIR/lib/markdown-helpers.sh"
 
 axr_init_output docs_context "script:check-docs-context.sh"
-
-# ---------------------------------------------------------------------------
-# sanitize_evidence <string> — strip NUL + non-printable ASCII control chars
-# from text extracted from target-repo files before embedding in evidence.
-# Preserves tab (0x09), newline (0x0A), carriage return (0x0D).
-# ---------------------------------------------------------------------------
-sanitize_evidence() {
-    printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037'
-}
-
-# ---------------------------------------------------------------------------
-# count_h2_outside_fences <file> — count lines matching `^## ` that are NOT
-# inside a fenced code block. Used for entry counts / title extraction in
-# markdown files (avoids counting fenced code-sample headings).
-# Prints the count to stdout. If <pattern> is provided as second arg, prints
-# matching headings instead of the count.
-# ---------------------------------------------------------------------------
-count_h2_outside_fences() {
-    local file="$1"
-    awk '
-        BEGIN { in_fence=0; count=0 }
-        /^[[:space:]]*```/ { in_fence = !in_fence; next }
-        in_fence == 1 { next }
-        /^## / { count++ }
-        END { print count }
-    ' "$file"
-}
-
-# titles_h2_outside_fences <file> — print the first N headings outside fences.
-titles_h2_outside_fences() {
-    local file="$1"
-    local limit="${2:-3}"
-    awk -v limit="$limit" '
-        BEGIN { in_fence=0; seen=0 }
-        /^[[:space:]]*```/ { in_fence = !in_fence; next }
-        in_fence == 1 { next }
-        /^## / {
-            sub(/^## +/, "")
-            print
-            seen++
-            if (seen >= limit) exit
-        }
-    ' "$file"
-}
 
 # ---------------------------------------------------------------------------
 # docs_context.1 — Root CLAUDE.md / AGENTS.md with agent-oriented sections.
@@ -124,65 +81,7 @@ score_docs_context_1() {
 
 # ---------------------------------------------------------------------------
 # docs_context.2 — README setup section with ≤5 commands.
-#
-# Fence handling:
-#   - Shell fences (```bash|sh|shell|console|zsh) contribute their non-blank
-#     body lines to the command count.
-#   - Non-shell fences (bare ``` or ```text, ```output, etc.) are skipped —
-#     lines inside them are NOT counted even if prefixed with $ or >.
-#   - Outside any fence, lines matching `^[[:space:]]*[$>] ` are counted as
-#     inline commands.
-#   - H2 headings inside any fence are treated as fence content (NOT as
-#     section boundaries) so fenced code samples containing `## ` do not
-#     prematurely exit the setup section.
 # ---------------------------------------------------------------------------
-count_setup_commands() {
-    local file="$1"
-    awk '
-        BEGIN {
-            in_setup=0
-            in_shell_fence=0
-            in_nonshell_fence=0
-            count=0
-        }
-        /^[[:space:]]*```/ {
-            if (in_shell_fence) { in_shell_fence=0; next }
-            if (in_nonshell_fence) { in_nonshell_fence=0; next }
-            if (match($0, /^[[:space:]]*```(bash|sh|shell|console|zsh)([[:space:]]|$)/)) {
-                in_shell_fence=1
-            } else {
-                in_nonshell_fence=1
-            }
-            next
-        }
-        /^## / {
-            if (in_shell_fence || in_nonshell_fence) {
-                # Fence content — count according to fence-state rules below.
-            } else {
-                if (in_setup && !match(tolower($0), /setup|getting started|quickstart|install|development/)) {
-                    exit
-                }
-                if (match(tolower($0), /setup|getting started|quickstart|install|development/)) {
-                    in_setup=1
-                    next
-                }
-                next
-            }
-        }
-        in_setup == 0 { next }
-        in_shell_fence == 1 {
-            line=$0
-            sub(/^[[:space:]]+/, "", line)
-            if (line == "") next
-            count++
-            next
-        }
-        in_nonshell_fence == 1 { next }
-        /^[[:space:]]*[\$>] / { count++ }
-        END { print count }
-    ' "$file"
-}
-
 score_docs_context_2() {
     local name
     name="$(axr_criterion_name docs_context.2)"
@@ -218,13 +117,6 @@ score_docs_context_2() {
 # ---------------------------------------------------------------------------
 # docs_context.4 — ADRs / decision log.
 # ---------------------------------------------------------------------------
-first_three_titles() {
-    local file="$1"
-    local raw
-    raw="$(titles_h2_outside_fences "$file" 3 | tr '\n' '|' | sed 's/|$//' || true)"
-    sanitize_evidence "$raw"
-}
-
 score_docs_context_4() {
     local name
     name="$(axr_criterion_name docs_context.4)"
@@ -304,7 +196,7 @@ score_docs_context_4() {
     local entries
     entries="$(count_h2_outside_fences "$found_file")"
     local sample_titles
-    sample_titles="$(first_three_titles "$found_file")"
+    sample_titles="$(first_three_titles_joined "$found_file")"
     if [ "$entries" -lt 3 ]; then
         axr_emit_criterion "docs_context.4" "$name" 1 "decision log has <3 entries" \
             "$found_file ($entries entries)" "sample: $sample_titles"
