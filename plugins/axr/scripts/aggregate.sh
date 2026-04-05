@@ -116,10 +116,17 @@ if [ -n "$AGENT_DIR" ]; then
             crit_id="$(jq -r '.id' <<<"$crit_json")"
             crit_score="$(jq -r '.score' <<<"$crit_json")"
             [ -n "$crit_id" ] && [ "$crit_id" != "null" ] || die "agent criterion missing id in $af (index $i)"
+            # Validate id matches rubric criterion format — prevents path
+            # traversal via crafted ids like "../../some/path.3" that would
+            # escape the merge temp directory.
+            [[ "$crit_id" =~ ^[a-z_]+\.[0-9]+$ ]] || die "agent criterion id '$crit_id' does not match expected format [a-z_]+.[0-9]+ in $af (index $i)"
             case "$crit_score" in
                 0|1|2|3) : ;;
                 *) die "agent criterion $crit_id has invalid score=$crit_score (must be 0-3, agents never emit 4) in $af" ;;
             esac
+            # Validate reviewer field — agents must always emit "agent-draft".
+            crit_reviewer="$(jq -r '.reviewer' <<<"$crit_json")"
+            [ "$crit_reviewer" = "agent-draft" ] || die "agent criterion $crit_id has reviewer=$crit_reviewer (must be agent-draft) in $af"
             # Derive dimension from id prefix (e.g., docs_context.3 -> docs_context).
             dim_from_id="${crit_id%.*}"
             merged_file="$EFFECTIVE_INPUT_DIR/$dim_from_id.json"
