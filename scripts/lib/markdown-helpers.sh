@@ -29,7 +29,7 @@ count_h2_outside_fences() {
     awk '
         BEGIN { in_fence=0; count=0 }
         /^[[:space:]]*```/ { in_fence = !in_fence; next }
-        in_fence == 1 { next }
+        in_fence { next }
         /^## / { count++ }
         END { print count }
     ' "$file"
@@ -45,7 +45,7 @@ titles_h2_outside_fences() {
     awk -v limit="$limit" '
         BEGIN { in_fence=0; seen=0 }
         /^[[:space:]]*```/ { in_fence = !in_fence; next }
-        in_fence == 1 { next }
+        in_fence { next }
         /^## / {
             sub(/^## +/, "")
             print
@@ -107,6 +107,10 @@ count_setup_commands() {
             line=$0
             sub(/^[[:space:]]+/, "", line)
             if (line == "") next
+            # A markdown heading that wandered into a shell fence is not a
+            # shell command — skip lines starting with ## (not #, which is a
+            # valid bash comment we already skip via the leading-## check).
+            if (line ~ /^##/) next
             count++
             next
         }
