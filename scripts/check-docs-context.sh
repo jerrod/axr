@@ -7,7 +7,9 @@
 # docs/plugin-brief.md.
 #
 # CWD must be the target repo root. The script sources scripts/lib/common.sh
-# via its own directory (resolved from BASH_SOURCE).
+# via its own directory (resolved from BASH_SOURCE). Criterion names are
+# looked up from the rubric at runtime via axr_criterion_name — no hardcoded
+# duplication.
 
 set -euo pipefail
 
@@ -16,28 +18,59 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
-# Criterion names (must match rubric.v1.json docs_context dimension).
-NAME_1="Root CLAUDE.md or AGENTS.md"
-NAME_2="README covers setup in ≤5 commands"
-NAME_3="Local READMEs for non-obvious subsystems"
-NAME_4="ADRs or decision log"
-NAME_5="Domain glossary"
-
 axr_init_output docs_context "script:check-docs-context.sh"
 
 # ---------------------------------------------------------------------------
 # sanitize_evidence <string> — strip NUL + non-printable ASCII control chars
 # from text extracted from target-repo files before embedding in evidence.
-# Preserves tab and newline only because they are harmless in jq -R encoding.
+# Preserves tab (0x09), newline (0x0A), carriage return (0x0D).
 # ---------------------------------------------------------------------------
 sanitize_evidence() {
     printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037'
 }
 
 # ---------------------------------------------------------------------------
+# count_h2_outside_fences <file> — count lines matching `^## ` that are NOT
+# inside a fenced code block. Used for entry counts / title extraction in
+# markdown files (avoids counting fenced code-sample headings).
+# Prints the count to stdout. If <pattern> is provided as second arg, prints
+# matching headings instead of the count.
+# ---------------------------------------------------------------------------
+count_h2_outside_fences() {
+    local file="$1"
+    awk '
+        BEGIN { in_fence=0; count=0 }
+        /^[[:space:]]*```/ { in_fence = !in_fence; next }
+        in_fence == 1 { next }
+        /^## / { count++ }
+        END { print count }
+    ' "$file"
+}
+
+# titles_h2_outside_fences <file> — print the first N headings outside fences.
+titles_h2_outside_fences() {
+    local file="$1"
+    local limit="${2:-3}"
+    awk -v limit="$limit" '
+        BEGIN { in_fence=0; seen=0 }
+        /^[[:space:]]*```/ { in_fence = !in_fence; next }
+        in_fence == 1 { next }
+        /^## / {
+            sub(/^## +/, "")
+            print
+            seen++
+            if (seen >= limit) exit
+        }
+    ' "$file"
+}
+
+# ---------------------------------------------------------------------------
 # docs_context.1 — Root CLAUDE.md / AGENTS.md with agent-oriented sections.
 # ---------------------------------------------------------------------------
 score_docs_context_1() {
+    local name
+    name="$(axr_criterion_name docs_context.1)"
+
     local candidates=(CLAUDE.md AGENTS.md .claude/CLAUDE.md .agents/AGENTS.md)
     local found=""
     local p
@@ -49,14 +82,14 @@ score_docs_context_1() {
     done
 
     if [ -z "$found" ]; then
-        axr_emit_criterion "docs_context.1" "$NAME_1" 0 "no agent-context file found"
+        axr_emit_criterion "docs_context.1" "$name" 0 "no agent-context file found"
         return
     fi
 
     local bytes
     bytes="$(wc -c <"$found" | tr -d ' ')"
     if [ "$bytes" -lt 500 ]; then
-        axr_emit_criterion "docs_context.1" "$NAME_1" 1 "below 500-byte threshold" \
+        axr_emit_criterion "docs_context.1" "$name" 1 "below 500-byte threshold" \
             "$found ($bytes bytes, below 500-byte threshold)"
         return
     fi
@@ -76,14 +109,14 @@ score_docs_context_1() {
     fi
 
     if [ "$matched_count" -eq 0 ]; then
-        axr_emit_criterion "docs_context.1" "$NAME_1" 2 "no agent-oriented sections matched" \
+        axr_emit_criterion "docs_context.1" "$name" 2 "no agent-oriented sections matched" \
             "$found ($bytes bytes, $sections sections, no agent-oriented sections)"
     elif [ "$matched_count" -le 2 ]; then
-        axr_emit_criterion "docs_context.1" "$NAME_1" 2 "partial agent-oriented coverage" \
+        axr_emit_criterion "docs_context.1" "$name" 2 "partial agent-oriented coverage" \
             "$found ($bytes bytes, $sections sections)" \
             "matched: $matched"
     else
-        axr_emit_criterion "docs_context.1" "$NAME_1" 3 "strong agent-oriented coverage" \
+        axr_emit_criterion "docs_context.1" "$name" 3 "strong agent-oriented coverage" \
             "$found ($bytes bytes, $sections sections)" \
             "matched: $matched"
     fi
@@ -99,6 +132,9 @@ score_docs_context_1() {
 #     lines inside them are NOT counted even if prefixed with $ or >.
 #   - Outside any fence, lines matching `^[[:space:]]*[$>] ` are counted as
 #     inline commands.
+#   - H2 headings inside any fence are treated as fence content (NOT as
+#     section boundaries) so fenced code samples containing `## ` do not
+#     prematurely exit the setup section.
 # ---------------------------------------------------------------------------
 count_setup_commands() {
     local file="$1"
@@ -109,16 +145,6 @@ count_setup_commands() {
             in_nonshell_fence=0
             count=0
         }
-        /^## / {
-            if (in_setup && !match(tolower($0), /setup|getting started|quickstart|install|development/)) {
-                exit
-            }
-            if (match(tolower($0), /setup|getting started|quickstart|install|development/)) {
-                in_setup=1
-                next
-            }
-        }
-        in_setup == 0 { next }
         /^[[:space:]]*```/ {
             if (in_shell_fence) { in_shell_fence=0; next }
             if (in_nonshell_fence) { in_nonshell_fence=0; next }
@@ -129,6 +155,21 @@ count_setup_commands() {
             }
             next
         }
+        /^## / {
+            if (in_shell_fence || in_nonshell_fence) {
+                # Fence content — count according to fence-state rules below.
+            } else {
+                if (in_setup && !match(tolower($0), /setup|getting started|quickstart|install|development/)) {
+                    exit
+                }
+                if (match(tolower($0), /setup|getting started|quickstart|install|development/)) {
+                    in_setup=1
+                    next
+                }
+                next
+            }
+        }
+        in_setup == 0 { next }
         in_shell_fence == 1 {
             line=$0
             sub(/^[[:space:]]+/, "", line)
@@ -143,13 +184,16 @@ count_setup_commands() {
 }
 
 score_docs_context_2() {
+    local name
+    name="$(axr_criterion_name docs_context.2)"
+
     if [ ! -f README.md ]; then
-        axr_emit_criterion "docs_context.2" "$NAME_2" 0 "README.md missing"
+        axr_emit_criterion "docs_context.2" "$name" 0 "README.md missing"
         return
     fi
 
     if ! grep -iEq '^## .*(setup|getting started|quickstart|install|development)' README.md; then
-        axr_emit_criterion "docs_context.2" "$NAME_2" 1 "no setup section in README" \
+        axr_emit_criterion "docs_context.2" "$name" 1 "no setup section in README" \
             "README.md present but no setup section found"
         return
     fi
@@ -157,16 +201,16 @@ score_docs_context_2() {
     local n
     n="$(count_setup_commands README.md)"
     if [ "$n" -eq 0 ]; then
-        axr_emit_criterion "docs_context.2" "$NAME_2" 1 "setup section has no commands" \
+        axr_emit_criterion "docs_context.2" "$name" 1 "setup section has no commands" \
             "README.md setup section: 0 commands"
     elif [ "$n" -le 5 ]; then
-        axr_emit_criterion "docs_context.2" "$NAME_2" 3 "setup section within budget" \
+        axr_emit_criterion "docs_context.2" "$name" 3 "setup section within budget" \
             "README.md setup section: $n commands"
     elif [ "$n" -le 10 ]; then
-        axr_emit_criterion "docs_context.2" "$NAME_2" 2 "setup section exceeds 5" \
+        axr_emit_criterion "docs_context.2" "$name" 2 "setup section exceeds 5" \
             "README.md setup section: $n commands (exceeds 5)"
     else
-        axr_emit_criterion "docs_context.2" "$NAME_2" 1 "setup section significantly exceeds 5" \
+        axr_emit_criterion "docs_context.2" "$name" 1 "setup section significantly exceeds 5" \
             "README.md setup section: $n commands (significantly exceeds 5)"
     fi
 }
@@ -177,11 +221,14 @@ score_docs_context_2() {
 first_three_titles() {
     local file="$1"
     local raw
-    raw="$(grep -E '^## ' "$file" | head -n3 | sed -E 's/^## +//' | tr '\n' '|' | sed 's/|$//' || true)"
+    raw="$(titles_h2_outside_fences "$file" 3 | tr '\n' '|' | sed 's/|$//' || true)"
     sanitize_evidence "$raw"
 }
 
 score_docs_context_4() {
+    local name
+    name="$(axr_criterion_name docs_context.4)"
+
     local adr_dirs=(docs/adr docs/adrs docs/decisions docs/architecture/decisions adr decisions architecture/decisions)
     local adr_files=(DECISIONS.md docs/DECISIONS.md)
 
@@ -204,7 +251,7 @@ score_docs_context_4() {
     done
 
     if [ -z "$found_dir" ] && [ -z "$found_file" ]; then
-        axr_emit_criterion "docs_context.4" "$NAME_4" 0 "no decision log found"
+        axr_emit_criterion "docs_context.4" "$name" 0 "no decision log found"
         return
     fi
 
@@ -223,46 +270,46 @@ score_docs_context_4() {
         fi
 
         if [ "$md_count" -eq 0 ]; then
-            axr_emit_criterion "docs_context.4" "$NAME_4" 0 "ADR directory exists but is empty" \
+            axr_emit_criterion "docs_context.4" "$name" 0 "ADR directory exists but is empty" \
                 "$found_dir (0 ADR files)"
         elif [ "$md_count" -le 2 ]; then
-            axr_emit_criterion "docs_context.4" "$NAME_4" 2 "sparse ADR directory" \
+            axr_emit_criterion "docs_context.4" "$name" 2 "sparse ADR directory" \
                 "$found_dir ($md_count ADR files)" "sample: $sample"
         elif [ "$md_count" -le 9 ]; then
-            axr_emit_criterion "docs_context.4" "$NAME_4" 3 "established ADR directory" \
+            axr_emit_criterion "docs_context.4" "$name" 3 "established ADR directory" \
                 "$found_dir ($md_count ADR files)" "sample: $sample"
         else
             # Check every ADR has Consequences or Context heading.
-            local complete=1
+            local full_structure=1
             local adr
             for adr in "${adr_list[@]}"; do
                 if ! grep -Eq '^#+ +(Consequences|Context)' "$adr"; then
-                    complete=0
+                    full_structure=0
                     break
                 fi
             done
-            if [ "$complete" = "1" ]; then
-                axr_emit_criterion "docs_context.4" "$NAME_4" 4 "mature ADR directory with full structure" \
+            if [ "$full_structure" = "1" ]; then
+                axr_emit_criterion "docs_context.4" "$name" 4 "mature ADR directory with full structure" \
                     "$found_dir ($md_count ADR files)" "sample: $sample" \
                     "all ADRs include Consequences or Context heading"
             else
-                axr_emit_criterion "docs_context.4" "$NAME_4" 3 "large ADR directory, inconsistent structure" \
+                axr_emit_criterion "docs_context.4" "$name" 3 "large ADR directory, inconsistent structure" \
                     "$found_dir ($md_count ADR files)" "sample: $sample"
             fi
         fi
         return
     fi
 
-    # Single-file decision log path.
+    # Single-file decision log path — count H2 entries outside fences.
     local entries
-    entries="$(grep -cE '^## ' "$found_file" || true)"
+    entries="$(count_h2_outside_fences "$found_file")"
     local sample_titles
     sample_titles="$(first_three_titles "$found_file")"
     if [ "$entries" -lt 3 ]; then
-        axr_emit_criterion "docs_context.4" "$NAME_4" 1 "decision log has <3 entries" \
+        axr_emit_criterion "docs_context.4" "$name" 1 "decision log has <3 entries" \
             "$found_file ($entries entries)" "sample: $sample_titles"
     else
-        axr_emit_criterion "docs_context.4" "$NAME_4" 2 "single-file decision log with 3+ entries" \
+        axr_emit_criterion "docs_context.4" "$name" 2 "single-file decision log with 3+ entries" \
             "$found_file ($entries entries)" "sample: $sample_titles"
     fi
 }
@@ -272,8 +319,8 @@ score_docs_context_4() {
 # ---------------------------------------------------------------------------
 score_docs_context_1
 score_docs_context_2
-axr_defer_criterion "docs_context.3" "$NAME_3" "Deferred to judgment subagent (docs-reviewer)"
+axr_defer_criterion "docs_context.3" "$(axr_criterion_name docs_context.3)" "Deferred to judgment subagent (docs-reviewer)"
 score_docs_context_4
-axr_defer_criterion "docs_context.5" "$NAME_5" "Deferred to judgment subagent (docs-reviewer)"
+axr_defer_criterion "docs_context.5" "$(axr_criterion_name docs_context.5)" "Deferred to judgment subagent (docs-reviewer)"
 
 axr_finalize_output

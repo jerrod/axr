@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
-# scripts/lib/shell-helpers.sh — shared helpers for bin/ scripts.
+# scripts/lib/shell-helpers.sh — shared helpers for bin/ gate scripts.
 #
-# Sourced by bin/lint and bin/test so ANSI stripping and repo-root resolution
-# stay consistent across gate scripts.
+# Intentionally separate namespace from scripts/lib/common.sh:
+#   - common.sh  = axr_* prefix, API for dimension checker scripts
+#                  (scripts/check-*.sh). Defines JSON schema + rubric lookup.
+#   - shell-helpers.sh = unprefixed utilities for bin/ gate scripts
+#                        (bin/lint, bin/test, bin/validate) that do NOT
+#                        source common.sh and do NOT emit AXR JSON output.
+#
+# Sourced by bin/lint, bin/test, and bin/validate so ANSI stripping,
+# repo-root resolution, and markdown frontmatter checks stay consistent
+# across the gate scripts.
 
 # strip_ansi — remove ANSI colour and cursor codes from tool output.
 strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
