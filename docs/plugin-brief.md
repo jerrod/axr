@@ -162,7 +162,9 @@ For every criterion resolvable from the filesystem, use tools (Read, Bash with `
 
 - **docs_context.1:** Does `CLAUDE.md` or `AGENTS.md` exist at repo root? If yes, is it >500 chars and does it contain sections for "architecture", "conventions", "gotchas/sharp edges"? Score 0 (absent), 2 (exists, thin), or 3 (present with required sections). 4 requires human confirmation.
 - **tooling.4:** Does `bin/setup`, `Makefile` with `dev` target, `scripts/bootstrap`, or equivalent exist? Does running it succeed in a clean environment? Score based on presence and documented runtime.
-- **safety_rails.4:** Use `gh api repos/{owner}/{repo}/branches/main/protection` to check branch protection. Score 0–4 based on required reviews, required status checks, admin enforcement.
+- **safety_rails.4:** Use `gh api "repos/$REPO_SLUG/branches/main/protection"` to check branch protection. Score 0–4 based on required reviews, required status checks, admin enforcement.
+
+  **Security requirement:** derive `REPO_SLUG` via `gh repo view --json nameWithOwner -q .nameWithOwner` (gh-native — no manual URL parsing) and validate it matches `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$` before interpolating into any `gh api` call. Never interpolate raw `git remote get-url` output into shell commands.
 - **tests_ci.1:** Parse `.github/workflows/*.yml` for test jobs. Use `gh run list --workflow=<test> --limit 10 --json conclusion,createdAt,updatedAt` for avg duration and flake rate.
 - **structure.2:** Run static analysis for the stack (`madge` for JS/TS, `pydeps` for Python, Gradle reports for Kotlin) to detect circular imports.
 
@@ -173,6 +175,15 @@ For qualitative criteria (is the glossary good enough, are module boundaries mea
 ### Pass 3 — Aggregation
 
 Compute weighted scores, determine band, identify top 3 blockers (criteria scoring 0–1 in high-weight dimensions), compute delta vs. previous run if `.axr/latest.json` exists, write both output files.
+
+## Orchestrator performance requirements
+
+The 20-minute tool-use budget is not achievable with serial dispatch of 8 check scripts + up to 18 judgment subagent calls. The orchestrator (`commands/axr.md` in Phase 2) MUST:
+
+1. **Run mechanical check scripts concurrently.** All 8 `scripts/check-*.sh` scripts are read-only, independent, and safe to fan out in parallel. Target: all 8 scripts run simultaneously, elapsed time = slowest script, not sum.
+2. **Batch judgment subagents per dimension.** Dispatch ONE judgment subagent per dimension that has ≥1 deferred criterion, passing all of that dimension's deferred criteria in a single call. Never dispatch one subagent per criterion.
+3. **Expose a mechanical-only fast path.** Support a mode that skips judgment entirely and returns in under 2 minutes against any repo. Useful for CI gates and for quick feedback during iteration.
+4. **Honor the timebox as a hard stop.** If 20 minutes elapse before all dimensions complete, emit `.axr/latest.json` with the partial results and flag incomplete dimensions explicitly.
 
 ## Handling unknown/unresolvable criteria
 

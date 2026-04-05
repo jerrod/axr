@@ -23,12 +23,12 @@
     },
     {
       "name": "axr-check",
-      "description": "Run AXR assessment for a single dimension (tests_ci, docs_context, change_surface, safety_rails, structure, tooling, execution_visibility, workflow_realism)",
+      "description": "Run AXR assessment for a single dimension — scheduled for Phase 2, stub in Phase 1",
       "file": "commands/axr-check.md"
     },
     {
       "name": "axr-diff",
-      "description": "Compare current AXR score to the most recent previous run and surface changes",
+      "description": "Compare current AXR score to the previous run — scheduled for Phase 4, stub in Phase 1",
       "file": "commands/axr-diff.md"
     }
   ],

@@ -1,9 +1,9 @@
 ---
-description: Score the current repo's Agent eXecution Readiness (Phase 1 — docs_context only).
+description: Score the current repo's Agent eXecution Readiness against the AXR rubric.
 allowed-tools: Bash, Read
 ---
 
-You are the `/axr` orchestrator for the rq-axr plugin. Phase 1 scope: prove the scripts-first architecture end-to-end by scoring **one** dimension (`docs_context`) and printing a summary.
+You are the `/axr` orchestrator for the rq-axr plugin. In **Phase 1**, the orchestrator proves the scripts-first architecture end-to-end by scoring **one** dimension (`docs_context`) and printing a summary. When Phase 2 lands, this command runs all 8 dimension checkers and writes `.axr/latest.{json,md}`.
 
 ## Strict DO NOT list
 
@@ -18,15 +18,15 @@ You are the `/axr` orchestrator for the rq-axr plugin. Phase 1 scope: prove the 
 
 2. **Detect stack.** Run:
    ```bash
-   bash -c 'source ${CLAUDE_PLUGIN_ROOT}/scripts/lib/common.sh && axr_detect_stack'
+   bash -c 'source "${CLAUDE_PLUGIN_ROOT}/scripts/lib/common.sh" && axr_detect_stack'
    ```
-   Capture the JSON array.
+   The path is double-quoted inside the `bash -c` body so a `CLAUDE_PLUGIN_ROOT` value containing spaces or shell metacharacters does not break the source command. Capture the JSON array.
 
 3. **Run the one Phase-1 checker.** From the user's repo root (the current working directory), run:
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/check-docs-context.sh
+   "${CLAUDE_PLUGIN_ROOT}/scripts/check-docs-context.sh"
    ```
-   The script emits a single JSON object to stdout. Capture it.
+   The script path is double-quoted for the same reason. The script emits a single JSON object to stdout. Capture it.
 
 4. **Merge against the rubric.** For each of the 5 criteria in the rubric's `docs_context` dimension, look up the matching criterion in the script output by `id`. Every mechanical criterion must have a non-null integer `score` (0–4). Every judgment criterion must have `score: null` and `deferred: true`.
 
