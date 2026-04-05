@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# bin/test — silent on success; failures only.
+#
+# Checks:
+#   1. bin/validate passes (verbose output suppressed, ✗ lines surfaced)
+#   2. Each scripts/check-*.sh exits 0 and emits JSON satisfying the invariants:
+#        - .dimension_id is a string
+#        - .criteria is a non-empty array
+#        - every criterion with score >= 2 has non-empty .evidence[]
+set -uo pipefail
+
+strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
+FAIL=0
+
+if ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+    cd "$ROOT" || exit 1
+fi
+
+# 1. bin/validate — run, strip success noise, surface failures only.
+if [ -x bin/validate ]; then
+    if ! VALIDATE_OUT="$(bin/validate 2>&1 | strip_ansi)"; then
+        FAIL=1
+    fi
+    # Extract only ✗ lines (strip leading ✓/section lines).
+    printf '%s\n' "$VALIDATE_OUT" | awk '/✗/ { sub(/^[[:space:]]*✗[[:space:]]*/, ""); print "bin/validate:1: " $0 }'
+else
+    printf 'bin/validate:1: script missing or not executable\n'
+    FAIL=1
+fi
+
+# 2. checker scripts — exit clean and emit schema-valid JSON.
+SCHEMA_FILTER='
+    (.dimension_id | type == "string")
+    and (.criteria | type == "array")
+    and ((.criteria | length) > 0)
+    and ([.criteria[] | select(.score != null and .score >= 2)
+                     | select((.evidence // []) | length < 1)]
+         | length == 0)
+'
+
+for checker in scripts/check-*.sh; do
+    [ -f "$checker" ] || continue
+    if ! JSON_OUT="$($checker 2>&1)"; then
+        printf '%s:1: script exited non-zero\n' "$checker"
+        FAIL=1
+        continue
+    fi
+    if ! printf '%s' "$JSON_OUT" | jq -e "$SCHEMA_FILTER" >/dev/null 2>&1; then
+        printf '%s:1: output fails schema invariants\n' "$checker"
+        FAIL=1
+    fi
+done
+
+exit $FAIL

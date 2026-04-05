@@ -39,3 +39,22 @@ To verify a change works, run `/axr` against a target repo (typically an target-
 ## Distribution
 
 This plugin ships via the jerrod/axr marketplace alongside `rq`. Breaking changes to output format (`result.json` schema) affect downstream consumers (future GitHub App, dashboards).
+
+## Quality Gates (rq)
+
+This project uses rq quality gates. Before your first code change in any session, detect the gate scripts:
+
+```bash
+PLUGIN_DIR=$(find . -path "*/rq/scripts/run-gates.sh" -exec dirname {} \; 2>/dev/null | head -1)
+if [ -z "$PLUGIN_DIR" ]; then
+  PLUGIN_DIR=$(find "$HOME/.claude" -path "*/rq/scripts/run-gates.sh" -exec dirname {} \; 2>/dev/null | head -1)
+fi
+```
+
+Run `bash "$PLUGIN_DIR/run-gates.sh" all` before any commit or push. Gate scripts produce proof artifacts in `.quality/proof/` — use these instead of manual quality checks.
+
+**Project-specific gate mapping:**
+- `bin/lint` → shellcheck on scripts + jq parse on JSON + YAML frontmatter on `commands/*.md`
+- `bin/test` → runs `bin/validate` + schema-invariant check on each `scripts/check-*.sh` JSON output
+- `bin/validate` (human-facing debug tool) — verbose per-check pass/fail listing
+- No `bin/typecheck`, `bin/coverage`, or `bin/format` — project is bash + JSON + markdown with no language runtime
