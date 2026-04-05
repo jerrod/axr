@@ -49,6 +49,9 @@ elif [ -d .git ]; then
 else
     REPO_NAME="$(basename "$PWD")"
 fi
+# Strip template placeholder syntax — REPO_NAME can carry attacker-
+# controlled content from git remote URL (see security review round 2).
+REPO_NAME="$(printf '%s' "$REPO_NAME" | tr -d '{}')"
 
 # ---------------------------------------------------------------------------
 # Aggregate per-dimension data. Build dimensions object + accumulate totals.
@@ -248,15 +251,18 @@ awk -v d="$RENDER_TMP" '
         line=$0
         for (k in tokens) {
             placeholder="{{" k "}}"
-            # Split-and-rejoin substitution: never re-scans substituted
-            # text, so a value containing {{...}} cannot trigger an
-            # infinite loop (previous implementation was vulnerable).
-            n=split(line, parts, placeholder)
-            if (n > 1) {
-                out=parts[1]
-                for (i=2; i<=n; i++) out = out vals[k] parts[i]
-                line=out
+            # Fixed-string index+substr substitution: advances past each
+            # replacement so substituted text is never re-scanned (safe
+            # from infinite-loop injection). index() also sidesteps awks
+            # ERE interpretation of { and } as interval metacharacters.
+            plen=length(placeholder)
+            out=""
+            remaining=line
+            while ((idx=index(remaining, placeholder)) > 0) {
+                out = out substr(remaining, 1, idx-1) vals[k]
+                remaining = substr(remaining, idx + plen)
             }
+            line = out remaining
         }
         print line
     }
