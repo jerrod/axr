@@ -35,7 +35,8 @@ sanitize() { printf '%s' "$1" | tr -d "\$()\`"; }
 
 cd_repo_root
 
-REPO_ROOT_REAL="$(pwd -P)"
+REPO_ROOT_REAL="$(pwd -P)" || { printf 'bin/validate: fatal: pwd -P failed\n' >&2; exit 1; }
+[ -n "$REPO_ROOT_REAL" ] || { printf 'bin/validate: fatal: REPO_ROOT_REAL is empty\n' >&2; exit 1; }
 
 ERRORS=()
 
@@ -193,14 +194,23 @@ else
             fi
         fi
 
-        # 3d. plugin-local validate hook
+        # 3d. plugin-local validate hook — containment-check the file itself
+        # (not just the plugin directory) to prevent symlink escape.
         plugin_validate="$plugin_dir/bin/validate"
-        if [ -x "$plugin_validate" ]; then
-            if "$plugin_validate"; then
-                pass "$plugin_name: plugin-local validate passed"
-            else
-                fail "$plugin_name: plugin-local validate failed (see output above)"
-            fi
+        if [ -f "$plugin_validate" ] && [ -x "$plugin_validate" ]; then
+            pv_real="$(cd "$(dirname "$plugin_validate")" 2>/dev/null && pwd -P)/$(basename "$plugin_validate")" || pv_real=""
+            case "$pv_real" in
+                "$REPO_ROOT_REAL"/*)
+                    if "$plugin_validate"; then
+                        pass "$plugin_name: plugin-local validate passed"
+                    else
+                        fail "$plugin_name: plugin-local validate failed (see output above)"
+                    fi
+                    ;;
+                *)
+                    fail "$plugin_name: bin/validate resolves outside repo root — skipping"
+                    ;;
+            esac
         fi
     done
 fi

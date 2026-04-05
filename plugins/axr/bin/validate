@@ -18,6 +18,9 @@ cd "$PLUGIN_DIR" || exit 1
 
 ERRORS=()
 
+# sanitize — strip shell/ANSI-unsafe chars from strings flowing into output.
+sanitize() { printf '%s' "$1" | tr -d "\$()\`\033"; }
+
 pass() { printf '  ✓ axr: %s\n' "$1"; }
 fail() { printf '  ✗ axr: %s\n' "$1"; ERRORS+=("$1"); }
 
@@ -47,21 +50,21 @@ else
         fail "rubric weights sum to ${WEIGHT_SUM:-missing} (expected 100)"
     fi
 
-    BAD_DIMS=$(jq -r '[.dimensions[] | select((.criteria | length) != 5) | .id] | join(",")' "$RUBRIC")
+    BAD_DIMS=$(sanitize "$(jq -r '[.dimensions[] | select((.criteria | length) != 5) | .id] | join(",")' "$RUBRIC")")
     if [ -z "$BAD_DIMS" ]; then
         pass "every dimension has 5 criteria"
     else
         fail "dimensions without 5 criteria: $BAD_DIMS"
     fi
 
-    BAD_CRIT=$(jq -r '[.dimensions[].criteria[] | select((has("id")|not) or (has("name")|not) or (has("description")|not) or (has("checker_type")|not) or ((.checker_type=="mechanical" or .checker_type=="judgment")|not)) | .id // "<missing-id>"] | join(",")' "$RUBRIC")
+    BAD_CRIT=$(sanitize "$(jq -r '[.dimensions[].criteria[] | select((has("id")|not) or (has("name")|not) or (has("description")|not) or (has("checker_type")|not) or ((.checker_type=="mechanical" or .checker_type=="judgment")|not)) | .id // "<missing-id>"] | join(",")' "$RUBRIC")")
     if [ -z "$BAD_CRIT" ]; then
         pass "every criterion has required fields and valid checker_type"
     else
         fail "criteria with missing/invalid core fields: $BAD_CRIT"
     fi
 
-    BAD_HINTS=$(jq -r '[.dimensions[].criteria[] | select((.evidence_hints | type) != "array" or (.evidence_hints | length) < 1) | .id] | join(",")' "$RUBRIC")
+    BAD_HINTS=$(sanitize "$(jq -r '[.dimensions[].criteria[] | select((.evidence_hints | type) != "array" or (.evidence_hints | length) < 1) | .id] | join(",")' "$RUBRIC")")
     if [ -z "$BAD_HINTS" ]; then
         pass "every criterion has evidence_hints[] ≥ 1"
     else

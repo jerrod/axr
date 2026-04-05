@@ -27,14 +27,21 @@ has_closed_frontmatter() {
 
 cd_repo_root
 
+REPO_ROOT_REAL="$(pwd -P)" || { printf 'bin/lint: fatal: pwd -P failed\n' >&2; exit 1; }
+[ -n "$REPO_ROOT_REAL" ] || { printf 'bin/lint: fatal: REPO_ROOT_REAL is empty\n' >&2; exit 1; }
+
 FAIL=0
 
 # 1. shellcheck on all bash scripts — bin/ plus every plugins/*/scripts
-#    and plugins/*/bin dir that exists. Guard each path so a missing dir
-#    doesn't make find emit an error that silently passes the whole gate.
+#    and plugins/*/bin dir that exists. Containment-check each candidate
+#    so a symlinked external directory isn't added to SH_ROOTS.
 SH_ROOTS=(bin)
 for p in plugins/*/scripts plugins/*/bin; do
-    [ -d "$p" ] && SH_ROOTS+=("$p")
+    [ -d "$p" ] || continue
+    p_real="$(cd "$p" 2>/dev/null && pwd -P)" || continue
+    case "$p_real" in
+        "$REPO_ROOT_REAL"/*) SH_ROOTS+=("$p") ;;
+    esac
 done
 while IFS= read -r -d '' f; do
     if ! shellcheck -f gcc -x "$f" 2>&1 | strip_ansi; then

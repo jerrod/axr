@@ -34,7 +34,12 @@ if [ -x bin/validate ]; then
         FAIL=1
         printf '%s\n' "$VALIDATE_OUT"
     else
-        printf '%s\n' "$VALIDATE_OUT" | awk '/✗/ { sub(/^[[:space:]]*✗[[:space:]]*/, ""); print "bin/validate:1: " $0 }'
+        # Defensive: if validate exits 0 but emits ✗ lines (internal
+        # inconsistency bug), surface them AND mark FAIL so the gate
+        # doesn't silently pass.
+        if printf '%s\n' "$VALIDATE_OUT" | awk '/✗/ { sub(/^[[:space:]]*✗[[:space:]]*/, ""); print "bin/validate:1: " $0; found=1 } END { exit !found }'; then
+            FAIL=1
+        fi
     fi
 else
     printf 'bin/validate:1: script missing or not executable\n'
