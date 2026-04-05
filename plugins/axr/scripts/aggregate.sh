@@ -219,16 +219,25 @@ chmod 700 "$RENDER_TMP"
 # shellcheck disable=SC2064
 trap "rm -rf '$RENDER_TMP'" EXIT
 
-printf '%s' "$REPO_NAME" > "$RENDER_TMP/repo"
-printf '%s' "$TOTAL_SCORE" > "$RENDER_TMP/total_score"
-printf '%s' "$BAND_LABEL" > "$RENDER_TMP/band_label"
-printf '%s' "$BAND_DESC" > "$RENDER_TMP/band_description"
-printf '%s' "$RUBRIC_VERSION" > "$RENDER_TMP/rubric_version"
-printf '%s' "$SCORED_AT" > "$RENDER_TMP/scored_at"
-printf '%s' "$TREND_SECTION" > "$RENDER_TMP/trend_section"
-printf '%s' "$DIM_TABLE" > "$RENDER_TMP/dimension_table"
-printf '%s' "$BLOCKER_LIST" > "$RENDER_TMP/blockers"
-printf '%s' "$BLOCKER_LIST" > "$RENDER_TMP/next_improvements"
+# Write a template token value, stripping { and } so no token value can
+# inject a {{placeholder}} that the awk substitution pass would expand.
+# This is defense-in-depth: dimension JSON .name fields, prev_date from
+# prior latest.json, and REPO_NAME from git remote URL all flow through
+# here and could otherwise carry attacker-influenced placeholder syntax.
+write_token() {
+    printf '%s' "$2" | tr -d '{}' > "$RENDER_TMP/$1"
+}
+
+write_token repo "$REPO_NAME"
+write_token total_score "$TOTAL_SCORE"
+write_token band_label "$BAND_LABEL"
+write_token band_description "$BAND_DESC"
+write_token rubric_version "$RUBRIC_VERSION"
+write_token scored_at "$SCORED_AT"
+write_token trend_section "$TREND_SECTION"
+write_token dimension_table "$DIM_TABLE"
+write_token blockers "$BLOCKER_LIST"
+write_token next_improvements "$BLOCKER_LIST"
 
 awk -v d="$RENDER_TMP" '
     BEGIN {
