@@ -17,10 +17,8 @@ cd_repo_root() {
     local root
     if root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
         cd "$root" || exit 1
-    elif [ -n "${BASH_SOURCE[1]:-}" ]; then
-        cd "$(dirname "${BASH_SOURCE[1]}")/.." || exit 1
     else
-        cd "$PWD" || exit 1
+        cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
     fi
 }
 
@@ -28,12 +26,16 @@ cd_repo_root
 
 FAIL=0
 
-# 1. bin/validate — run, strip success noise, surface failures only.
+# 1. bin/validate — run, surface failures in file:line:message format.
+#    On non-zero exit, also print the raw output so bash errors that occur
+#    before the pass/fail functions fire are not silently swallowed.
 if [ -x bin/validate ]; then
     if ! VALIDATE_OUT="$(bin/validate 2>&1 | strip_ansi)"; then
         FAIL=1
+        printf '%s\n' "$VALIDATE_OUT"
+    else
+        printf '%s\n' "$VALIDATE_OUT" | awk '/✗/ { sub(/^[[:space:]]*✗[[:space:]]*/, ""); print "bin/validate:1: " $0 }'
     fi
-    printf '%s\n' "$VALIDATE_OUT" | awk '/✗/ { sub(/^[[:space:]]*✗[[:space:]]*/, ""); print "bin/validate:1: " $0 }'
 else
     printf 'bin/validate:1: script missing or not executable\n'
     FAIL=1

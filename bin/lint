@@ -14,10 +14,8 @@ cd_repo_root() {
     local root
     if root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
         cd "$root" || exit 1
-    elif [ -n "${BASH_SOURCE[1]:-}" ]; then
-        cd "$(dirname "${BASH_SOURCE[1]}")/.." || exit 1
     else
-        cd "$PWD" || exit 1
+        cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
     fi
 }
 
@@ -31,12 +29,18 @@ cd_repo_root
 
 FAIL=0
 
-# 1. shellcheck on all bash scripts.
+# 1. shellcheck on all bash scripts — bin/ plus every plugins/*/scripts
+#    and plugins/*/bin dir that exists. Guard each path so a missing dir
+#    doesn't make find emit an error that silently passes the whole gate.
+SH_ROOTS=(bin)
+for p in plugins/*/scripts plugins/*/bin; do
+    [ -d "$p" ] && SH_ROOTS+=("$p")
+done
 while IFS= read -r -d '' f; do
     if ! shellcheck -f gcc -x "$f" 2>&1 | strip_ansi; then
         FAIL=1
     fi
-done < <(find bin plugins/*/scripts -type f \( -name '*.sh' -o -perm -u+x \) -print0 2>/dev/null)
+done < <(find -P "${SH_ROOTS[@]}" -type f -not -type l \( -name '*.sh' -o -perm -u+x \) -print0 2>/dev/null)
 
 # 2. jq parse on all JSON.
 while IFS= read -r -d '' f; do
@@ -44,11 +48,12 @@ while IFS= read -r -d '' f; do
         printf '%s:1: %s\n' "$f" "$err" | strip_ansi
         FAIL=1
     fi
-done < <(find . -type f -name '*.json' \
+done < <(find -P . -type f -name '*.json' \
              -not -path './.git/*' \
              -not -path './.axr/*' \
              -not -path './.quality/*' \
              -not -path './.therapist/*' \
+             -not -path './node_modules/*' \
              -print0 2>/dev/null)
 
 # 3. YAML frontmatter on commands/*.md.

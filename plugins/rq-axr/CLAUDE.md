@@ -8,7 +8,8 @@ This is the `rq-axr` Claude Code plugin. It scores repositories against the Agen
 - `commands/*.md` — slash command definitions (`/axr`, `/axr-check`, `/axr-diff`)
 - `rubric/rubric.v1.json` — versioned rubric, source of truth for scoring
 - `scripts/check-*.sh` — per-dimension deterministic checkers
-- `scripts/lib/` — shared bash helpers (common.sh, markdown-helpers.sh, shell-helpers.sh)
+- `scripts/lib/` — shared bash helpers (common.sh, markdown-helpers.sh)
+- `bin/validate` — plugin-local validator invoked by marketplace `bin/validate` (rubric schema checks)
 - `docs/plugin-brief.md` — authoritative spec and operational rules
 
 ## Architecture
