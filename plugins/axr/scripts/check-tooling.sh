@@ -8,64 +8,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source-path=SCRIPTDIR
 # shellcheck source=lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib/workflow-helpers.sh
+source "$SCRIPT_DIR/lib/workflow-helpers.sh"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib/tooling-helpers.sh
+source "$SCRIPT_DIR/lib/tooling-helpers.sh"
 
 axr_init_output tooling "script:check-tooling.sh"
 
 STACK_JSON="$(axr_detect_stack)"
 has_tag() {
     jq -e --arg t "$1" 'any(.[]; . == $t)' <<<"$STACK_JSON" >/dev/null 2>&1
-}
-
-# ---------------------------------------------------------------------------
-# extract_workflow_run_lines — print the command body of every `run:` step
-# across all .github/workflows/*.yml files to stdout. awk-based fallback if
-# yq is not available.
-# ---------------------------------------------------------------------------
-extract_workflow_run_lines() {
-    local files=()
-    while IFS= read -r line; do
-        files+=("$line")
-    done < <(find -P .github/workflows -maxdepth 1 -type f -not -type l \
-        \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null | sort)
-    [ "${#files[@]}" -eq 0 ] && return 0
-
-    if command -v yq >/dev/null 2>&1; then
-        local f
-        for f in "${files[@]}"; do
-            yq e '.. | select(has("run")) | .run' "$f" 2>/dev/null || true
-        done
-        return 0
-    fi
-
-    # awk fallback: extract values after "run:" keys, including block-scalar
-    # (| or >) continuations. Normalize to single lines.
-    local f
-    for f in "${files[@]}"; do
-        awk '
-            BEGIN { in_block=0; base_indent=-1 }
-            {
-                line=$0
-                if (in_block) {
-                    # determine leading spaces
-                    match(line, /^[[:space:]]*/)
-                    lead=RLENGTH
-                    if (line ~ /^[[:space:]]*$/) { print ""; next }
-                    if (base_indent < 0) base_indent=lead
-                    if (lead < base_indent) { in_block=0; base_indent=-1 }
-                    else { print substr(line, base_indent+1); next }
-                }
-                if (match(line, /^[[:space:]]*-?[[:space:]]*run:[[:space:]]*[|>][-+]?[[:space:]]*$/)) {
-                    in_block=1; base_indent=-1; next
-                }
-                if (match(line, /^[[:space:]]*-?[[:space:]]*run:[[:space:]]+/)) {
-                    val=substr(line, RSTART+RLENGTH)
-                    gsub(/^["'\'']/, "", val)
-                    gsub(/["'\'']$/, "", val)
-                    print val
-                }
-            }
-        ' "$f"
-    done
 }
 
 # ---------------------------------------------------------------------------
@@ -218,28 +172,10 @@ score_tooling_3() {
     local name
     name="$(axr_criterion_name tooling.3)"
 
-    local lockfiles=(package-lock.json yarn.lock pnpm-lock.yaml poetry.lock uv.lock
-        Pipfile.lock Gemfile.lock Cargo.lock go.sum composer.lock)
-    local lockfound=""
-    local f
-    for f in "${lockfiles[@]}"; do
-        if [ -f "$f" ]; then lockfound="${lockfound}${f},"; fi
-    done
-    lockfound="${lockfound%,}"
-
-    local env_pins=(.tool-versions .nvmrc .python-version .ruby-version rust-toolchain
-        rust-toolchain.toml)
-    local envfound=""
-    for f in "${env_pins[@]}"; do
-        if [ -f "$f" ]; then envfound="${envfound}${f},"; fi
-    done
-    envfound="${envfound%,}"
-
-    local container_found=""
-    for f in Dockerfile .devcontainer/devcontainer.json flake.nix shell.nix nix.conf; do
-        if [ -e "$f" ]; then container_found="${container_found}${f},"; fi
-    done
-    container_found="${container_found%,}"
+    local lockfound envfound container_found
+    lockfound="$(list_lockfiles | paste -sd, -)"
+    envfound="$(list_env_pins | paste -sd, -)"
+    container_found="$(list_containerization | paste -sd, -)"
 
     local ev=()
     [ -n "$lockfound" ] && ev+=("lockfiles: $lockfound")
@@ -315,13 +251,8 @@ score_tooling_5() {
     local name
     name="$(axr_criterion_name tooling.5)"
 
-    local lockfiles=(package-lock.json yarn.lock pnpm-lock.yaml poetry.lock uv.lock
-        Pipfile.lock Gemfile.lock Cargo.lock go.sum composer.lock)
-    local lock_count=0
-    local f
-    for f in "${lockfiles[@]}"; do
-        [ -f "$f" ] && lock_count=$((lock_count + 1))
-    done
+    local lock_count
+    lock_count="$(count_lockfiles)"
 
     local automation=""
     for f in renovate.json .github/renovate.json .renovaterc .renovaterc.json \
