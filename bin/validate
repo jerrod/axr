@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+# bin/validate — integrity checks for the axr plugin.
+#
+# Exits 0 when every check passes. Exits 1 and prints an accumulated list of
+# failures otherwise. Every check emits a single line prefixed with ✓ (pass)
+# or ✗ (fail) so CI output is easy to scan.
+#
+# Checks:
+#   1. Every *.json under the repo parses with jq (skipping .axr/ output dir).
+#   2. .claude-plugin/plugin.json has required fields.
+#   3. rubric/rubric.v1.json integrity (total_points, dimensions, weights,
+#      criteria counts, required criterion fields, evidence_hints).
+#   4. Every commands/*.md has YAML frontmatter with a description: field.
+#   5. Every scripts/**/*.sh is executable.
+
+set -uo pipefail
+
+# Resolve repo root regardless of CWD.
+if ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+    :
+else
+    ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+cd "$ROOT"
+
+ERRORS=()
+
+pass() { printf '  ✓ %s\n' "$1"; }
+fail() { printf '  ✗ %s\n' "$1"; ERRORS+=("$1"); }
+
+section() { printf '\n%s\n' "$1"; }
+
+# ---------------------------------------------------------------------------
+# Check 1: All *.json files parse
+# ---------------------------------------------------------------------------
+section "Check 1: JSON files parse"
+JSON_FILES=()
+while IFS= read -r -d '' f; do
+    JSON_FILES+=("$f")
+done < <(find . -type f -name '*.json' \
+             -not -path './.axr/*' \
+             -not -path './.git/*' \
+             -not -path './node_modules/*' \
+             -print0 2>/dev/null)
+
+if [ ${#JSON_FILES[@]} -eq 0 ]; then
+    fail "no JSON files found"
+else
+    for f in "${JSON_FILES[@]}"; do
+        if jq empty "$f" >/dev/null 2>&1; then
+            pass "parses: $f"
+        else
+            fail "invalid JSON: $f"
+        fi
+    done
+fi
+
+# ---------------------------------------------------------------------------
+# Check 2: plugin.json has required fields
+# ---------------------------------------------------------------------------
+section "Check 2: plugin.json required fields"
+PLUGIN_JSON=".claude-plugin/plugin.json"
+if [ ! -f "$PLUGIN_JSON" ]; then
+    fail "$PLUGIN_JSON missing"
+else
+    for field in name version description commands; do
+        if jq -e --arg f "$field" 'has($f)' "$PLUGIN_JSON" >/dev/null 2>&1; then
+            pass "plugin.json has .$field"
+        else
+            fail "plugin.json missing .$field"
+        fi
+    done
+    if jq -e '.config.rubric_path' "$PLUGIN_JSON" >/dev/null 2>&1; then
+        pass "plugin.json has .config.rubric_path"
+    else
+        fail "plugin.json missing .config.rubric_path"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Check 3: rubric integrity
+# ---------------------------------------------------------------------------
+section "Check 3: rubric integrity"
+RUBRIC="rubric/rubric.v1.json"
+if [ ! -f "$RUBRIC" ]; then
+    fail "$RUBRIC missing"
+else
+    TOTAL_POINTS=$(jq -r '.total_points // empty' "$RUBRIC")
+    if [ "$TOTAL_POINTS" = "100" ]; then
+        pass "rubric.total_points == 100"
+    else
+        fail "rubric.total_points != 100 (got: ${TOTAL_POINTS:-missing})"
+    fi
+
+    DIM_COUNT=$(jq -r '.dimensions | length' "$RUBRIC")
+    if [ "$DIM_COUNT" = "8" ]; then
+        pass "rubric has 8 dimensions"
+    else
+        fail "rubric has $DIM_COUNT dimensions (expected 8)"
+    fi
+
+    WEIGHT_SUM=$(jq -r '.dimensions | map(.weight) | add' "$RUBRIC")
+    if [ "$WEIGHT_SUM" = "100" ]; then
+        pass "rubric dimension weights sum to 100"
+    else
+        fail "rubric dimension weights sum to $WEIGHT_SUM (expected 100)"
+    fi
+
+    BAD_DIMS=$(jq -r '[.dimensions[] | select((.criteria | length) != 5) | .id] | join(",")' "$RUBRIC")
+    if [ -z "$BAD_DIMS" ]; then
+        pass "every dimension has 5 criteria"
+    else
+        fail "dimensions without 5 criteria: $BAD_DIMS"
+    fi
+
+    BAD_CRIT=$(jq -r '[.dimensions[].criteria[] | select((has("id")|not) or (has("name")|not) or (has("description")|not) or (has("checker_type")|not) or ((.checker_type=="mechanical" or .checker_type=="judgment")|not)) | .id // "<missing-id>"] | join(",")' "$RUBRIC")
+    if [ -z "$BAD_CRIT" ]; then
+        pass "every criterion has id/name/description/checker_type"
+    else
+        fail "criteria with missing/invalid core fields: $BAD_CRIT"
+    fi
+
+    BAD_HINTS=$(jq -r '[.dimensions[].criteria[] | select((.evidence_hints | type) != "array" or (.evidence_hints | length) < 1) | .id] | join(",")' "$RUBRIC")
+    if [ -z "$BAD_HINTS" ]; then
+        pass "every criterion has evidence_hints[] with ≥1 entry"
+    else
+        fail "criteria with empty/missing evidence_hints: $BAD_HINTS"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Check 4: commands/*.md have YAML frontmatter with description:
+# ---------------------------------------------------------------------------
+section "Check 4: command frontmatter"
+if [ ! -d commands ]; then
+    fail "commands/ directory missing"
+else
+    CMD_FILES=()
+    while IFS= read -r -d '' f; do
+        CMD_FILES+=("$f")
+    done < <(find commands -maxdepth 1 -type f -name '*.md' -print0 2>/dev/null)
+
+    if [ ${#CMD_FILES[@]} -eq 0 ]; then
+        fail "no commands/*.md files found"
+    else
+        for f in "${CMD_FILES[@]}"; do
+            FIRST_LINE=$(head -n1 "$f")
+            if [ "$FIRST_LINE" != "---" ]; then
+                fail "$f: missing YAML frontmatter (first line is not ---)"
+                continue
+            fi
+            # Extract frontmatter block (between first two --- lines)
+            FM=$(awk 'NR==1 && /^---$/ {inside=1; next} inside && /^---$/ {exit} inside {print}' "$f")
+            if printf '%s\n' "$FM" | grep -Eq '^[[:space:]]*description:[[:space:]]*.+'; then
+                pass "$f: frontmatter has description"
+            else
+                fail "$f: frontmatter missing description:"
+            fi
+        done
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Check 5: scripts/**/*.sh are executable
+# ---------------------------------------------------------------------------
+section "Check 5: script executability"
+if [ ! -d scripts ]; then
+    fail "scripts/ directory missing"
+else
+    SH_FILES=()
+    while IFS= read -r -d '' f; do
+        SH_FILES+=("$f")
+    done < <(find scripts -type f -name '*.sh' -print0 2>/dev/null)
+
+    if [ ${#SH_FILES[@]} -eq 0 ]; then
+        fail "no scripts/**/*.sh files found"
+    else
+        for f in "${SH_FILES[@]}"; do
+            if [ -x "$f" ]; then
+                pass "$f is executable"
+            else
+                fail "$f is not executable (chmod +x)"
+            fi
+        done
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+printf '\n'
+if [ ${#ERRORS[@]} -eq 0 ]; then
+    printf 'bin/validate: all checks passed ✓\n'
+    exit 0
+else
+    printf 'bin/validate: %d check(s) failed ✗\n' "${#ERRORS[@]}"
+    exit 1
+fi
