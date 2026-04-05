@@ -16,7 +16,7 @@ All work uses the rq plugin: `/rq:writing-plans` → `/rq:pair-build` → `/rq:r
 ## Gates
 
 - `bin/validate` — marketplace manifest + every plugin's manifest, rubric, commands, and script executability
-- `bin/lint` — shellcheck on every script under `bin/` and `plugins/*/scripts/`, jq parse on every `*.json`, YAML frontmatter check on every `plugins/*/commands/*.md`
+- `bin/lint` — shellcheck on every script under `bin/`, `plugins/*/scripts/`, and `plugins/*/bin/`; jq parse on every `*.json`; YAML frontmatter check on every `plugins/*/commands/*.md`
 - `bin/test` — runs `bin/validate` plus every plugin's `scripts/check-*.sh`, verifies each emits schema-valid JSON
 
 Always use the `bin/` scripts — never run the underlying tools directly.

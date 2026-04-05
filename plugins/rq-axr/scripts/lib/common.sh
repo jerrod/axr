@@ -43,9 +43,9 @@ declare -gA _AXR_CRITERION_NAME_BY_ID
 # axr_repo_root — echo the TARGET repo root (the repo being scored), falling
 # back to $PWD. For the PLUGIN root, see $_AXR_PLUGIN_ROOT.
 #
-# Note: a parallel cd_repo_root helper exists in scripts/lib/shell-helpers.sh
-# for bin/ gate scripts that do not source common.sh. If detection strategy
-# changes, update both.
+# Note: cd_repo_root is inlined in each marketplace bin/ gate script
+# (bin/validate, bin/lint, bin/test) and in plugins/rq-axr/bin/validate.
+# If detection strategy changes, update each inline copy.
 # ---------------------------------------------------------------------------
 axr_repo_root() {
     local root
