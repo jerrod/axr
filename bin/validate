@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
-# bin/validate — integrity checks for the rq-axr plugin.
-#
-# Exits 0 when every check passes. Exits 1 and prints an accumulated list of
-# failures otherwise. Every check emits a single line prefixed with ✓ (pass)
-# or ✗ (fail) so CI output is easy to scan.
+# bin/validate — integrity checks for the jerrod/axr marketplace.
 #
 # Checks:
-#   1. Every *.json under the repo parses with jq (skipping .axr/ output dir).
-#   2. .claude-plugin/plugin.json has required fields.
-#   3. rubric/rubric.v1.json integrity (total_points, dimensions, weights,
-#      criteria counts, required criterion fields, evidence_hints).
-#   4. Every commands/*.md has YAML frontmatter with a description: field.
-#   5. Every scripts/**/*.sh is executable.
+#   1. Every *.json file parses with jq.
+#   2. .claude-plugin/marketplace.json has name + owner + plugins[].
+#   3. For each plugin under plugins/*/:
+#        a. .claude-plugin/plugin.json has name, version, description, commands.
+#        b. If rubric/*.json exists: rubric integrity (weights, criteria, fields).
+#        c. Every commands/*.md has closed YAML frontmatter with description:.
+#        d. Every scripts/**/*.sh is executable.
 
 set -uo pipefail
 
@@ -38,7 +35,6 @@ ERRORS=()
 
 pass() { printf '  ✓ %s\n' "$1"; }
 fail() { printf '  ✗ %s\n' "$1"; ERRORS+=("$1"); }
-
 section() { printf '\n%s\n' "$1"; }
 
 # ---------------------------------------------------------------------------
@@ -69,132 +65,143 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Check 2: plugin.json has required fields
+# Check 2: marketplace.json
 # ---------------------------------------------------------------------------
-section "Check 2: plugin.json required fields"
-PLUGIN_JSON=".claude-plugin/plugin.json"
-if [ ! -f "$PLUGIN_JSON" ]; then
-    fail "$PLUGIN_JSON missing"
+section "Check 2: marketplace manifest"
+MARKETPLACE=".claude-plugin/marketplace.json"
+if [ ! -f "$MARKETPLACE" ]; then
+    fail "$MARKETPLACE missing"
 else
-    for field in name version description commands; do
-        if jq -e --arg f "$field" 'has($f)' "$PLUGIN_JSON" >/dev/null 2>&1; then
-            pass "plugin.json has .$field"
+    for field in name owner plugins; do
+        if jq -e --arg f "$field" 'has($f)' "$MARKETPLACE" >/dev/null 2>&1; then
+            pass "marketplace.json has .$field"
         else
-            fail "plugin.json missing .$field"
+            fail "marketplace.json missing .$field"
         fi
     done
-    if jq -e '.config.rubric_path' "$PLUGIN_JSON" >/dev/null 2>&1; then
-        pass "plugin.json has .config.rubric_path"
+    if jq -e '.plugins | type == "array" and length > 0' "$MARKETPLACE" >/dev/null 2>&1; then
+        pass "marketplace.json .plugins is non-empty array"
     else
-        fail "plugin.json missing .config.rubric_path"
+        fail "marketplace.json .plugins must be a non-empty array"
+    fi
+    BAD_ENTRIES=$(jq -r '[.plugins[] | select((has("name")|not) or (has("description")|not) or (has("source")|not) or (.source | startswith("./") | not)) | .name // "<no-name>"] | join(",")' "$MARKETPLACE")
+    if [ -z "$BAD_ENTRIES" ]; then
+        pass "every plugin entry has name, description, relative source"
+    else
+        fail "plugin entries with missing fields or non-relative source: $BAD_ENTRIES"
     fi
 fi
 
 # ---------------------------------------------------------------------------
-# Check 3: rubric integrity
+# Check 3: per-plugin validation
 # ---------------------------------------------------------------------------
-section "Check 3: rubric integrity"
-RUBRIC="rubric/rubric.v1.json"
-if [ ! -f "$RUBRIC" ]; then
-    fail "$RUBRIC missing"
+PLUGIN_DIRS=()
+for d in plugins/*/; do
+    [ -d "$d" ] || continue
+    PLUGIN_DIRS+=("${d%/}")
+done
+
+if [ ${#PLUGIN_DIRS[@]} -eq 0 ]; then
+    section "Check 3: per-plugin validation"
+    fail "no plugins/ subdirectories found"
 else
-    TOTAL_POINTS=$(jq -r '.total_points // empty' "$RUBRIC")
-    if [ "$TOTAL_POINTS" = "100" ]; then
-        pass "rubric.total_points == 100"
-    else
-        fail "rubric.total_points != 100 (got: ${TOTAL_POINTS:-missing})"
-    fi
+    for plugin_dir in "${PLUGIN_DIRS[@]}"; do
+        plugin_name=$(basename "$plugin_dir")
+        section "Check 3: $plugin_name"
 
-    DIM_COUNT=$(jq -r '.dimensions | length' "$RUBRIC")
-    if [ "$DIM_COUNT" = "8" ]; then
-        pass "rubric has 8 dimensions"
-    else
-        fail "rubric has $DIM_COUNT dimensions (expected 8)"
-    fi
+        plugin_json="$plugin_dir/.claude-plugin/plugin.json"
+        if [ ! -f "$plugin_json" ]; then
+            fail "$plugin_name: $plugin_json missing"
+        else
+            for field in name version description commands; do
+                if jq -e --arg f "$field" 'has($f)' "$plugin_json" >/dev/null 2>&1; then
+                    pass "$plugin_name: plugin.json has .$field"
+                else
+                    fail "$plugin_name: plugin.json missing .$field"
+                fi
+            done
+        fi
 
-    WEIGHT_SUM=$(jq -r '.dimensions | map(.weight) | add' "$RUBRIC")
-    if [ "$WEIGHT_SUM" = "100" ]; then
-        pass "rubric dimension weights sum to 100"
-    else
-        fail "rubric dimension weights sum to $WEIGHT_SUM (expected 100)"
-    fi
+        RUBRIC_GLOB=("$plugin_dir/rubric/"*.json)
+        if [ -e "${RUBRIC_GLOB[0]:-/nonexistent}" ]; then
+            for rubric in "${RUBRIC_GLOB[@]}"; do
+                [ -f "$rubric" ] || continue
+                TOTAL_POINTS=$(jq -r '.total_points // empty' "$rubric")
+                if [ "$TOTAL_POINTS" = "100" ]; then
+                    pass "$plugin_name: $rubric total_points == 100"
+                else
+                    fail "$plugin_name: $rubric total_points != 100 (got: ${TOTAL_POINTS:-missing})"
+                fi
+                WEIGHT_SUM=$(jq -r '(.dimensions | map(.weight) | add) // empty' "$rubric")
+                if [ "$WEIGHT_SUM" = "100" ]; then
+                    pass "$plugin_name: $rubric weights sum to 100"
+                else
+                    fail "$plugin_name: $rubric weights sum to ${WEIGHT_SUM:-missing} (expected 100)"
+                fi
+                BAD_DIMS=$(jq -r '[.dimensions[] | select((.criteria | length) != 5) | .id] | join(",")' "$rubric")
+                if [ -z "$BAD_DIMS" ]; then
+                    pass "$plugin_name: $rubric every dimension has 5 criteria"
+                else
+                    fail "$plugin_name: $rubric dimensions without 5 criteria: $BAD_DIMS"
+                fi
+                BAD_CRIT=$(jq -r '[.dimensions[].criteria[] | select((has("id")|not) or (has("name")|not) or (has("description")|not) or (has("checker_type")|not) or ((.checker_type=="mechanical" or .checker_type=="judgment")|not)) | .id // "<missing-id>"] | join(",")' "$rubric")
+                if [ -z "$BAD_CRIT" ]; then
+                    pass "$plugin_name: $rubric every criterion has required fields"
+                else
+                    fail "$plugin_name: $rubric criteria with missing/invalid fields: $BAD_CRIT"
+                fi
+                BAD_HINTS=$(jq -r '[.dimensions[].criteria[] | select((.evidence_hints | type) != "array" or (.evidence_hints | length) < 1) | .id] | join(",")' "$rubric")
+                if [ -z "$BAD_HINTS" ]; then
+                    pass "$plugin_name: $rubric every criterion has evidence_hints[] ≥ 1"
+                else
+                    fail "$plugin_name: $rubric empty/missing evidence_hints: $BAD_HINTS"
+                fi
+            done
+        fi
 
-    BAD_DIMS=$(jq -r '[.dimensions[] | select((.criteria | length) != 5) | .id] | join(",")' "$RUBRIC")
-    if [ -z "$BAD_DIMS" ]; then
-        pass "every dimension has 5 criteria"
-    else
-        fail "dimensions without 5 criteria: $BAD_DIMS"
-    fi
+        if [ -d "$plugin_dir/commands" ]; then
+            CMD_FILES=()
+            while IFS= read -r -d '' f; do
+                CMD_FILES+=("$f")
+            done < <(find "$plugin_dir/commands" -maxdepth 1 -type f -name '*.md' -print0 2>/dev/null)
 
-    BAD_CRIT=$(jq -r '[.dimensions[].criteria[] | select((has("id")|not) or (has("name")|not) or (has("description")|not) or (has("checker_type")|not) or ((.checker_type=="mechanical" or .checker_type=="judgment")|not)) | .id // "<missing-id>"] | join(",")' "$RUBRIC")
-    if [ -z "$BAD_CRIT" ]; then
-        pass "every criterion has id/name/description/checker_type"
-    else
-        fail "criteria with missing/invalid core fields: $BAD_CRIT"
-    fi
-
-    BAD_HINTS=$(jq -r '[.dimensions[].criteria[] | select((.evidence_hints | type) != "array" or (.evidence_hints | length) < 1) | .id] | join(",")' "$RUBRIC")
-    if [ -z "$BAD_HINTS" ]; then
-        pass "every criterion has evidence_hints[] with ≥1 entry"
-    else
-        fail "criteria with empty/missing evidence_hints: $BAD_HINTS"
-    fi
-fi
-
-# ---------------------------------------------------------------------------
-# Check 4: commands/*.md have YAML frontmatter with description:
-# ---------------------------------------------------------------------------
-section "Check 4: command frontmatter"
-if [ ! -d commands ]; then
-    fail "commands/ directory missing"
-else
-    CMD_FILES=()
-    while IFS= read -r -d '' f; do
-        CMD_FILES+=("$f")
-    done < <(find commands -maxdepth 1 -type f -name '*.md' -print0 2>/dev/null)
-
-    if [ ${#CMD_FILES[@]} -eq 0 ]; then
-        fail "no commands/*.md files found"
-    else
-        for f in "${CMD_FILES[@]}"; do
-            if ! has_closed_frontmatter "$f"; then
-                fail "$f: missing or unclosed YAML frontmatter (need opening and closing ---)"
-                continue
-            fi
-            # Extract frontmatter block (between first two --- lines).
-            FM=$(awk 'NR==1 && /^---$/ {inside=1; next} inside && /^---$/ {exit} inside {print}' "$f")
-            if printf '%s\n' "$FM" | grep -Eq '^[[:space:]]*description:[[:space:]]*.+'; then
-                pass "$f: frontmatter has description"
+            if [ ${#CMD_FILES[@]} -eq 0 ]; then
+                fail "$plugin_name: commands/ has no *.md files"
             else
-                fail "$f: frontmatter missing description:"
+                for f in "${CMD_FILES[@]}"; do
+                    if ! has_closed_frontmatter "$f"; then
+                        fail "$plugin_name: $f missing or unclosed YAML frontmatter"
+                        continue
+                    fi
+                    FM=$(awk 'NR==1 && /^---$/ {inside=1; next} inside && /^---$/ {exit} inside {print}' "$f")
+                    if printf '%s\n' "$FM" | grep -Eq '^[[:space:]]*description:[[:space:]]*.+'; then
+                        pass "$plugin_name: $f frontmatter has description"
+                    else
+                        fail "$plugin_name: $f frontmatter missing description:"
+                    fi
+                done
             fi
-        done
-    fi
-fi
+        fi
 
-# ---------------------------------------------------------------------------
-# Check 5: scripts/**/*.sh are executable
-# ---------------------------------------------------------------------------
-section "Check 5: script executability"
-if [ ! -d scripts ]; then
-    fail "scripts/ directory missing"
-else
-    SH_FILES=()
-    while IFS= read -r -d '' f; do
-        SH_FILES+=("$f")
-    done < <(find scripts -type f -name '*.sh' -print0 2>/dev/null)
+        if [ -d "$plugin_dir/scripts" ]; then
+            SH_FILES=()
+            while IFS= read -r -d '' f; do
+                SH_FILES+=("$f")
+            done < <(find "$plugin_dir/scripts" -type f -name '*.sh' -print0 2>/dev/null)
 
-    if [ ${#SH_FILES[@]} -eq 0 ]; then
-        fail "no scripts/**/*.sh files found"
-    else
-        for f in "${SH_FILES[@]}"; do
-            if [ -x "$f" ]; then
-                pass "$f is executable"
+            if [ ${#SH_FILES[@]} -eq 0 ]; then
+                fail "$plugin_name: scripts/ has no *.sh files"
             else
-                fail "$f is not executable (chmod +x)"
+                for f in "${SH_FILES[@]}"; do
+                    if [ -x "$f" ]; then
+                        pass "$plugin_name: $f executable"
+                    else
+                        fail "$plugin_name: $f not executable"
+                    fi
+                done
             fi
-        done
-    fi
+        fi
+    done
 fi
 
 # ---------------------------------------------------------------------------

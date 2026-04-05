@@ -36,7 +36,7 @@ while IFS= read -r -d '' f; do
     if ! shellcheck -f gcc -x "$f" 2>&1 | strip_ansi; then
         FAIL=1
     fi
-done < <(find bin scripts -type f \( -name '*.sh' -o -perm -u+x \) -print0 2>/dev/null)
+done < <(find bin plugins/*/scripts -type f \( -name '*.sh' -o -perm -u+x \) -print0 2>/dev/null)
 
 # 2. jq parse on all JSON.
 while IFS= read -r -d '' f; do
@@ -52,8 +52,9 @@ done < <(find . -type f -name '*.json' \
              -print0 2>/dev/null)
 
 # 3. YAML frontmatter on commands/*.md.
-if [ -d commands ]; then
-    for f in commands/*.md; do
+for plugin_cmd_dir in plugins/*/commands; do
+    [ -d "$plugin_cmd_dir" ] || continue
+    for f in "$plugin_cmd_dir"/*.md; do
         [ -f "$f" ] || continue
         if ! has_closed_frontmatter "$f"; then
             printf '%s:1: missing or unclosed YAML frontmatter (expected opening and closing ---)\n' "$f"
@@ -66,6 +67,6 @@ if [ -d commands ]; then
             FAIL=1
         fi
     done
-fi
+done
 
 exit $FAIL
