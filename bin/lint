@@ -4,16 +4,18 @@
 # Checks:
 #   1. shellcheck on all executable bash scripts (bin/, scripts/)
 #   2. jq parse on all *.json files
-#   3. YAML frontmatter (first line ---, contains description:) on commands/*.md
+#   3. YAML frontmatter (opening + closing ---, contains description:) on
+#      commands/*.md
 set -uo pipefail
 
-strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
-FAIL=0
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=../scripts/lib/shell-helpers.sh
+source "$SCRIPT_DIR/../scripts/lib/shell-helpers.sh"
 
-# Resolve repo root regardless of CWD.
-if ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
-    cd "$ROOT" || exit 1
-fi
+cd_repo_root
+
+FAIL=0
 
 # 1. shellcheck on all bash scripts.
 while IFS= read -r -d '' f; do
@@ -39,8 +41,8 @@ done < <(find . -type f -name '*.json' \
 if [ -d commands ]; then
     for f in commands/*.md; do
         [ -f "$f" ] || continue
-        if [ "$(head -n1 "$f")" != "---" ]; then
-            printf '%s:1: missing YAML frontmatter (first line is not ---)\n' "$f"
+        if ! has_closed_frontmatter "$f"; then
+            printf '%s:1: missing or unclosed YAML frontmatter (expected opening and closing ---)\n' "$f"
             FAIL=1
             continue
         fi

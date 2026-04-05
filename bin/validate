@@ -15,13 +15,11 @@
 
 set -uo pipefail
 
-# Resolve repo root regardless of CWD.
-if ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"; then
-    :
-else
-    ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-fi
-cd "$ROOT" || exit 1
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=../scripts/lib/shell-helpers.sh
+source "$SCRIPT_DIR/../scripts/lib/shell-helpers.sh"
+cd_repo_root
 
 ERRORS=()
 
@@ -38,8 +36,10 @@ JSON_FILES=()
 while IFS= read -r -d '' f; do
     JSON_FILES+=("$f")
 done < <(find . -type f -name '*.json' \
-             -not -path './.axr/*' \
              -not -path './.git/*' \
+             -not -path './.axr/*' \
+             -not -path './.quality/*' \
+             -not -path './.therapist/*' \
              -not -path './node_modules/*' \
              -print0 2>/dev/null)
 
@@ -144,12 +144,11 @@ else
         fail "no commands/*.md files found"
     else
         for f in "${CMD_FILES[@]}"; do
-            FIRST_LINE=$(head -n1 "$f")
-            if [ "$FIRST_LINE" != "---" ]; then
-                fail "$f: missing YAML frontmatter (first line is not ---)"
+            if ! has_closed_frontmatter "$f"; then
+                fail "$f: missing or unclosed YAML frontmatter (need opening and closing ---)"
                 continue
             fi
-            # Extract frontmatter block (between first two --- lines)
+            # Extract frontmatter block (between first two --- lines).
             FM=$(awk 'NR==1 && /^---$/ {inside=1; next} inside && /^---$/ {exit} inside {print}' "$f")
             if printf '%s\n' "$FM" | grep -Eq '^[[:space:]]*description:[[:space:]]*.+'; then
                 pass "$f: frontmatter has description"
