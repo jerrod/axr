@@ -209,15 +209,15 @@ score_tests_ci_5() {
     local name
     name="$(axr_criterion_name tests_ci.5)"
 
-    local cfg="" hook_count=0
+    local cfg="" hook_count=0 f=""
     if [ -f .pre-commit-config.yaml ] || [ -f .pre-commit-config.yml ]; then
         cfg=".pre-commit-config.yaml"
-        local f=".pre-commit-config.yaml"
+        f=".pre-commit-config.yaml"
         [ -f .pre-commit-config.yml ] && f=".pre-commit-config.yml"
         hook_count="$(grep -cE '^[[:space:]]+-[[:space:]]+id:' "$f" 2>/dev/null || echo 0)"
     elif [ -f lefthook.yml ] || [ -f .lefthook.yml ]; then
         cfg="lefthook"
-        local f="lefthook.yml"
+        f="lefthook.yml"
         [ -f .lefthook.yml ] && f=".lefthook.yml"
         hook_count="$(grep -cE '^[[:space:]]+[a-zA-Z0-9_-]+:[[:space:]]*$' "$f" 2>/dev/null || echo 0)"
     elif [ -d .husky ]; then

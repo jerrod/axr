@@ -12,20 +12,34 @@ source "$SCRIPT_DIR/lib/common.sh"
 axr_init_output structure "script:check-structure.sh"
 
 STACK_JSON="$(axr_detect_stack)"
-has_tag() {
-    jq -e --arg t "$1" 'any(.[]; . == $t)' <<<"$STACK_JSON" >/dev/null 2>&1
-}
 
 # ---------------------------------------------------------------------------
 # structure.2 — No circular dependencies
 # ---------------------------------------------------------------------------
+score_by_cycles() {
+    local name="$1" cycles="$2" entry="$3"
+    if [ "$cycles" -eq 0 ]; then
+        axr_emit_criterion "structure.2" "$name" script 3 "zero cycles detected" \
+            "madge found 0 cycles in $entry"
+    elif [ "$cycles" -le 2 ]; then
+        axr_emit_criterion "structure.2" "$name" script 2 "$cycles cycle(s) detected" \
+            "madge found $cycles cycle(s) in $entry"
+    elif [ "$cycles" -le 5 ]; then
+        axr_emit_criterion "structure.2" "$name" script 1 "$cycles cycle(s) detected" \
+            "madge found $cycles cycle(s) in $entry"
+    else
+        axr_emit_criterion "structure.2" "$name" script 0 "$cycles cycle(s) detected" \
+            "madge found $cycles cycle(s) in $entry"
+    fi
+}
+
 score_structure_2() {
     local name
     name="$(axr_criterion_name structure.2)"
 
     local attempts=()
 
-    if has_tag node; then
+    if axr_has_stack_tag node; then
         attempts+=("node: attempted npx madge")
         if command -v npx >/dev/null 2>&1 && npx --yes madge --version >/dev/null 2>&1; then
             local entry=""
@@ -46,32 +60,15 @@ score_structure_2() {
         fi
     fi
 
-    if has_tag python; then
+    if axr_has_stack_tag python; then
         attempts+=("python: pydeps/pylint not attempted (tool unavailable)")
     fi
-    if has_tag go; then
+    if axr_has_stack_tag go; then
         attempts+=("go: cycle detection not implemented for go stack")
     fi
 
     axr_emit_criterion "structure.2" "$name" script 1 "tool unavailable — circular deps not checked" \
         "${attempts[@]:-no stack-specific tool available}"
-}
-
-score_by_cycles() {
-    local name="$1" cycles="$2" entry="$3"
-    if [ "$cycles" -eq 0 ]; then
-        axr_emit_criterion "structure.2" "$name" script 3 "zero cycles detected" \
-            "madge found 0 cycles in $entry"
-    elif [ "$cycles" -le 2 ]; then
-        axr_emit_criterion "structure.2" "$name" script 3 "$cycles cycle(s) detected" \
-            "madge found $cycles cycle(s) in $entry"
-    elif [ "$cycles" -le 5 ]; then
-        axr_emit_criterion "structure.2" "$name" script 2 "$cycles cycle(s) detected" \
-            "madge found $cycles cycle(s) in $entry"
-    else
-        axr_emit_criterion "structure.2" "$name" script 1 "$cycles cycle(s) detected" \
-            "madge found $cycles cycle(s) in $entry"
-    fi
 }
 
 # ---------------------------------------------------------------------------

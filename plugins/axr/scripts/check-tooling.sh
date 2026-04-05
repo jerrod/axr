@@ -18,9 +18,6 @@ source "$SCRIPT_DIR/lib/tooling-helpers.sh"
 axr_init_output tooling "script:check-tooling.sh"
 
 STACK_JSON="$(axr_detect_stack)"
-has_tag() {
-    jq -e --arg t "$1" 'any(.[]; . == $t)' <<<"$STACK_JSON" >/dev/null 2>&1
-}
 
 # ---------------------------------------------------------------------------
 # tooling.1 — Type checker clean or baselined
@@ -30,8 +27,8 @@ score_tooling_1() {
     name="$(axr_criterion_name tooling.1)"
 
     local has_node=0 has_python=0
-    has_tag node && has_node=1
-    has_tag python && has_python=1
+    axr_has_stack_tag node && has_node=1
+    axr_has_stack_tag python && has_python=1
 
     if [ "$has_node" = "0" ] && [ "$has_python" = "0" ]; then
         axr_emit_criterion "tooling.1" "$name" script 4 "no type-checkable language" \

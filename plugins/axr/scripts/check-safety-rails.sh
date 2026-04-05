@@ -100,8 +100,10 @@ score_safety_rails_4() {
     fi
 
     if ! printf '%s' "$slug" | grep -Eq '^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$'; then
+        local safe_slug
+        safe_slug="$(printf '%s' "$slug" | head -c 100 | tr -cd 'A-Za-z0-9./_-')"
         axr_emit_criterion "safety_rails.4" "$name" script 1 "branch protection state unknown" \
-            "could not derive repo slug (got: $slug)"
+            "could not derive repo slug (sanitized: $safe_slug)"
         return
     fi
 

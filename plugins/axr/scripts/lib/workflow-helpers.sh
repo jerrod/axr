@@ -41,8 +41,10 @@ extract_workflow_run_lines() {
                     lead=RLENGTH
                     if (line ~ /^[[:space:]]*$/) { print ""; next }
                     if (base_indent < 0) base_indent=lead
-                    if (lead < base_indent) { in_block=0; base_indent=-1 }
-                    else { print substr(line, base_indent+1); next }
+                    if (lead >= base_indent) { print substr(line, base_indent+1); next }
+                    # Block ended — fall through so this line can still be
+                    # evaluated as a new run: directive.
+                    in_block=0; base_indent=-1
                 }
                 if (match(line, /^[[:space:]]*-?[[:space:]]*run:[[:space:]]*[|>][-+]?[[:space:]]*$/)) {
                     in_block=1; base_indent=-1; next

@@ -96,9 +96,13 @@ for dim_id in "${DIM_IDS[@]}"; do
     DIMENSIONS_JSON="$(jq -c --arg id "$dim_id" --argjson obj "$dim_obj" \
         '. + {($id): $obj}' <<<"$DIMENSIONS_JSON")"
 
-    # Blocker candidates: score <= 1
+    # Blocker candidates: score <= 1 AND NOT defaulted_from_deferred.
+    # Defaulted judgment criteria score 1 as a placeholder — they're not
+    # assessed yet, so they shouldn't dominate the blockers list. Real
+    # mechanical scores of 0-1 are the actionable blockers.
     blocker_add="$(jq -c --arg dim_id "$dim_id" --argjson weight "$weight" '
-        [.[] | select(.score <= 1) | {dim_id: $dim_id, dim_weight: $weight, id: .id, name: .name, score: .score}]
+        [.[] | select(.score <= 1 and (.defaulted_from_deferred != true))
+             | {dim_id: $dim_id, dim_weight: $weight, id: .id, name: .name, score: .score}]
     ' <<<"$resolved_criteria")"
     BLOCKERS_JSON="$(jq -c --argjson add "$blocker_add" '. + $add' <<<"$BLOCKERS_JSON")"
 done
@@ -129,6 +133,9 @@ TOP_BLOCKERS="$(jq -c '
 # Trend.
 # ---------------------------------------------------------------------------
 if [ -n "$PREV_TOTAL" ] && [ "$PREV_TOTAL" != "null" ]; then
+    # Normalize to integer in case a prior run stored a float-serialized
+    # total_score; bash $(( )) silently treats non-integer strings as 0.
+    PREV_TOTAL="$(printf '%.0f' "$PREV_TOTAL")"
     DELTA=$((TOTAL_SCORE - PREV_TOTAL))
     TREND_JSON="$(jq -nc --argjson prev "$PREV_TOTAL" --argjson delta "$DELTA" --arg date "$PREV_DATE" \
         '{previous_score: $prev, delta: $delta, previous_date: $date}')"
@@ -205,6 +212,7 @@ fi
 # Render template using jq + awk — no python dependency. Write each token's
 # value to a temp file, then awk-substitute placeholders with file contents.
 RENDER_TMP="$(mktemp -d)"
+chmod 700 "$RENDER_TMP"
 # shellcheck disable=SC2064
 trap "rm -rf '$RENDER_TMP'" EXIT
 
@@ -240,8 +248,14 @@ awk -v d="$RENDER_TMP" '
         line=$0
         for (k in tokens) {
             placeholder="{{" k "}}"
-            while ((idx=index(line, placeholder)) > 0) {
-                line=substr(line,1,idx-1) vals[k] substr(line,idx+length(placeholder))
+            # Split-and-rejoin substitution: never re-scans substituted
+            # text, so a value containing {{...}} cannot trigger an
+            # infinite loop (previous implementation was vulnerable).
+            n=split(line, parts, placeholder)
+            if (n > 1) {
+                out=parts[1]
+                for (i=2; i<=n; i++) out = out vals[k] parts[i]
+                line=out
             }
         }
         print line

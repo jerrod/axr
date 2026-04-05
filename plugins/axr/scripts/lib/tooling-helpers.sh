@@ -4,6 +4,11 @@
 # tool configuration (check-tooling.sh primarily).
 #
 # Pure functions — take no shell-global state, output to stdout.
+#
+# Contract: callers MUST be at the target repo root (cwd). These helpers
+# test paths with bare relative globs (e.g., "package-lock.json") and
+# therefore rely on $PWD == repo root. Checker scripts satisfy this
+# because /axr invokes them with cwd set to the target repo.
 
 # Comprehensive lockfile list — kept in one place so additions (new package
 # managers) propagate to every checker that counts lockfiles.
