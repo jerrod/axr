@@ -23,9 +23,12 @@ Always use the `bin/` scripts — never run the underlying tools directly.
 
 ## Adding a new plugin
 
+All paths here are **repo-root-relative** (paths inside a plugin's own docs are plugin-root-relative).
+
 1. Create `plugins/<new-name>/` with its own `.claude-plugin/plugin.json`, `commands/`, `scripts/`, `docs/`, `README.md`, `CLAUDE.md`.
-2. Add an entry to `.claude-plugin/marketplace.json` under `plugins[]`.
-3. Run `bin/validate` to confirm the new plugin integrates.
+2. Add an entry to `.claude-plugin/marketplace.json` under `plugins[]` including `name`, `description`, `source` (relative path starting `./`), and `category`.
+3. If the plugin needs schema checks the marketplace validator doesn't cover (e.g., rubric integrity), add an executable `plugins/<new-name>/bin/validate` — marketplace `bin/validate` will invoke it automatically.
+4. Run `bin/validate` at repo root to confirm the new plugin integrates.
 
 ## Rubric stability (plugins that carry rubrics)
 

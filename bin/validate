@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# bin/validate — integrity checks for the jerrod/axr marketplace.
+# bin/validate — structural integrity checks for the jerrod/axr marketplace.
 #
 # Checks:
 #   1. Every *.json file parses with jq.
-#   2. .claude-plugin/marketplace.json has name + owner + plugins[].
-#   3. For each plugin under plugins/*/:
+#   2. .claude-plugin/marketplace.json has name + owner + plugins[] with
+#      name/description/source/category on every entry, relative sources.
+#   3. For each plugin under plugins/*/ (containment-checked against repo root):
 #        a. .claude-plugin/plugin.json has name, version, description, commands.
-#        b. If rubric/*.json exists: rubric integrity (weights, criteria, fields).
-#        c. Every commands/*.md has closed YAML frontmatter with description:.
-#        d. Every scripts/**/*.sh is executable.
+#        b. commands/ directory present with at least one *.md, each having
+#           closed YAML frontmatter with description:.
+#        c. scripts/ directory present with at least one *.sh, all executable.
+#        d. If bin/validate exists and is executable, invoke it (plugin-local
+#           validation hook — e.g., rubric schema checks).
 
 set -uo pipefail
 
@@ -16,10 +19,8 @@ cd_repo_root() {
     local root
     if root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
         cd "$root" || exit 1
-    elif [ -n "${BASH_SOURCE[1]:-}" ]; then
-        cd "$(dirname "${BASH_SOURCE[1]}")/.." || exit 1
     else
-        cd "$PWD" || exit 1
+        cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
     fi
 }
 
@@ -29,7 +30,12 @@ has_closed_frontmatter() {
     awk 'FNR>1 && /^---$/ {found=1; exit} END{exit !found}' "$file"
 }
 
+# sanitize — strip shell-unsafe chars from strings flowing into error output.
+sanitize() { printf '%s' "$1" | tr -d "\$()\`"; }
+
 cd_repo_root
+
+REPO_ROOT_REAL="$(pwd -P)"
 
 ERRORS=()
 
@@ -44,7 +50,7 @@ section "Check 1: JSON files parse"
 JSON_FILES=()
 while IFS= read -r -d '' f; do
     JSON_FILES+=("$f")
-done < <(find . -type f -name '*.json' \
+done < <(find -P . -type f -name '*.json' \
              -not -path './.git/*' \
              -not -path './.axr/*' \
              -not -path './.quality/*' \
@@ -65,14 +71,14 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Check 2: marketplace.json
+# Check 2: marketplace manifest
 # ---------------------------------------------------------------------------
 section "Check 2: marketplace manifest"
 MARKETPLACE=".claude-plugin/marketplace.json"
 if [ ! -f "$MARKETPLACE" ]; then
     fail "$MARKETPLACE missing"
 else
-    for field in name owner plugins; do
+    for field in name owner plugins version; do
         if jq -e --arg f "$field" 'has($f)' "$MARKETPLACE" >/dev/null 2>&1; then
             pass "marketplace.json has .$field"
         else
@@ -84,20 +90,33 @@ else
     else
         fail "marketplace.json .plugins must be a non-empty array"
     fi
-    BAD_ENTRIES=$(jq -r '[.plugins[] | select((has("name")|not) or (has("description")|not) or (has("source")|not) or (.source | startswith("./") | not)) | .name // "<no-name>"] | join(",")' "$MARKETPLACE")
+    # Every plugin entry must have name, description, source, category, and
+    # a source path starting with "./" (relative, within this repo).
+    BAD_ENTRIES=$(jq -r '[.plugins[] | select((has("name")|not) or (has("description")|not) or (has("source")|not) or (has("category")|not) or (.source | startswith("./") | not)) | .name // "<no-name>"] | join(",")' "$MARKETPLACE")
+    BAD_ENTRIES=$(sanitize "$BAD_ENTRIES")
     if [ -z "$BAD_ENTRIES" ]; then
-        pass "every plugin entry has name, description, relative source"
+        pass "every plugin entry has name, description, source, category, relative source"
     else
         fail "plugin entries with missing fields or non-relative source: $BAD_ENTRIES"
     fi
 fi
 
 # ---------------------------------------------------------------------------
-# Check 3: per-plugin validation
+# Check 3: per-plugin validation (one Check heading per plugin)
 # ---------------------------------------------------------------------------
 PLUGIN_DIRS=()
 for d in plugins/*/; do
     [ -d "$d" ] || continue
+    # Symlink containment: resolve real path, skip anything outside repo root.
+    plugin_real="$(cd "$d" 2>/dev/null && pwd -P)" || continue
+    case "$plugin_real" in
+        "$REPO_ROOT_REAL"/*) : ;;
+        *)
+            section "Check 3: ${d%/}"
+            fail "${d%/} resolves outside repo root ($plugin_real) — skipping"
+            continue
+            ;;
+    esac
     PLUGIN_DIRS+=("${d%/}")
 done
 
@@ -105,10 +124,13 @@ if [ ${#PLUGIN_DIRS[@]} -eq 0 ]; then
     section "Check 3: per-plugin validation"
     fail "no plugins/ subdirectories found"
 else
+    plugin_idx=0
     for plugin_dir in "${PLUGIN_DIRS[@]}"; do
+        plugin_idx=$((plugin_idx + 1))
         plugin_name=$(basename "$plugin_dir")
-        section "Check 3: $plugin_name"
+        section "Check 3/$plugin_idx ($plugin_name)"
 
+        # 3a. plugin.json required fields
         plugin_json="$plugin_dir/.claude-plugin/plugin.json"
         if [ ! -f "$plugin_json" ]; then
             fail "$plugin_name: $plugin_json missing"
@@ -122,48 +144,14 @@ else
             done
         fi
 
-        RUBRIC_GLOB=("$plugin_dir/rubric/"*.json)
-        if [ -e "${RUBRIC_GLOB[0]:-/nonexistent}" ]; then
-            for rubric in "${RUBRIC_GLOB[@]}"; do
-                [ -f "$rubric" ] || continue
-                TOTAL_POINTS=$(jq -r '.total_points // empty' "$rubric")
-                if [ "$TOTAL_POINTS" = "100" ]; then
-                    pass "$plugin_name: $rubric total_points == 100"
-                else
-                    fail "$plugin_name: $rubric total_points != 100 (got: ${TOTAL_POINTS:-missing})"
-                fi
-                WEIGHT_SUM=$(jq -r '(.dimensions | map(.weight) | add) // empty' "$rubric")
-                if [ "$WEIGHT_SUM" = "100" ]; then
-                    pass "$plugin_name: $rubric weights sum to 100"
-                else
-                    fail "$plugin_name: $rubric weights sum to ${WEIGHT_SUM:-missing} (expected 100)"
-                fi
-                BAD_DIMS=$(jq -r '[.dimensions[] | select((.criteria | length) != 5) | .id] | join(",")' "$rubric")
-                if [ -z "$BAD_DIMS" ]; then
-                    pass "$plugin_name: $rubric every dimension has 5 criteria"
-                else
-                    fail "$plugin_name: $rubric dimensions without 5 criteria: $BAD_DIMS"
-                fi
-                BAD_CRIT=$(jq -r '[.dimensions[].criteria[] | select((has("id")|not) or (has("name")|not) or (has("description")|not) or (has("checker_type")|not) or ((.checker_type=="mechanical" or .checker_type=="judgment")|not)) | .id // "<missing-id>"] | join(",")' "$rubric")
-                if [ -z "$BAD_CRIT" ]; then
-                    pass "$plugin_name: $rubric every criterion has required fields"
-                else
-                    fail "$plugin_name: $rubric criteria with missing/invalid fields: $BAD_CRIT"
-                fi
-                BAD_HINTS=$(jq -r '[.dimensions[].criteria[] | select((.evidence_hints | type) != "array" or (.evidence_hints | length) < 1) | .id] | join(",")' "$rubric")
-                if [ -z "$BAD_HINTS" ]; then
-                    pass "$plugin_name: $rubric every criterion has evidence_hints[] ≥ 1"
-                else
-                    fail "$plugin_name: $rubric empty/missing evidence_hints: $BAD_HINTS"
-                fi
-            done
-        fi
-
-        if [ -d "$plugin_dir/commands" ]; then
+        # 3b. commands/ directory with at least one valid *.md
+        if [ ! -d "$plugin_dir/commands" ]; then
+            fail "$plugin_name: commands/ directory missing"
+        else
             CMD_FILES=()
             while IFS= read -r -d '' f; do
                 CMD_FILES+=("$f")
-            done < <(find "$plugin_dir/commands" -maxdepth 1 -type f -name '*.md' -print0 2>/dev/null)
+            done < <(find -P "$plugin_dir/commands" -maxdepth 1 -type f -not -type l -name '*.md' -print0 2>/dev/null)
 
             if [ ${#CMD_FILES[@]} -eq 0 ]; then
                 fail "$plugin_name: commands/ has no *.md files"
@@ -183,11 +171,14 @@ else
             fi
         fi
 
-        if [ -d "$plugin_dir/scripts" ]; then
+        # 3c. scripts/ directory with executable *.sh files
+        if [ ! -d "$plugin_dir/scripts" ]; then
+            fail "$plugin_name: scripts/ directory missing"
+        else
             SH_FILES=()
             while IFS= read -r -d '' f; do
                 SH_FILES+=("$f")
-            done < <(find "$plugin_dir/scripts" -type f -name '*.sh' -print0 2>/dev/null)
+            done < <(find -P "$plugin_dir/scripts" -type f -not -type l -name '*.sh' -print0 2>/dev/null)
 
             if [ ${#SH_FILES[@]} -eq 0 ]; then
                 fail "$plugin_name: scripts/ has no *.sh files"
@@ -199,6 +190,16 @@ else
                         fail "$plugin_name: $f not executable"
                     fi
                 done
+            fi
+        fi
+
+        # 3d. plugin-local validate hook
+        plugin_validate="$plugin_dir/bin/validate"
+        if [ -x "$plugin_validate" ]; then
+            if "$plugin_validate"; then
+                pass "$plugin_name: plugin-local validate passed"
+            else
+                fail "$plugin_name: plugin-local validate failed (see output above)"
             fi
         fi
     done

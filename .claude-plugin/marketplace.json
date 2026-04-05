@@ -1,5 +1,6 @@
 {
   "name": "axr",
+  "version": "1.0",
   "description": "Tools for agent-operated software engineering — readiness scoring, workflow automation, and quality gates.",
   "owner": {
     "name": "jerrod"
