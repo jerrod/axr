@@ -39,14 +39,14 @@ score_docs_context_1() {
     done
 
     if [ -z "$found" ]; then
-        axr_emit_criterion "docs_context.1" "$name" 0 "no agent-context file found"
+        axr_emit_criterion "docs_context.1" "$name" script 0 "no agent-context file found"
         return
     fi
 
     local bytes
     bytes="$(wc -c <"$found" | tr -d ' ')"
     if [ "$bytes" -lt 500 ]; then
-        axr_emit_criterion "docs_context.1" "$name" 1 "below 500-byte threshold" \
+        axr_emit_criterion "docs_context.1" "$name" script 1 "below 500-byte threshold" \
             "$found ($bytes bytes, below 500-byte threshold)"
         return
     fi
@@ -66,14 +66,14 @@ score_docs_context_1() {
     fi
 
     if [ "$matched_count" -eq 0 ]; then
-        axr_emit_criterion "docs_context.1" "$name" 2 "no agent-oriented sections matched" \
+        axr_emit_criterion "docs_context.1" "$name" script 2 "no agent-oriented sections matched" \
             "$found ($bytes bytes, $sections sections, no agent-oriented sections)"
     elif [ "$matched_count" -le 2 ]; then
-        axr_emit_criterion "docs_context.1" "$name" 2 "partial agent-oriented coverage" \
+        axr_emit_criterion "docs_context.1" "$name" script 2 "partial agent-oriented coverage" \
             "$found ($bytes bytes, $sections sections)" \
             "matched: $matched"
     else
-        axr_emit_criterion "docs_context.1" "$name" 3 "strong agent-oriented coverage" \
+        axr_emit_criterion "docs_context.1" "$name" script 3 "strong agent-oriented coverage" \
             "$found ($bytes bytes, $sections sections)" \
             "matched: $matched"
     fi
@@ -87,12 +87,12 @@ score_docs_context_2() {
     name="$(axr_criterion_name docs_context.2)"
 
     if [ ! -f README.md ]; then
-        axr_emit_criterion "docs_context.2" "$name" 0 "README.md missing"
+        axr_emit_criterion "docs_context.2" "$name" script 0 "README.md missing"
         return
     fi
 
     if ! grep -iEq '^## .*(setup|getting started|quickstart|install|development)' README.md; then
-        axr_emit_criterion "docs_context.2" "$name" 1 "no setup section in README" \
+        axr_emit_criterion "docs_context.2" "$name" script 1 "no setup section in README" \
             "README.md present but no setup section found"
         return
     fi
@@ -100,16 +100,16 @@ score_docs_context_2() {
     local n
     n="$(count_setup_commands README.md)"
     if [ "$n" -eq 0 ]; then
-        axr_emit_criterion "docs_context.2" "$name" 1 "setup section has no commands" \
+        axr_emit_criterion "docs_context.2" "$name" script 1 "setup section has no commands" \
             "README.md setup section: 0 commands"
     elif [ "$n" -le 5 ]; then
-        axr_emit_criterion "docs_context.2" "$name" 3 "setup section within budget" \
+        axr_emit_criterion "docs_context.2" "$name" script 3 "setup section within budget" \
             "README.md setup section: $n commands"
     elif [ "$n" -le 10 ]; then
-        axr_emit_criterion "docs_context.2" "$name" 2 "setup section exceeds 5" \
+        axr_emit_criterion "docs_context.2" "$name" script 2 "setup section exceeds 5" \
             "README.md setup section: $n commands (exceeds 5)"
     else
-        axr_emit_criterion "docs_context.2" "$name" 1 "setup section significantly exceeds 5" \
+        axr_emit_criterion "docs_context.2" "$name" script 1 "setup section significantly exceeds 5" \
             "README.md setup section: $n commands (significantly exceeds 5)"
     fi
 }
@@ -143,7 +143,7 @@ score_docs_context_4() {
     done
 
     if [ -z "$found_dir" ] && [ -z "$found_file" ]; then
-        axr_emit_criterion "docs_context.4" "$name" 0 "no decision log found"
+        axr_emit_criterion "docs_context.4" "$name" script 0 "no decision log found"
         return
     fi
 
@@ -162,13 +162,13 @@ score_docs_context_4() {
         fi
 
         if [ "$md_count" -eq 0 ]; then
-            axr_emit_criterion "docs_context.4" "$name" 0 "ADR directory exists but is empty" \
+            axr_emit_criterion "docs_context.4" "$name" script 0 "ADR directory exists but is empty" \
                 "$found_dir (0 ADR files)"
         elif [ "$md_count" -le 2 ]; then
-            axr_emit_criterion "docs_context.4" "$name" 2 "sparse ADR directory" \
+            axr_emit_criterion "docs_context.4" "$name" script 2 "sparse ADR directory" \
                 "$found_dir ($md_count ADR files)" "sample: $sample"
         elif [ "$md_count" -le 9 ]; then
-            axr_emit_criterion "docs_context.4" "$name" 3 "established ADR directory" \
+            axr_emit_criterion "docs_context.4" "$name" script 3 "established ADR directory" \
                 "$found_dir ($md_count ADR files)" "sample: $sample"
         else
             # Check every ADR has Consequences or Context heading.
@@ -181,11 +181,11 @@ score_docs_context_4() {
                 fi
             done
             if [ "$full_structure" = "1" ]; then
-                axr_emit_criterion "docs_context.4" "$name" 4 "mature ADR directory with full structure" \
+                axr_emit_criterion "docs_context.4" "$name" script 4 "mature ADR directory with full structure" \
                     "$found_dir ($md_count ADR files)" "sample: $sample" \
                     "all ADRs include Consequences or Context heading"
             else
-                axr_emit_criterion "docs_context.4" "$name" 3 "large ADR directory, inconsistent structure" \
+                axr_emit_criterion "docs_context.4" "$name" script 3 "large ADR directory, inconsistent structure" \
                     "$found_dir ($md_count ADR files)" "sample: $sample"
             fi
         fi
@@ -198,10 +198,10 @@ score_docs_context_4() {
     local sample_titles
     sample_titles="$(first_three_titles_joined "$found_file")"
     if [ "$entries" -lt 3 ]; then
-        axr_emit_criterion "docs_context.4" "$name" 1 "decision log has <3 entries" \
+        axr_emit_criterion "docs_context.4" "$name" script 1 "decision log has <3 entries" \
             "$found_file ($entries entries)" "sample: $sample_titles"
     else
-        axr_emit_criterion "docs_context.4" "$name" 2 "single-file decision log with 3+ entries" \
+        axr_emit_criterion "docs_context.4" "$name" script 2 "single-file decision log with 3+ entries" \
             "$found_file ($entries entries)" "sample: $sample_titles"
     fi
 }

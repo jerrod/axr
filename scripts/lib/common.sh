@@ -8,14 +8,14 @@
 # Usage:
 #   source scripts/lib/common.sh
 #   axr_init_output docs_context "script:check-docs-context.sh"
-#   axr_emit_criterion "docs_context.1" "Root CLAUDE.md" 3 "..." "evidence one"
+#   axr_emit_criterion "docs_context.1" "Root CLAUDE.md" script 3 "..." "ev1"
 #   axr_defer_criterion "docs_context.3" "Local READMEs" "deferred to judgment"
 #   axr_finalize_output   # prints the assembled JSON to stdout
 #
-# Per-criterion reviewer defaults to "script" for mechanical checkers. Judgment
-# subagents that source this lib can override by setting _AXR_CRITERION_REVIEWER
-# before calling axr_emit_criterion, e.g.:
-#   _AXR_CRITERION_REVIEWER="agent-draft" axr_emit_criterion ...
+# The reviewer field ("script", "agent-draft", etc.) is an explicit positional
+# argument on every axr_emit_criterion call — no shell-global state, no
+# leakage between criteria. Judgment subagents pass "agent-draft" at each
+# call site.
 #
 # Intentionally does NOT set -e. Callers decide their own error discipline.
 
@@ -26,7 +26,6 @@ _AXR_DIMENSION_ID=""
 _AXR_REVIEWER=""
 _AXR_STACK_JSON="[]"
 _AXR_CRITERIA_JSON="[]"
-_AXR_CRITERION_REVIEWER="${_AXR_CRITERION_REVIEWER:-script}"
 
 # Plugin root = scripts/lib/../../ = two levels up from this file. Used to
 # locate rubric/rubric.v1.json regardless of target repo CWD.
@@ -54,7 +53,14 @@ axr_repo_root() {
 
 # ---------------------------------------------------------------------------
 # axr_criterion_name <criterion_id> — return the canonical criterion name
-# from the rubric. Rubric is read once and cached in _AXR_CRITERION_NAME_BY_ID.
+# from the rubric.
+#
+# Caching contract: the rubric is read from $_AXR_RUBRIC_PATH once per shell
+# session and cached in _AXR_CRITERION_NAME_BY_ID. If the rubric file changes
+# on disk during a single session, callers must unset _AXR_RUBRIC_NAMES_LOADED
+# to force reload. In practice the rubric is write-once per run, so the
+# cache is safe for Phase 1 checker scripts that load common.sh once and exit.
+#
 # Exits non-zero if the rubric is missing or the id is not found.
 # ---------------------------------------------------------------------------
 axr_criterion_name() {
@@ -129,17 +135,19 @@ axr_init_output() {
 }
 
 # ---------------------------------------------------------------------------
-# axr_emit_criterion <id> <name> <score> <notes> [evidence...]
+# axr_emit_criterion <id> <name> <reviewer> <score> <notes> [evidence...]
 #
-# reviewer field defaults to $_AXR_CRITERION_REVIEWER ("script" unless
-# overridden by the caller).
+# reviewer is an explicit positional arg — typically "script" for mechanical
+# checkers and "agent-draft" for judgment subagent emissions. No shell-global
+# state: each call carries its own reviewer.
 # ---------------------------------------------------------------------------
 axr_emit_criterion() {
     local id="$1"
     local name="$2"
-    local score="$3"
-    local notes="$4"
-    shift 4
+    local reviewer="$3"
+    local score="$4"
+    local notes="$5"
+    shift 5
     local evidence_json
     if [ "$#" -eq 0 ]; then
         evidence_json="[]"
@@ -152,7 +160,7 @@ axr_emit_criterion() {
         --argjson score "$score" \
         --arg notes "$notes" \
         --argjson evidence "$evidence_json" \
-        --arg reviewer "$_AXR_CRITERION_REVIEWER" \
+        --arg reviewer "$reviewer" \
         '. + [{id:$id, name:$name, score:$score, evidence:$evidence, notes:$notes, reviewer:$reviewer}]' \
         <<<"$_AXR_CRITERIA_JSON")"
 }
