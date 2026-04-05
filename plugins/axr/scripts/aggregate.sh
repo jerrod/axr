@@ -3,7 +3,13 @@
 # weighted scores/band/blockers per the rubric, writes .axr/latest.{json,md}
 # and archives prior latest.json to history/<iso>.json.
 #
-# Usage: aggregate.sh <input-dir> <output-dir>
+# Usage: aggregate.sh [--merge-agents <agent-dir>] <input-dir> <output-dir>
+#
+# When --merge-agents <agent-dir> is present (must precede positional args),
+# each agent-*.json under <agent-dir> is parsed as a JSON array of criterion
+# objects. Each criterion is overlaid onto the matching mechanical dimension
+# JSON (derived from id prefix) into a temp merged dir; the aggregation loop
+# then reads from the merged dir. <input-dir> is never mutated.
 
 set -euo pipefail
 
@@ -14,7 +20,20 @@ source "$SCRIPT_DIR/lib/common.sh"
 
 die() { printf 'aggregate.sh: %s\n' "$*" >&2; exit 1; }
 
-[ $# -eq 2 ] || die "usage: aggregate.sh <input-dir> <output-dir>"
+# Unified cleanup trap — collects temp dirs to remove on EXIT.
+_CLEANUP_DIRS=()
+_cleanup() { for d in "${_CLEANUP_DIRS[@]}"; do rm -rf "$d"; done; }
+trap _cleanup EXIT
+
+AGENT_DIR=""
+if [ $# -ge 1 ] && [ "$1" = "--merge-agents" ]; then
+    [ $# -ge 2 ] || die "usage: aggregate.sh [--merge-agents <agent-dir>] <input-dir> <output-dir>"
+    AGENT_DIR="$2"
+    shift 2
+    [ -d "$AGENT_DIR" ] || die "agent dir not found: $AGENT_DIR"
+fi
+
+[ $# -eq 2 ] || die "usage: aggregate.sh [--merge-agents <agent-dir>] <input-dir> <output-dir>"
 INPUT_DIR="$1"
 OUTPUT_DIR="$2"
 
@@ -54,28 +73,102 @@ fi
 REPO_NAME="$(printf '%s' "$REPO_NAME" | tr -d '{}')"
 
 # ---------------------------------------------------------------------------
+# Collect dimension ids (used by merge and by the aggregation loop).
+# ---------------------------------------------------------------------------
+DIM_IDS=()
+while IFS= read -r id; do
+    DIM_IDS+=("$id")
+done < <(jq -r '.dimensions[].id' "$_AXR_RUBRIC_PATH")
+
+# ---------------------------------------------------------------------------
+# --merge-agents: overlay agent-draft scores onto a merged temp dir.
+# Never mutates $INPUT_DIR. When no agent dir supplied, EFFECTIVE_INPUT_DIR
+# equals INPUT_DIR and no merging happens.
+# ---------------------------------------------------------------------------
+EFFECTIVE_INPUT_DIR="$INPUT_DIR"
+MERGE_TMP=""
+if [ -n "$AGENT_DIR" ]; then
+    MERGE_TMP="$(mktemp -d)"
+    chmod 700 "$MERGE_TMP"
+    _CLEANUP_DIRS+=("$MERGE_TMP")
+    mkdir -p "$MERGE_TMP/merged"
+    EFFECTIVE_INPUT_DIR="$MERGE_TMP/merged"
+
+    # Seed merged dir from input dimension JSONs.
+    for dim_id in "${DIM_IDS[@]}"; do
+        src="$INPUT_DIR/$dim_id.json"
+        [ -f "$src" ] || die "missing dimension JSON: $src"
+        cp "$src" "$EFFECTIVE_INPUT_DIR/$dim_id.json"
+    done
+
+    # Overlay each agent-*.json criterion onto its matching dimension JSON.
+    # Agent files are a top-level JSON array of criterion objects.
+    shopt -s nullglob
+    agent_files=("$AGENT_DIR"/agent-*.json)
+    shopt -u nullglob
+    for af in "${agent_files[@]}"; do
+        jq empty "$af" 2>/dev/null || die "invalid JSON: $af"
+        # Each element: {id, name, score, evidence, notes, reviewer}
+        crit_count="$(jq 'length' "$af")"
+        i=0
+        while [ "$i" -lt "$crit_count" ]; do
+            crit_json="$(jq -c ".[$i]" "$af")"
+            crit_id="$(jq -r '.id' <<<"$crit_json")"
+            crit_score="$(jq -r '.score' <<<"$crit_json")"
+            [ -n "$crit_id" ] && [ "$crit_id" != "null" ] || die "agent criterion missing id in $af (index $i)"
+            case "$crit_score" in
+                0|1|2|3) : ;;
+                *) die "agent criterion $crit_id has invalid score=$crit_score (must be 0-3, agents never emit 4) in $af" ;;
+            esac
+            # Derive dimension from id prefix (e.g., docs_context.3 -> docs_context).
+            dim_from_id="${crit_id%.*}"
+            merged_file="$EFFECTIVE_INPUT_DIR/$dim_from_id.json"
+            [ -f "$merged_file" ] || die "agent criterion $crit_id maps to unknown dimension '$dim_from_id' in $af"
+            # Verify the id exists in that dimension's criteria array.
+            matches="$(jq --arg id "$crit_id" '[.criteria[] | select(.id == $id)] | length' "$merged_file")"
+            [ "$matches" = "1" ] || die "agent criterion $crit_id not found in $merged_file (matches=$matches) in $af"
+            jq -c --argjson ac "$crit_json" '
+                .criteria |= map(
+                    if .id == ($ac.id) then
+                        .score = $ac.score
+                        | .evidence = $ac.evidence
+                        | .notes = $ac.notes
+                        | .reviewer = $ac.reviewer
+                        | .defaulted_from_deferred = false
+                    else . end
+                )
+            ' "$merged_file" > "$merged_file.new" && mv "$merged_file.new" "$merged_file"
+            i=$((i + 1))
+        done
+    done
+fi
+
+# ---------------------------------------------------------------------------
 # Aggregate per-dimension data. Build dimensions object + accumulate totals.
 # ---------------------------------------------------------------------------
 DIMENSIONS_JSON='{}'
 TOTAL_WEIGHTED=0
 BLOCKERS_JSON='[]'
 
-DIM_IDS=()
-while IFS= read -r id; do
-    DIM_IDS+=("$id")
-done < <(jq -r '.dimensions[].id' "$_AXR_RUBRIC_PATH")
-
 for dim_id in "${DIM_IDS[@]}"; do
-    input_file="$INPUT_DIR/$dim_id.json"
+    input_file="$EFFECTIVE_INPUT_DIR/$dim_id.json"
     [ -f "$input_file" ] || die "missing dimension JSON: $input_file"
     jq empty "$input_file" 2>/dev/null || die "invalid JSON: $input_file"
 
     weight="$(jq -r --arg id "$dim_id" '.dimensions[] | select(.id == $id) | .weight' "$_AXR_RUBRIC_PATH")"
     dim_name="$(jq -r --arg id "$dim_id" '.dimensions[] | select(.id == $id) | .name' "$_AXR_RUBRIC_PATH")"
 
-    # Build resolved criteria: defaulted_from_deferred for deferred ones.
+    # Build resolved criteria: default deferred criteria to score 1 unless
+    # they've already been overlaid by an agent (reviewer == "agent-draft"
+    # AND defaulted_from_deferred == false from the merge step).
+    # In merge mode, agent-overlaid criteria have defaulted_from_deferred
+    # explicitly set to false and reviewer to "agent-draft". Preserve them.
+    # Note: jq's // operator treats false as absent, so we use has() instead.
     resolved_criteria="$(jq -c '
-        [.criteria[] | if (.deferred == true) then
+        [.criteria[] |
+         if (.reviewer == "agent-draft" and (has("defaulted_from_deferred") and .defaulted_from_deferred == false)) then
+            .
+         elif (.deferred == true) then
             . + {score: 1, defaulted_from_deferred: true}
          else
             . + {defaulted_from_deferred: false}
@@ -216,8 +309,7 @@ fi
 # value to a temp file, then awk-substitute placeholders with file contents.
 RENDER_TMP="$(mktemp -d)"
 chmod 700 "$RENDER_TMP"
-# shellcheck disable=SC2064
-trap "rm -rf '$RENDER_TMP'" EXIT
+_CLEANUP_DIRS+=("$RENDER_TMP")
 
 # Write a template token value, stripping { and } so no token value can
 # inject a {{placeholder}} that the awk substitution pass would expand.
@@ -237,6 +329,24 @@ write_token scored_at "$SCORED_AT"
 write_token trend_section "$TREND_SECTION"
 write_token dimension_table "$DIM_TABLE"
 write_token blockers "$BLOCKER_LIST"
+# Build agent-draft section: list all criteria with reviewer=="agent-draft",
+# grouped by dimension.
+AGENT_DRAFT_LIST="$(jq -r --argjson dims "$DIMENSIONS_JSON" -n '
+    [$dims | to_entries[] |
+     {dim: .key, items: [.value.criteria[] | select(.reviewer == "agent-draft") | {id, name, score}]}
+     | select(.items | length > 0)] |
+    if length == 0 then ""
+    else
+        ["## Agent-Draft Criteria (needs human confirmation)", "",
+         "Scored by judgment subagents -- review before treating as final.", ""] +
+        [.[] |
+         "**\(.dim)** (\(.items | length) items)",
+         (.items[] | "- `\(.id)` -- \(.name) · score \(.score)"),
+         ""] |
+        join("\n")
+    end
+')"
+write_token agent_draft_section "$AGENT_DRAFT_LIST"
 write_token next_improvements "$BLOCKER_LIST"
 
 awk -v d="$RENDER_TMP" '
@@ -245,7 +355,7 @@ awk -v d="$RENDER_TMP" '
         tokens["band_description"]=1; tokens["rubric_version"]=1
         tokens["scored_at"]=1; tokens["trend_section"]=1
         tokens["dimension_table"]=1; tokens["blockers"]=1
-        tokens["next_improvements"]=1
+        tokens["next_improvements"]=1; tokens["agent_draft_section"]=1
         for (k in tokens) {
             val=""
             while ((getline line < (d"/"k)) > 0) {
