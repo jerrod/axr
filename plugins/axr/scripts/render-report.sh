@@ -26,6 +26,7 @@ else
     delta="$(jq -r '.delta' <<<"$TREND_JSON")"
     prev_date="$(jq -r '.previous_date' <<<"$TREND_JSON")"
     sign=""
+    [[ "$delta" =~ ^-?[0-9]+$ ]] || delta=0
     [ "$delta" -ge 0 ] && sign="+"
     TREND_SECTION="**Trend:** previous ${prev}/100 (${prev_date}) · delta: ${sign}${delta}"
 fi
