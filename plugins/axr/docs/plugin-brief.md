@@ -116,14 +116,14 @@ Every run writes two files to `.axr/` at repo root.
 
 ```json
 {
-  "rubric_version": "1.0",
+  "rubric_version": "2.0",
   "scored_at": "2026-04-05T14:30:00Z",
   "repo": "example-org/example-repo",
   "total_score": 73,
   "band": "Agent-Ready",
   "dimensions": {
     "tests_ci": {
-      "weight": 20,
+      "weight": 18,
       "raw_score": 14,
       "max_raw": 20,
       "weighted_score": 14.0,

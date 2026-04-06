@@ -74,8 +74,10 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
    AXR Score: <total_score>/100 · <band_label>
    Rubric: v<rubric_version> · Scored: <scored_at>
 
-   <N> of 17 judgment criteria scored by agents (draft, needs human confirmation)
+   <N> of <J> judgment criteria scored by agents (draft, needs human confirmation)
    <M> judgment criteria still defaulted to 1 (agent did not return output)
+
+   To compute J (total judgment criteria): `jq '[.dimensions[].criteria[] | select(.checker_type=="judgment")] | length' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v2.json"`
 
    Top 3 blockers:
    1. <blocker 1>

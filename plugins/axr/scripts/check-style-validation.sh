@@ -21,7 +21,7 @@ score_style_validation_1() {
     axr_has_stack_tag node && has_node=1
     axr_has_stack_tag python && has_python=1
     if [ "$has_node" = "0" ] && [ "$has_python" = "0" ]; then
-        axr_emit_criterion "style_validation.1" "$name" script 4 "no type-checkable language" \
+        axr_emit_criterion "style_validation.1" "$name" script 3 "criterion not applicable — no type-checkable language detected" \
             "stack: $STACK_JSON"
         return
     fi
@@ -181,6 +181,8 @@ score_style_validation_3() {
     if [ "$local_enforce" = "1" ] && [ "$ci_enforce" = "1" ]; then
         score=3
     elif [ "$local_enforce" = "1" ]; then
+        score=2
+    elif [ "$ci_enforce" = "1" ]; then
         score=2
     fi
     if [ "$score" -eq 0 ]; then

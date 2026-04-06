@@ -171,7 +171,9 @@ score_tooling_4() {
         ev+=(".gitpod.yml present")
     fi
 
-    if [ -d .github ] && grep -rq 'codespace' .github/ 2>/dev/null; then
+    if [ -d .github ] && find -P .github -maxdepth 3 -type f -not -type l \
+        \( -name '*.yml' -o -name '*.yaml' -o -name '*.json' \) -print0 2>/dev/null \
+        | xargs -0 grep -lq 'codespace' 2>/dev/null; then
         codespace=2
         ev+=("codespace references in .github/")
     fi

@@ -9,7 +9,7 @@ This is the `axr` Claude Code plugin. It scores repositories against the Agent e
 - `rubric/rubric.v2.json` — versioned rubric, source of truth for scoring (v2.0: 9 dimensions, 45 criteria)
 - `rubric/rubric.v1.json` — preserved for history comparison
 - `scripts/check-*.sh` — per-dimension deterministic checkers
-- `scripts/lib/` — shared bash helpers (common.sh, markdown-helpers.sh)
+- `scripts/lib/` — shared bash helpers (common.sh, markdown-helpers.sh, workflow-helpers.sh, tooling-helpers.sh)
 - `bin/validate` — plugin-local validator invoked by marketplace `bin/validate` (rubric schema checks)
 - `docs/plugin-brief.md` — authoritative spec and operational rules
 
