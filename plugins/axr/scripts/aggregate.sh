@@ -26,6 +26,12 @@ _cleanup() { for d in "${_CLEANUP_DIRS[@]}"; do rm -rf "$d"; done; }
 trap _cleanup EXIT
 AGENT_DIR=""
 
+# --patch-dimension mode: delegate entirely to patch-dimension.sh.
+if [ $# -ge 1 ] && [ "$1" = "--patch-dimension" ]; then
+    [ $# -eq 4 ] || die "usage: aggregate.sh --patch-dimension <dim-id> <dim-json> <latest-json>"
+    exec "$SCRIPT_DIR/patch-dimension.sh" "$2" "$3" "$4"
+fi
+
 if [ $# -ge 1 ] && [ "$1" = "--merge-agents" ]; then
     [ $# -ge 2 ] || die "usage: aggregate.sh [--merge-agents <agent-dir>] <input-dir> <output-dir>"
     AGENT_DIR="$2"
@@ -114,16 +120,18 @@ for dim_id in "${DIM_IDS[@]}"; do
          end]
     ' "$input_file")"
     raw_score="$(jq '[.[] | .score] | add // 0' <<<"$resolved_criteria")"
-    # weighted = raw / 20 * weight — use awk for float math.
-    weighted="$(awk -v r="$raw_score" -v w="$weight" 'BEGIN { printf "%.6f", (r/20.0)*w }')"
+    # max_raw derived from rubric criteria count (not hardcoded to 20).
+    max_raw="$(jq --arg id "$dim_id" '.dimensions[] | select(.id==$id) | (.criteria | length) * 4' "$_AXR_RUBRIC_PATH")"
+    weighted="$(awk -v r="$raw_score" -v m="$max_raw" -v w="$weight" 'BEGIN { printf "%.6f", (r/m)*w }')"
     TOTAL_WEIGHTED="$(awk -v a="$TOTAL_WEIGHTED" -v b="$weighted" 'BEGIN { printf "%.6f", a+b }')"
     dim_obj="$(jq -n \
         --arg name "$dim_name" \
         --argjson weight "$weight" \
         --argjson raw_score "$raw_score" \
+        --argjson max_raw "$max_raw" \
         --argjson weighted_score "$weighted" \
         --argjson criteria "$resolved_criteria" \
-        '{name: $name, weight: $weight, raw_score: $raw_score, max_raw: 20, weighted_score: $weighted_score, criteria: $criteria}')"
+        '{name: $name, weight: $weight, raw_score: $raw_score, max_raw: $max_raw, weighted_score: $weighted_score, criteria: $criteria}')"
     DIMENSIONS_JSON="$(jq -c --arg id "$dim_id" --argjson obj "$dim_obj" \
         '. + {($id): $obj}' <<<"$DIMENSIONS_JSON")"
     # Blocker candidates: score <= 1 AND NOT defaulted_from_deferred.
@@ -162,9 +170,9 @@ TOP_BLOCKERS="$(jq -c '
 # Trend.
 
 if [ -n "$PREV_TOTAL" ] && [ "$PREV_TOTAL" != "null" ]; then
-    # Normalize to integer in case a prior run stored a float-serialized
-    # total_score; bash $(( )) silently treats non-integer strings as 0.
-    PREV_TOTAL="$(printf '%.0f' "$PREV_TOTAL")"
+    # Integer-guard: printf normalizes floats, grep rejects non-integers.
+    # Prevents bash $(( )) arithmetic injection from crafted latest.json.
+    PREV_TOTAL="$(printf '%.0f' "$PREV_TOTAL" 2>/dev/null | grep -Eo '^[0-9]+$' || echo 0)"
     DELTA=$((TOTAL_SCORE - PREV_TOTAL))
     TREND_JSON="$(jq -nc --argjson prev "$PREV_TOTAL" --argjson delta "$DELTA" --arg date "$PREV_DATE" \
         '{previous_score: $prev, delta: $delta, previous_date: $date}')"
