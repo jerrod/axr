@@ -58,9 +58,12 @@ for af in "${agent_files[@]}"; do
         # Validate reviewer field.
         crit_reviewer="$(jq -r '.reviewer' <<<"$crit_json")"
         [ "$crit_reviewer" = "agent-draft" ] || die "agent criterion $crit_id has reviewer=$crit_reviewer (must be agent-draft) in $af"
-        # Validate evidence is an array and notes is a string (≤500 chars).
+        # Validate evidence is a JSON array.
         ev_type="$(jq 'if .evidence | type == "array" then "ok" else "bad" end' <<<"$crit_json")"
         [ "$ev_type" = '"ok"' ] || die "agent criterion $crit_id evidence must be a JSON array in $af"
+        # Validate notes is a string (not array/object) and ≤500 chars.
+        notes_type="$(jq -r '.notes | type' <<<"$crit_json")"
+        [ "$notes_type" = "string" ] || die "agent criterion $crit_id notes must be a string (got $notes_type) in $af"
         notes_len="$(jq -r '.notes | length' <<<"$crit_json")"
         [ "$notes_len" -le 500 ] || die "agent criterion $crit_id notes exceeds 500 chars ($notes_len) in $af"
         # Derive dimension from id prefix.

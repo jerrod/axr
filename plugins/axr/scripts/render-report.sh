@@ -22,9 +22,11 @@ fi
 if [ "$TREND_JSON" = "null" ]; then
     TREND_SECTION="_First scored run — no trend data yet._"
 else
-    prev="$(jq -r '.previous_score' <<<"$TREND_JSON")"
+    # Sanitize trend values to expected formats — defense-in-depth against
+    # a tampered prior latest.json injecting content via these fields.
+    prev="$(jq -r '.previous_score' <<<"$TREND_JSON" | grep -Eo '^[0-9]+$' || echo "0")"
     delta="$(jq -r '.delta' <<<"$TREND_JSON")"
-    prev_date="$(jq -r '.previous_date' <<<"$TREND_JSON")"
+    prev_date="$(jq -r '.previous_date' <<<"$TREND_JSON" | grep -Eo '^[0-9T:.Z-]+$' || echo "unknown")"
     sign=""
     [[ "$delta" =~ ^-?[0-9]+$ ]] || delta=0
     [ "$delta" -ge 0 ] && sign="+"
