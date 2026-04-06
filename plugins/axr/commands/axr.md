@@ -95,7 +95,40 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
    To compute N: count criteria in `.axr/latest.json` where `reviewer == "agent-draft"`.
    To compute M: count criteria where `defaulted_from_deferred == true`.
 
-8. **Clean up.** `rm -rf .axr/tmp`.
+8. **Generate badge.** Build a shields.io badge URL from the score and band, and offer to add it to the repo's README:
+
+   ```bash
+   score=$(jq '.total_score' .axr/latest.json)
+   band=$(jq -r '.band.label' .axr/latest.json)
+
+   # Color by band
+   case "$band" in
+       Agent-Native)    color="brightgreen" ;;
+       Agent-Ready)     color="green" ;;
+       Agent-Assisted)  color="yellow" ;;
+       Agent-Hazardous) color="orange" ;;
+       *)               color="red" ;;
+   esac
+
+   # URL-encode spaces/hyphens for shields.io
+   band_encoded="${band// /_}"
+   badge_url="https://img.shields.io/badge/AXR-${score}%2F100_${band_encoded}-${color}"
+   badge_md="[![AXR Score](${badge_url})](https://github.com/jerrod/axr)"
+   ```
+
+   Print the badge markdown and ask if the user wants it added to their README:
+
+   ```
+   AXR Badge:
+   [![AXR Score](<badge_url>)](https://github.com/jerrod/axr)
+
+   Add to your README? (paste this at the top)
+   <badge_md>
+   ```
+
+   If the user says yes, read `README.md` and prepend the badge markdown on the line after the first `# ` heading. If no README exists, note it and skip.
+
+9. **Clean up.** `rm -rf .axr/tmp`.
 
 ## Failure modes
 
