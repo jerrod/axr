@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate marketplace + plugin structure
+        run: bin/validate
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Lint (shellcheck + JSON + frontmatter)
+        run: bin/lint
+
+  format-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check EditorConfig compliance
+        run: |
+          # Verify all files have final newline and no trailing whitespace
+          failed=0
+          for f in $(git ls-files '*.sh' '*.json' '*.md'); do
+            if [ -s "$f" ] && [ "$(tail -c1 "$f" | wc -l)" -eq 0 ]; then
+              echo "FAIL: $f missing final newline"
+              failed=1
+            fi
+          done
+          exit $failed
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test (all checkers produce valid JSON)
+        run: bin/test
+
+  axr-score:
+    runs-on: ubuntu-latest
+    needs: [validate, lint, format-check, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run AXR CI scoring
+        run: plugins/axr/scripts/axr-ci.sh

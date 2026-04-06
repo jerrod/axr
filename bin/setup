@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# bin/setup — one-command bootstrap for the axr marketplace.
+#
+# Usage: bin/setup
+#
+# Installs dependencies needed for development:
+# - shellcheck (linting bash scripts)
+# - jq (JSON processing, used by all checkers)
+# - pre-commit hooks (if pre-commit is available)
+set -euo pipefail
+
+echo "axr marketplace setup"
+echo "====================="
+
+# Check required tools
+for tool in bash jq git; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+        echo "MISSING: $tool — please install it first" >&2
+        exit 1
+    fi
+    echo "✓ $tool: $(command -v "$tool")"
+done
+
+# Optional tools
+for tool in shellcheck pre-commit; do
+    if command -v "$tool" >/dev/null 2>&1; then
+        echo "✓ $tool: $(command -v "$tool")"
+    else
+        echo "○ $tool: not installed (optional — install for full lint/hook support)"
+    fi
+done
+
+# Install pre-commit hooks if available
+if command -v pre-commit >/dev/null 2>&1 && [ -f .pre-commit-config.yaml ]; then
+    echo ""
+    echo "Installing pre-commit hooks..."
+    pre-commit install
+    echo "✓ pre-commit hooks installed"
+fi
+
+echo ""
+echo "Setup complete. Run bin/validate && bin/lint && bin/test to verify."

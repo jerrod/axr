@@ -48,7 +48,9 @@ for af in "${agent_files[@]}"; do
         crit_json="$(jq -c ".[$i]" "$af")"
         crit_id="$(jq -r '.id' <<<"$crit_json")"
         crit_score="$(jq -r '.score' <<<"$crit_json")"
-        [ -n "$crit_id" ] && [ "$crit_id" != "null" ] || die "agent criterion missing id in $af (index $i)"
+        if [ -z "$crit_id" ] || [ "$crit_id" = "null" ]; then
+            die "agent criterion missing id in $af (index $i)"
+        fi
         # Validate id format — prevents path traversal.
         [[ "$crit_id" =~ ^[a-z_]+\.[0-9]+$ ]] || die "agent criterion id '$crit_id' does not match format in $af (index $i)"
         case "$crit_score" in

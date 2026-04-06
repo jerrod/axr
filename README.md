@@ -6,9 +6,25 @@ Claude Code plugin marketplace by [jerrod](https://github.com/jerrod).
 
 ### axr
 
-Agent eXecution Readiness scoring. Grades a repository against a 100-point rubric across 8 dimensions (tests & CI, docs, change surface, safety rails, structure, tooling, execution visibility, workflow realism) using deterministic bash checkers and judgment subagents. Produces a machine-readable JSON report and a human-readable markdown report per run.
+Agent eXecution Readiness scoring. Grades a repository against a 100-point rubric across 9 dimensions (tests & CI, docs, change surface, safety rails, structure, tooling, execution visibility, workflow realism) using deterministic bash checkers and judgment subagents. Produces a machine-readable JSON report and a human-readable markdown report per run.
 
 See `plugins/axr/README.md` for details.
+
+## Quickstart
+
+```bash
+# Install the marketplace in Claude Code
+# /plugin → Add Marketplace → jerrod/axr
+
+# Validate the plugin structure
+bin/validate
+
+# Run linting (shellcheck + JSON + frontmatter)
+bin/lint
+
+# Run tests (validates all checkers produce schema-valid JSON)
+bin/test
+```
 
 ## Installation
 
