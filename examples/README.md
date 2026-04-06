@@ -12,7 +12,7 @@ Worked examples demonstrating axr usage and extension.
 /axr
 
 # Check a single dimension
-/axr-check docs_context
+/axr-check docs
 
 # Compare to previous run
 /axr-diff

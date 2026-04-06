@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/check-safety-rails.sh — deterministic checker for safety_rails dim.
+# scripts/check-safety-rails.sh — deterministic checker for safety dim.
 # Scores 3 mechanical criteria (.3, .4, .5). Defers .1 and .2 to judgment.
 
 set -euo pipefail
@@ -10,17 +10,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 axr_package_scope "$@"
-axr_init_output safety_rails "script:check-safety-rails.sh"
+axr_init_output safety "script:check-safety.sh"
 
 # ---------------------------------------------------------------------------
-# safety_rails.3 — Secrets not in repo
+# safety.no-secrets — Secrets not in repo
 # ---------------------------------------------------------------------------
-score_safety_rails_3() {
+score_safety_3() {
     local name
-    name="$(axr_criterion_name safety_rails.3)"
+    name="$(axr_criterion_name safety.no-secrets)"
 
     if [ ! -f .gitignore ]; then
-        axr_emit_criterion "safety_rails.3" "$name" script 0 ".gitignore missing"
+        axr_emit_criterion "safety.no-secrets" "$name" script 0 ".gitignore missing"
         return
     fi
 
@@ -74,28 +74,28 @@ score_safety_rails_3() {
     fi
 
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "safety_rails.3" "$name" script 0 ".env not covered in .gitignore"
+        axr_emit_criterion "safety.no-secrets" "$name" script 0 ".env not covered in .gitignore"
     else
-        axr_emit_criterion "safety_rails.3" "$name" script "$score" "secrets hygiene" "${ev[@]}"
+        axr_emit_criterion "safety.no-secrets" "$name" script "$score" "secrets hygiene" "${ev[@]}"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# safety_rails.4 — Branch protection on main
+# safety.branch-protection — Branch protection on main
 # ---------------------------------------------------------------------------
-score_safety_rails_4() {
+score_safety_4() {
     local name
-    name="$(axr_criterion_name safety_rails.4)"
+    name="$(axr_criterion_name safety.branch-protection)"
 
     if ! command -v gh >/dev/null 2>&1; then
-        axr_emit_criterion "safety_rails.4" "$name" script 1 "branch protection state unknown" \
+        axr_emit_criterion "safety.branch-protection" "$name" script 1 "branch protection state unknown" \
             "gh CLI not available"
         return
     fi
 
     local slug
     if ! slug="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)"; then
-        axr_emit_criterion "safety_rails.4" "$name" script 1 "branch protection state unknown" \
+        axr_emit_criterion "safety.branch-protection" "$name" script 1 "branch protection state unknown" \
             "no GitHub remote detected or gh not authenticated"
         return
     fi
@@ -103,7 +103,7 @@ score_safety_rails_4() {
     if ! printf '%s' "$slug" | grep -Eq '^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$'; then
         local safe_slug
         safe_slug="$(printf '%s' "$slug" | head -c 100 | tr -cd 'A-Za-z0-9./_-')"
-        axr_emit_criterion "safety_rails.4" "$name" script 1 "branch protection state unknown" \
+        axr_emit_criterion "safety.branch-protection" "$name" script 1 "branch protection state unknown" \
             "could not derive repo slug (sanitized: $safe_slug)"
         return
     fi
@@ -120,7 +120,7 @@ score_safety_rails_4() {
     prot="$(printf '%s' "$prot" | tr -d '\n' || true)"
 
     if [ -z "$prot" ] || [ "$prot" = "null" ] || ! printf '%s' "$prot" | jq -e . >/dev/null 2>&1; then
-        axr_emit_criterion "safety_rails.4" "$name" script 0 "no branch protection configured" \
+        axr_emit_criterion "safety.branch-protection" "$name" script 0 "no branch protection configured" \
             "$slug: no protection on main/master"
         return
     fi
@@ -139,16 +139,16 @@ score_safety_rails_4() {
         score=2
     fi
 
-    axr_emit_criterion "safety_rails.4" "$name" script "$score" "branch protection on $slug" \
+    axr_emit_criterion "safety.branch-protection" "$name" script "$score" "branch protection on $slug" \
         "reviews=$reviews" "strict_status_checks=$status_checks" "admin_enforced=$admin_enforced"
 }
 
 # ---------------------------------------------------------------------------
-# safety_rails.5 — Agent boundaries documented
+# safety.agent-boundaries — Agent boundaries documented
 # ---------------------------------------------------------------------------
-score_safety_rails_5() {
+score_safety_5() {
     local name
-    name="$(axr_criterion_name safety_rails.5)"
+    name="$(axr_criterion_name safety.agent-boundaries)"
 
     local doc=""
     for f in CLAUDE.md AGENTS.md .claude/CLAUDE.md .agents/AGENTS.md; do
@@ -188,20 +188,20 @@ score_safety_rails_5() {
     fi
 
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "safety_rails.5" "$name" script 0 "no agent context doc or settings.json"
+        axr_emit_criterion "safety.agent-boundaries" "$name" script 0 "no agent context doc or settings.json"
     elif [ "$score" -eq 1 ]; then
-        axr_emit_criterion "safety_rails.5" "$name" script 1 "agent doc present but no boundary section" \
+        axr_emit_criterion "safety.agent-boundaries" "$name" script 1 "agent doc present but no boundary section" \
             "${ev[@]}"
     else
-        axr_emit_criterion "safety_rails.5" "$name" script "$score" "agent boundaries documented" \
+        axr_emit_criterion "safety.agent-boundaries" "$name" script "$score" "agent boundaries documented" \
             "${ev[@]}"
     fi
 }
 
-axr_defer_criterion "safety_rails.1" "$(axr_criterion_name safety_rails.1)" "deferred to Phase 3 judgment subagent"
-axr_defer_criterion "safety_rails.2" "$(axr_criterion_name safety_rails.2)" "deferred to Phase 3 judgment subagent"
-score_safety_rails_3
-score_safety_rails_4
-score_safety_rails_5
+axr_defer_criterion "safety.hitl-checkpoints" "$(axr_criterion_name safety.hitl-checkpoints)" "deferred to Phase 3 judgment subagent"
+axr_defer_criterion "safety.reversible-default" "$(axr_criterion_name safety.reversible-default)" "deferred to Phase 3 judgment subagent"
+score_safety_3
+score_safety_4
+score_safety_5
 
 axr_finalize_output

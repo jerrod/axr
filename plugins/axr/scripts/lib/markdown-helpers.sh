@@ -5,7 +5,7 @@
 # Parsers here know how to read headings, fenced code blocks, and setup
 # sections from README/CLAUDE/DECISIONS files while respecting triple-backtick
 # fences. Extracted from check-docs-context.sh so that future dimension
-# checkers (docs_context is unlikely to be the only markdown-reading checker)
+# checkers (docs is unlikely to be the only markdown-reading checker)
 # can reuse the same logic.
 #
 # All functions are pure — they take a filename and emit text or integers to

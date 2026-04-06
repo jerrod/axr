@@ -26,7 +26,7 @@ DIM_JSON_PATH="$2"
 LATEST_JSON_PATH="$3"
 
 # Validate dim-id format.
-[[ "$DIM_ID" =~ ^[a-z_]+$ ]] || die "invalid dimension id: $DIM_ID"
+[[ "$DIM_ID" =~ ^[a-z]+$ ]] || die "invalid dimension id: $DIM_ID"
 
 # Validate dim-id exists in rubric.
 jq -e --arg id "$DIM_ID" '.dimensions[] | select(.id == $id)' "$_AXR_RUBRIC_PATH" >/dev/null 2>&1 \

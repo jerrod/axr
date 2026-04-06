@@ -7,9 +7,9 @@
 #
 # Usage:
 #   source scripts/lib/common.sh
-#   axr_init_output docs_context "script:check-docs-context.sh"
-#   axr_emit_criterion "docs_context.1" "Root CLAUDE.md" script 3 "..." "ev1"
-#   axr_defer_criterion "docs_context.3" "Local READMEs" "deferred to judgment"
+#   axr_init_output docs "script:check-docs-context.sh"
+#   axr_emit_criterion "docs.agent-context" "Root CLAUDE.md" script 3 "..." "ev1"
+#   axr_defer_criterion "docs.subsystem-readmes" "Local READMEs" "deferred to judgment"
 #   axr_finalize_output   # prints the assembled JSON to stdout
 #
 # Two reviewer fields exist in the output:
@@ -33,9 +33,9 @@ _AXR_STACK_JSON="[]"
 _AXR_CRITERIA_JSON="[]"
 
 # Plugin root = scripts/lib/../../ = two levels up from this file. Used to
-# locate rubric/rubric.v2.json regardless of target repo CWD.
+# locate rubric/rubric.v3.json regardless of target repo CWD.
 _AXR_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-_AXR_RUBRIC_PATH="$_AXR_PLUGIN_ROOT/rubric/rubric.v2.json"
+_AXR_RUBRIC_PATH="$_AXR_PLUGIN_ROOT/rubric/rubric.v3.json"
 
 # shellcheck source-path=SCRIPTDIR
 # shellcheck source=monorepo-helpers.sh

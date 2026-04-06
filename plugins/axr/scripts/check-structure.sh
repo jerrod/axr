@@ -15,28 +15,28 @@ axr_init_output structure "script:check-structure.sh"
 STACK_JSON="$(axr_detect_stack)"
 
 # ---------------------------------------------------------------------------
-# structure.2 — No circular dependencies
+# structure.no-circular-deps — No circular dependencies
 # ---------------------------------------------------------------------------
 score_by_cycles() {
     local name="$1" cycles="$2" entry="$3"
     if [ "$cycles" -eq 0 ]; then
-        axr_emit_criterion "structure.2" "$name" script 3 "zero cycles detected" \
+        axr_emit_criterion "structure.no-circular-deps" "$name" script 3 "zero cycles detected" \
             "madge found 0 cycles in $entry"
     elif [ "$cycles" -le 2 ]; then
-        axr_emit_criterion "structure.2" "$name" script 2 "$cycles cycle(s) detected" \
+        axr_emit_criterion "structure.no-circular-deps" "$name" script 2 "$cycles cycle(s) detected" \
             "madge found $cycles cycle(s) in $entry"
     elif [ "$cycles" -le 5 ]; then
-        axr_emit_criterion "structure.2" "$name" script 1 "$cycles cycle(s) detected" \
+        axr_emit_criterion "structure.no-circular-deps" "$name" script 1 "$cycles cycle(s) detected" \
             "madge found $cycles cycle(s) in $entry"
     else
-        axr_emit_criterion "structure.2" "$name" script 0 "$cycles cycle(s) detected" \
+        axr_emit_criterion "structure.no-circular-deps" "$name" script 0 "$cycles cycle(s) detected" \
             "madge found $cycles cycle(s) in $entry"
     fi
 }
 
 score_structure_2() {
     local name
-    name="$(axr_criterion_name structure.2)"
+    name="$(axr_criterion_name structure.no-circular-deps)"
 
     local attempts=()
 
@@ -68,16 +68,16 @@ score_structure_2() {
         attempts+=("go: cycle detection not implemented for go stack")
     fi
 
-    axr_emit_criterion "structure.2" "$name" script 1 "tool unavailable — circular deps not checked" \
+    axr_emit_criterion "structure.no-circular-deps" "$name" script 1 "tool unavailable — circular deps not checked" \
         "${attempts[@]:-no stack-specific tool available}"
 }
 
 # ---------------------------------------------------------------------------
-# structure.5 — Dead code removed
+# structure.dead-code-removed — Dead code removed
 # ---------------------------------------------------------------------------
 score_structure_5() {
     local name
-    name="$(axr_criterion_name structure.5)"
+    name="$(axr_criterion_name structure.dead-code-removed)"
 
     # Count blocks of 5+ consecutive commented-out code-like lines.
     local blocks=0
@@ -123,13 +123,13 @@ score_structure_5() {
     elif [ "$blocks" -ge 1 ]; then score=3
     fi
 
-    axr_emit_criterion "structure.5" "$name" script "$score" "dead-code evaluation" "${ev[@]}"
+    axr_emit_criterion "structure.dead-code-removed" "$name" script "$score" "dead-code evaluation" "${ev[@]}"
 }
 
-axr_defer_criterion "structure.1" "$(axr_criterion_name structure.1)" "deferred to Phase 3 judgment subagent"
+axr_defer_criterion "structure.module-boundaries" "$(axr_criterion_name structure.module-boundaries)" "deferred to Phase 3 judgment subagent"
 score_structure_2
-axr_defer_criterion "structure.3" "$(axr_criterion_name structure.3)" "deferred to Phase 3 judgment subagent"
-axr_defer_criterion "structure.4" "$(axr_criterion_name structure.4)" "deferred to Phase 3 judgment subagent"
+axr_defer_criterion "structure.scoped-files" "$(axr_criterion_name structure.scoped-files)" "deferred to Phase 3 judgment subagent"
+axr_defer_criterion "structure.searchable-naming" "$(axr_criterion_name structure.searchable-naming)" "deferred to Phase 3 judgment subagent"
 score_structure_5
 
 axr_finalize_output

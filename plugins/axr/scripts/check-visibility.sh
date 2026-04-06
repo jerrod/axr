@@ -10,14 +10,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 axr_package_scope "$@"
-axr_init_output execution_visibility "script:check-execution-visibility.sh"
+axr_init_output visibility "script:check-visibility.sh"
 
 # ---------------------------------------------------------------------------
-# execution_visibility.3 — Errors route to a single searchable place
+# visibility.error-routing — Errors route to a single searchable place
 # ---------------------------------------------------------------------------
-score_execution_visibility_3() {
+score_visibility_3() {
     local name
-    name="$(axr_criterion_name execution_visibility.3)"
+    name="$(axr_criterion_name visibility.error-routing)"
 
     local signals=()
 
@@ -65,22 +65,22 @@ score_execution_visibility_3() {
     fi
 
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "execution_visibility.3" "$name" script 0 "no error-tracking signals"
+        axr_emit_criterion "visibility.error-routing" "$name" script 0 "no error-tracking signals"
     else
-        axr_emit_criterion "execution_visibility.3" "$name" script "$score" "$n signal(s) found" \
+        axr_emit_criterion "visibility.error-routing" "$name" script "$score" "$n signal(s) found" \
             "${signals[@]}"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# execution_visibility.5 — Test failures preserve logs/artifacts
+# visibility.test-artifacts — Test failures preserve logs/artifacts
 # ---------------------------------------------------------------------------
-score_execution_visibility_5() {
+score_visibility_5() {
     local name
-    name="$(axr_criterion_name execution_visibility.5)"
+    name="$(axr_criterion_name visibility.test-artifacts)"
 
     if [ ! -d .github/workflows ]; then
-        axr_emit_criterion "execution_visibility.5" "$name" script 0 "no workflows directory"
+        axr_emit_criterion "visibility.test-artifacts" "$name" script 0 "no workflows directory"
         return
     fi
 
@@ -110,17 +110,17 @@ score_execution_visibility_5() {
     fi
 
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "execution_visibility.5" "$name" script 0 "no artifact upload in workflows"
+        axr_emit_criterion "visibility.test-artifacts" "$name" script 0 "no artifact upload in workflows"
     else
-        axr_emit_criterion "execution_visibility.5" "$name" script "$score" "CI artifact handling" \
+        axr_emit_criterion "visibility.test-artifacts" "$name" script "$score" "CI artifact handling" \
             "${ev[@]}"
     fi
 }
 
-axr_defer_criterion "execution_visibility.1" "$(axr_criterion_name execution_visibility.1)" "deferred to Phase 3 judgment subagent"
-axr_defer_criterion "execution_visibility.2" "$(axr_criterion_name execution_visibility.2)" "deferred to Phase 3 judgment subagent"
-score_execution_visibility_3
-axr_defer_criterion "execution_visibility.4" "$(axr_criterion_name execution_visibility.4)" "deferred to Phase 3 judgment subagent"
-score_execution_visibility_5
+axr_defer_criterion "visibility.structured-logging" "$(axr_criterion_name visibility.structured-logging)" "deferred to Phase 3 judgment subagent"
+axr_defer_criterion "visibility.telemetry" "$(axr_criterion_name visibility.telemetry)" "deferred to Phase 3 judgment subagent"
+score_visibility_3
+axr_defer_criterion "visibility.local-diagnostics" "$(axr_criterion_name visibility.local-diagnostics)" "deferred to Phase 3 judgment subagent"
+score_visibility_5
 
 axr_finalize_output

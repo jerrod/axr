@@ -8,7 +8,7 @@ Building `axr`, a Claude Code plugin that scores a repository's **Agent eXecutio
 
 The plugin must work today for a single repo, run from inside a Claude Code session, and produce both a human-readable report and a machine-readable JSON artifact. Do not build the GitHub App, a shared `axr-core` library, or a dashboard in this phase. Inline the logic; premature abstraction is the enemy.
 
-## The Rubric (v2.0)
+## The Rubric (v3.0)
 
 100 points across 9 dimensions. Each criterion scored 0–4. Dimension score = `(sum of criteria / max possible) × weight`.
 
@@ -116,21 +116,21 @@ Auto-remediation command. Reads `.axr/latest.json` and applies automated fixes t
 **Usage:**
 - `/axr-fix all` — fix every low-scoring criterion that has a strategy
 - `/axr-fix blockers` — fix top 3 blockers
-- `/axr-fix docs_context.1` — fix a specific criterion
-- `/axr-fix safety_rails` — fix all low-scoring criteria in a dimension
+- `/axr-fix docs.readme-setup` — fix a specific criterion
+- `/axr-fix safety` — fix all low-scoring criteria in a dimension
 
 **Supported remediations (8 criteria):**
 
 | Criterion | What it does |
 |-----------|-------------|
-| docs_context.1 | Generate/update CLAUDE.md with architecture, conventions, sharp edges |
-| docs_context.2 | Add quickstart section to README with ≤5 setup commands |
-| docs_context.4 | Scaffold `docs/adr/` with template and initial ADRs |
-| safety_rails.3 | Add missing secret patterns to .gitignore, create .env.example |
-| safety_rails.5 | Add agent permissions/boundaries section to CLAUDE.md |
-| style_validation.5 | Generate .editorconfig from detected project conventions |
-| tooling.2 | Create bin/setup bootstrap script from detected stack |
-| tooling.4 | Generate .devcontainer/devcontainer.json from detected stack |
+| docs.agent-context | Generate/update CLAUDE.md with architecture, conventions, sharp edges |
+| docs.readme-setup | Add quickstart section to README with ≤5 setup commands |
+| docs.decision-log | Scaffold `docs/adr/` with template and initial ADRs |
+| safety.no-secrets | Add missing secret patterns to .gitignore, create .env.example |
+| safety.agent-boundaries | Add agent permissions/boundaries section to CLAUDE.md |
+| style.editor-config | Generate .editorconfig from detected project conventions |
+| tooling.bootstrap | Create bin/setup bootstrap script from detected stack |
+| tooling.devcontainer | Generate .devcontainer/devcontainer.json from detected stack |
 
 After each fix, re-runs the relevant dimension checker and reports the score delta.
 
@@ -148,14 +148,14 @@ Every run writes two files to `.axr/` at repo root.
   "total_score": 73,
   "band": "Agent-Ready",
   "dimensions": {
-    "tests_ci": {
+    "tests": {
       "weight": 18,
       "raw_score": 14,
       "max_raw": 20,
       "weighted_score": 14.0,
       "criteria": [
         {
-          "id": "tests_ci.1",
+          "id": "tests.deterministic-suite",
           "name": "Test suite runs deterministically under 10min",
           "score": 3,
           "evidence": [
@@ -169,8 +169,8 @@ Every run writes two files to `.axr/` at repo root.
     }
   },
   "blockers": [
-    "No CLAUDE.md at root (docs_context.1)",
-    "No branch protection on main (safety_rails.4)"
+    "No CLAUDE.md at root (docs.agent-context)",
+    "No branch protection on main (safety.branch-protection)"
   ],
   "trend": {
     "previous_score": 68,
@@ -194,13 +194,13 @@ Archive of prior runs, preserved on each new run.
 
 For every criterion resolvable from the filesystem, use tools (Read, Bash with `gh`, `grep`, `fd`) to collect evidence and assign a score. Examples:
 
-- **docs_context.1:** Does `CLAUDE.md` or `AGENTS.md` exist at repo root? If yes, is it >500 chars and does it contain sections for "architecture", "conventions", "gotchas/sharp edges"? Score 0 (absent), 2 (exists, thin), or 3 (present with required sections). 4 requires human confirmation.
-- **tooling.4:** Does `bin/setup`, `Makefile` with `dev` target, `scripts/bootstrap`, or equivalent exist? Does running it succeed in a clean environment? Score based on presence and documented runtime.
-- **safety_rails.4:** Use `gh api "repos/$REPO_SLUG/branches/main/protection"` to check branch protection. Score 0–4 based on required reviews, required status checks, admin enforcement.
+- **docs.agent-context:** Does `CLAUDE.md` or `AGENTS.md` exist at repo root? If yes, is it >500 chars and does it contain sections for "architecture", "conventions", "gotchas/sharp edges"? Score 0 (absent), 2 (exists, thin), or 3 (present with required sections). 4 requires human confirmation.
+- **tooling.devcontainer:** Does `bin/setup`, `Makefile` with `dev` target, `scripts/bootstrap`, or equivalent exist? Does running it succeed in a clean environment? Score based on presence and documented runtime.
+- **safety.branch-protection:** Use `gh api "repos/$REPO_SLUG/branches/main/protection"` to check branch protection. Score 0–4 based on required reviews, required status checks, admin enforcement.
 
   **Security requirement:** derive `REPO_SLUG` via `gh repo view --json nameWithOwner -q .nameWithOwner` (gh-native — no manual URL parsing) and validate it matches `^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$` before interpolating into any `gh api` call. Never interpolate raw `git remote get-url` output into shell commands.
-- **tests_ci.1:** Parse `.github/workflows/*.yml` for test jobs. Use `gh run list --workflow=<test> --limit 10 --json conclusion,createdAt,updatedAt` for avg duration and flake rate.
-- **structure.2:** Run static analysis for the stack (`madge` for JS/TS, `pydeps` for Python, Gradle reports for Kotlin) to detect circular imports.
+- **tests.deterministic-suite:** Parse `.github/workflows/*.yml` for test jobs. Use `gh run list --workflow=<test> --limit 10 --json conclusion,createdAt,updatedAt` for avg duration and flake rate.
+- **structure.no-circular-deps:** Run static analysis for the stack (`madge` for JS/TS, `pydeps` for Python, Gradle reports for Kotlin) to detect circular imports.
 
 ### Pass 2 — Judgment checks (Phase 3)
 
@@ -208,11 +208,11 @@ For every criterion resolvable from the filesystem, use tools (Read, Bash with `
 
 | Agent | Criteria |
 |---|---|
-| `docs-reviewer` | docs_context.3, .5 |
-| `architecture-reviewer` | change_surface.1, .2, .4; structure.1, .3, .4 |
-| `safety-reviewer` | safety_rails.1, .2 |
-| `observability-reviewer` | execution_visibility.1, .2, .4 |
-| `workflow-reviewer` | tests_ci.2; workflow_realism.1, .2, .4 |
+| `docs-reviewer` | docs.subsystem-readmes, .5 |
+| `architecture-reviewer` | change.locatable-logic, .2, .4; structure.module-boundaries, .3, .4 |
+| `safety-reviewer` | safety.hitl-checkpoints, .2 |
+| `observability-reviewer` | visibility.structured-logging, .2, .4 |
+| `workflow-reviewer` | tests.boundary-coverage; workflow.fixtures, .2, .4 |
 
 Agents score 0-3 autonomously. Score 4 requires human confirmation. Every agent-emitted criterion carries `reviewer: "agent-draft"` so downstream consumers know to confirm before treating as final.
 
@@ -295,20 +295,20 @@ If none are found, the repo is treated as a single-package project.
 
 These dimensions are scored independently for each package because they reflect package-level concerns:
 
-- `tests_ci` — each package has its own test suite and CI signal
-- `docs_context` — each package may have its own README and local docs
-- `style_validation` — linter/formatter config may vary per package
+- `tests` — each package has its own test suite and CI signal
+- `docs` — each package may have its own README and local docs
+- `style` — linter/formatter config may vary per package
 - `tooling` — build and bootstrap tooling is often per-package
 
 ### Repo-level dimensions (5)
 
 These dimensions are scored once at the repo root because they reflect repo-wide concerns:
 
-- `safety_rails` — branch protection, secrets policy, HITL checkpoints
+- `safety` — branch protection, secrets policy, HITL checkpoints
 - `structure` — module boundaries and dependency direction across the whole repo
-- `change_surface` — integration points and context packing at the repo level
-- `execution_visibility` — logging and observability infrastructure
-- `workflow_realism` — sandbox flows and regression artifacts
+- `change` — integration points and context packing at the repo level
+- `visibility` — logging and observability infrastructure
+- `workflow` — sandbox flows and regression artifacts
 
 ### Aggregation
 
@@ -361,9 +361,9 @@ Band thresholds are read from `rubric/rubric.v2.json` (not hardcoded) so they st
 2. Implement mechanical checks for highest-value criteria:
    - All of Docs & Agent Context (filesystem)
    - All of Safety Rails (mostly `gh api` + filesystem)
-   - `tests_ci.1`, `tests_ci.4` (CI introspection via `gh`)
-   - `tooling.4`, `tooling.5` (bootstrap script, pinned deps)
-   - `change_surface.5` (context packing)
+   - `tests.deterministic-suite`, `tests.actionable-ci` (CI introspection via `gh`)
+   - `tooling.devcontainer`, `tooling.build-cache` (bootstrap script, pinned deps)
+   - `change.context-packing` (context packing)
 3. For each check, define: what evidence to collect, how to score 0–4, what counts as each level.
 4. Run against one target repo, inspect output, tune.
 

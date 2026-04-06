@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/check-style-validation.sh — deterministic checker for the
-# style_validation dimension.
+# style dimension.
 # Scores 5 mechanical criteria (.1 through .5). No judgment criteria.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,19 +15,19 @@ source "$SCRIPT_DIR/lib/workflow-helpers.sh"
 source "$SCRIPT_DIR/lib/tooling-helpers.sh"
 
 axr_package_scope "$@"
-axr_init_output style_validation "script:check-style-validation.sh"
+axr_init_output style "script:check-style.sh"
 
 STACK_JSON="$(axr_detect_stack)"
-score_style_validation_1() {
+score_style_1() {
     local name
-    name="$(axr_criterion_name style_validation.1)"
+    name="$(axr_criterion_name style.type-checker)"
     local has_node=0 has_python=0 has_compiled=0 has_php=0
     axr_has_stack_tag node && has_node=1
     axr_has_stack_tag python && has_python=1
     axr_has_stack_tag php && has_php=1
     { axr_has_stack_tag java || axr_has_stack_tag csharp || axr_has_stack_tag swift; } && has_compiled=1
     if [ "$has_node" = "0" ] && [ "$has_python" = "0" ] && [ "$has_compiled" = "0" ] && [ "$has_php" = "0" ]; then
-        axr_emit_criterion "style_validation.1" "$name" script 0 \
+        axr_emit_criterion "style.type-checker" "$name" script 0 \
             "no type-checkable language — no type-checker signal for agents" \
             "stack: $STACK_JSON (no supported language detected)"
         return
@@ -84,12 +84,12 @@ score_style_validation_1() {
     local s; for s in "${scores[@]}"; do
         [ "$s" -lt "$final" ] && final=$s
     done
-    axr_emit_criterion "style_validation.1" "$name" script "$final" \
+    axr_emit_criterion "style.type-checker" "$name" script "$final" \
         "type checker config evaluation" "${evidence[@]}"
 }
-score_style_validation_2() {
+score_style_2() {
     local name
-    name="$(axr_criterion_name style_validation.2)"
+    name="$(axr_criterion_name style.lint-format)"
     local lint_found="" format_found=""
     lint_found="$(list_lint_configs | head -1)"
     if [ -z "$lint_found" ] && [ -f .editorconfig ] && grep -qiE 'ktlint' .editorconfig 2>/dev/null; then
@@ -120,14 +120,14 @@ score_style_validation_2() {
         score=1
     fi
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "style_validation.2" "$name" script 0 "no lint or format config found"
+        axr_emit_criterion "style.lint-format" "$name" script 0 "no lint or format config found"
     else
-        axr_emit_criterion "style_validation.2" "$name" script "$score" "lint/format config evaluation" "${ev[@]}"
+        axr_emit_criterion "style.lint-format" "$name" script "$score" "lint/format config evaluation" "${ev[@]}"
     fi
 }
-score_style_validation_3() {
+score_style_3() {
     local name
-    name="$(axr_criterion_name style_validation.3)"
+    name="$(axr_criterion_name style.format-enforced)"
     local local_enforce=0 ci_enforce=0
     local ev=()
     # Check pre-commit hooks for formatter
@@ -176,14 +176,14 @@ score_style_validation_3() {
         score=2
     fi
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "style_validation.3" "$name" script 0 "no formatting enforcement found"
+        axr_emit_criterion "style.format-enforced" "$name" script 0 "no formatting enforcement found"
     else
-        axr_emit_criterion "style_validation.3" "$name" script "$score" "format enforcement evaluation" "${ev[@]}"
+        axr_emit_criterion "style.format-enforced" "$name" script "$score" "format enforcement evaluation" "${ev[@]}"
     fi
 }
-score_style_validation_4() {
+score_style_4() {
     local name
-    name="$(axr_criterion_name style_validation.4)"
+    name="$(axr_criterion_name style.static-analysis)"
     local local_found=0 ci_found=0
     local ev=()
     # Semgrep
@@ -234,14 +234,14 @@ score_style_validation_4() {
         score=2
     fi
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "style_validation.4" "$name" script 0 "no static analysis beyond linting"
+        axr_emit_criterion "style.static-analysis" "$name" script 0 "no static analysis beyond linting"
     else
-        axr_emit_criterion "style_validation.4" "$name" script "$score" "static analysis evaluation" "${ev[@]}"
+        axr_emit_criterion "style.static-analysis" "$name" script "$score" "static analysis evaluation" "${ev[@]}"
     fi
 }
-score_style_validation_5() {
+score_style_5() {
     local name
-    name="$(axr_criterion_name style_validation.5)"
+    name="$(axr_criterion_name style.editor-config)"
     local has_editorconfig=0 has_ide=0
     local ev=()
     if [ -f .editorconfig ]; then
@@ -273,16 +273,16 @@ score_style_validation_5() {
         score=2
     fi
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "style_validation.5" "$name" script 0 "no editor/IDE config shared"
+        axr_emit_criterion "style.editor-config" "$name" script 0 "no editor/IDE config shared"
     else
-        axr_emit_criterion "style_validation.5" "$name" script "$score" "editor config evaluation" "${ev[@]}"
+        axr_emit_criterion "style.editor-config" "$name" script "$score" "editor config evaluation" "${ev[@]}"
     fi
 }
 
-score_style_validation_1
-score_style_validation_2
-score_style_validation_3
-score_style_validation_4
-score_style_validation_5
+score_style_1
+score_style_2
+score_style_3
+score_style_4
+score_style_5
 
 axr_finalize_output

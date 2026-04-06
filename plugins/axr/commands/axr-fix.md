@@ -13,9 +13,9 @@ You are the `/axr-fix` orchestrator. Read `.axr/latest.json`, identify low-scori
 2. **Parse arguments.** `$ARGUMENTS` determines the fix scope:
 
    - `all` — fix every criterion scoring ≤ 2 that has a remediation strategy
-   - `blockers` — fix the top 3 blockers from `.axr/latest.json` (the `blockers[]` array, excluding any with `defaulted_from_deferred: true`)
-   - A criterion id (e.g., `docs_context.1`) — fix that single criterion
-   - A dimension id (e.g., `safety_rails`) — fix all criteria in that dimension scoring ≤ 2
+   - `blockers` — fix the top 3 blockers from `.axr/latest.json`
+   - A criterion id (e.g., `docs.readme-setup`) — fix that single criterion
+   - A dimension id (e.g., `safety`) — fix all criteria in that dimension scoring ≤ 2
 
    If `$ARGUMENTS` is empty, abort with usage: `/axr-fix <all | blockers | criterion-id | dimension-id>`.
 
@@ -24,22 +24,22 @@ You are the `/axr-fix` orchestrator. Read `.axr/latest.json`, identify low-scori
    # Empty check
    [ -n "$ARGUMENTS" ] || { echo "Usage: /axr-fix <all | blockers | criterion-id | dimension-id>"; exit 1; }
 
-   # Check if it's "all" or "blockers"
+   # Check modes
    if [ "$ARGUMENTS" = "all" ]; then
        echo "Mode: fix all low-scoring criteria"
    elif [ "$ARGUMENTS" = "blockers" ]; then
        echo "Mode: fix top 3 blockers"
-   # Check if it's a criterion id (contains a dot followed by digits)
-   elif echo "$ARGUMENTS" | grep -qE '^\w+\.\d+$'; then
+   # Check if it's a criterion id (e.g., docs.readme-setup)
+   elif echo "$ARGUMENTS" | grep -qE '^[a-z]+\.[a-z0-9-]+$'; then
        jq -e --arg id "$ARGUMENTS" \
            '[.dimensions[].criteria[] | select(.id == $id)] | length > 0' \
-           "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v2.json" >/dev/null \
+           "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v3.json" >/dev/null \
            || { echo "Unknown criterion: $ARGUMENTS"; exit 1; }
        echo "Mode: fix criterion $ARGUMENTS"
    # Check if it's a dimension id
    else
        jq -e --arg id "$ARGUMENTS" '.dimensions[] | select(.id == $id)' \
-           "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v2.json" >/dev/null \
+           "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v3.json" >/dev/null \
            || { echo "Unknown dimension or criterion: $ARGUMENTS"; exit 1; }
        echo "Mode: fix dimension $ARGUMENTS"
    fi
@@ -52,7 +52,7 @@ You are the `/axr-fix` orchestrator. Read `.axr/latest.json`, identify low-scori
    jq -r '[.dimensions | to_entries[].value.criteria[] | select(.score != null and .score <= 2)] | .[].id' .axr/latest.json
    ```
 
-   For `blockers` mode (blockers array is pre-filtered by aggregate.sh to exclude `defaulted_from_deferred`, but filter defensively):
+   For `blockers` mode:
    ```bash
    jq -r '[.blockers[] | select(.defaulted_from_deferred != true)][:3][] | .id' .axr/latest.json
    ```
@@ -83,7 +83,7 @@ You are the `/axr-fix` orchestrator. Read `.axr/latest.json`, identify low-scori
 
    For each target criterion:
 
-   a. Read `${CLAUDE_PLUGIN_ROOT}/docs/remediation-strategies.md` and find the section headed `## <criterion_id>` matching the target (e.g., `## docs_context.1`). If no section exists for this criterion, print "No automated remediation available for <id>" and skip to the next target.
+   a. Read `${CLAUDE_PLUGIN_ROOT}/docs/remediation-strategies.md` and find the section headed `## <criterion_id>` matching the target (e.g., `## docs.agent-context`). If no section exists for this criterion, print "No automated remediation available for <id>" and skip to the next target.
 
    b. Execute the strategy described in that section. The strategy describes what files to create or modify ��� follow it using Write/Edit/Glob/Grep tools, adapting to the target repo's actual structure and stack. The strategy is a guide, not a rigid script.
 

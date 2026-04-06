@@ -10,14 +10,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 axr_package_scope "$@"
-axr_init_output workflow_realism "script:check-workflow-realism.sh"
+axr_init_output workflow "script:check-workflow.sh"
 
 # ---------------------------------------------------------------------------
-# workflow_realism.3 — External integrations stubable
+# workflow.stubable-integrations — External integrations stubable
 # ---------------------------------------------------------------------------
-score_workflow_realism_3() {
+score_workflow_3() {
     local name
-    name="$(axr_criterion_name workflow_realism.3)"
+    name="$(axr_criterion_name workflow.stubable-integrations)"
 
     local techs=()
     local ev=()
@@ -75,18 +75,18 @@ score_workflow_realism_3() {
     fi
 
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "workflow_realism.3" "$name" script 0 "no stubbing technology found"
+        axr_emit_criterion "workflow.stubable-integrations" "$name" script 0 "no stubbing technology found"
     else
-        axr_emit_criterion "workflow_realism.3" "$name" script "$score" "$n stubbing tech" "${ev[@]}"
+        axr_emit_criterion "workflow.stubable-integrations" "$name" script "$score" "$n stubbing tech" "${ev[@]}"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# workflow_realism.5 — Regression artifacts
+# workflow.regression-artifacts — Regression artifacts
 # ---------------------------------------------------------------------------
-score_workflow_realism_5() {
+score_workflow_5() {
     local name
-    name="$(axr_criterion_name workflow_realism.5)"
+    name="$(axr_criterion_name workflow.regression-artifacts)"
 
     local types=()
     local total=0
@@ -141,17 +141,17 @@ score_workflow_realism_5() {
     fi
 
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "workflow_realism.5" "$name" script 0 "no regression artifacts found"
+        axr_emit_criterion "workflow.regression-artifacts" "$name" script 0 "no regression artifacts found"
     else
-        axr_emit_criterion "workflow_realism.5" "$name" script "$score" "$total regression artifact(s)" \
+        axr_emit_criterion "workflow.regression-artifacts" "$name" script "$score" "$total regression artifact(s)" \
             "${ev[@]}"
     fi
 }
 
-axr_defer_criterion "workflow_realism.1" "$(axr_criterion_name workflow_realism.1)" "deferred to Phase 3 judgment subagent"
-axr_defer_criterion "workflow_realism.2" "$(axr_criterion_name workflow_realism.2)" "deferred to Phase 3 judgment subagent"
-score_workflow_realism_3
-axr_defer_criterion "workflow_realism.4" "$(axr_criterion_name workflow_realism.4)" "deferred to Phase 3 judgment subagent"
-score_workflow_realism_5
+axr_defer_criterion "workflow.fixtures" "$(axr_criterion_name workflow.fixtures)" "deferred to Phase 3 judgment subagent"
+axr_defer_criterion "workflow.sandbox-parity" "$(axr_criterion_name workflow.sandbox-parity)" "deferred to Phase 3 judgment subagent"
+score_workflow_3
+axr_defer_criterion "workflow.golden-paths" "$(axr_criterion_name workflow.golden-paths)" "deferred to Phase 3 judgment subagent"
+score_workflow_5
 
 axr_finalize_output

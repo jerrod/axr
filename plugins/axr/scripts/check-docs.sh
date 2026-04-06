@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/check-docs-context.sh — deterministic checker for the docs_context
+# scripts/check-docs-context.sh — deterministic checker for the docs
 # dimension of the axr rubric.
 #
 # Scores three mechanical criteria (.1, .2, .4). Defers .3 and .5 to judgment.
@@ -20,14 +20,14 @@ source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/markdown-helpers.sh"
 
 axr_package_scope "$@"
-axr_init_output docs_context "script:check-docs-context.sh"
+axr_init_output docs "script:check-docs.sh"
 
 # ---------------------------------------------------------------------------
-# docs_context.1 — Root CLAUDE.md / AGENTS.md with agent-oriented sections.
+# docs.agent-context — Root CLAUDE.md / AGENTS.md with agent-oriented sections.
 # ---------------------------------------------------------------------------
-score_docs_context_1() {
+score_docs_1() {
     local name
-    name="$(axr_criterion_name docs_context.1)"
+    name="$(axr_criterion_name docs.agent-context)"
 
     local candidates=(CLAUDE.md AGENTS.md .claude/CLAUDE.md .agents/AGENTS.md)
     local found=""
@@ -40,14 +40,14 @@ score_docs_context_1() {
     done
 
     if [ -z "$found" ]; then
-        axr_emit_criterion "docs_context.1" "$name" script 0 "no agent-context file found"
+        axr_emit_criterion "docs.agent-context" "$name" script 0 "no agent-context file found"
         return
     fi
 
     local bytes
     bytes="$(wc -c <"$found" | tr -d ' ')"
     if [ "$bytes" -lt 500 ]; then
-        axr_emit_criterion "docs_context.1" "$name" script 1 "below 500-byte threshold" \
+        axr_emit_criterion "docs.agent-context" "$name" script 1 "below 500-byte threshold" \
             "$found ($bytes bytes, below 500-byte threshold)"
         return
     fi
@@ -67,33 +67,33 @@ score_docs_context_1() {
     fi
 
     if [ "$matched_count" -eq 0 ]; then
-        axr_emit_criterion "docs_context.1" "$name" script 2 "no agent-oriented sections matched" \
+        axr_emit_criterion "docs.agent-context" "$name" script 2 "no agent-oriented sections matched" \
             "$found ($bytes bytes, $sections sections, no agent-oriented sections)"
     elif [ "$matched_count" -le 2 ]; then
-        axr_emit_criterion "docs_context.1" "$name" script 2 "partial agent-oriented coverage" \
+        axr_emit_criterion "docs.agent-context" "$name" script 2 "partial agent-oriented coverage" \
             "$found ($bytes bytes, $sections sections)" \
             "matched: $matched"
     else
-        axr_emit_criterion "docs_context.1" "$name" script 3 "strong agent-oriented coverage" \
+        axr_emit_criterion "docs.agent-context" "$name" script 3 "strong agent-oriented coverage" \
             "$found ($bytes bytes, $sections sections)" \
             "matched: $matched"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# docs_context.2 — README setup section with ≤5 commands.
+# docs.readme-setup — README setup section with ≤5 commands.
 # ---------------------------------------------------------------------------
-score_docs_context_2() {
+score_docs_2() {
     local name
-    name="$(axr_criterion_name docs_context.2)"
+    name="$(axr_criterion_name docs.readme-setup)"
 
     if [ ! -f README.md ]; then
-        axr_emit_criterion "docs_context.2" "$name" script 0 "README.md missing"
+        axr_emit_criterion "docs.readme-setup" "$name" script 0 "README.md missing"
         return
     fi
 
     if ! grep -iEq '^## .*(setup|getting started|quickstart|install|development)' README.md; then
-        axr_emit_criterion "docs_context.2" "$name" script 1 "no setup section in README" \
+        axr_emit_criterion "docs.readme-setup" "$name" script 1 "no setup section in README" \
             "README.md present but no setup section found"
         return
     fi
@@ -101,26 +101,26 @@ score_docs_context_2() {
     local n
     n="$(count_setup_commands README.md)"
     if [ "$n" -eq 0 ]; then
-        axr_emit_criterion "docs_context.2" "$name" script 1 "setup section has no commands" \
+        axr_emit_criterion "docs.readme-setup" "$name" script 1 "setup section has no commands" \
             "README.md setup section: 0 commands"
     elif [ "$n" -le 5 ]; then
-        axr_emit_criterion "docs_context.2" "$name" script 3 "setup section within budget" \
+        axr_emit_criterion "docs.readme-setup" "$name" script 3 "setup section within budget" \
             "README.md setup section: $n commands"
     elif [ "$n" -le 10 ]; then
-        axr_emit_criterion "docs_context.2" "$name" script 2 "setup section exceeds 5" \
+        axr_emit_criterion "docs.readme-setup" "$name" script 2 "setup section exceeds 5" \
             "README.md setup section: $n commands (exceeds 5)"
     else
-        axr_emit_criterion "docs_context.2" "$name" script 1 "setup section significantly exceeds 5" \
+        axr_emit_criterion "docs.readme-setup" "$name" script 1 "setup section significantly exceeds 5" \
             "README.md setup section: $n commands (significantly exceeds 5)"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# docs_context.4 — ADRs / decision log.
+# docs.decision-log — ADRs / decision log.
 # ---------------------------------------------------------------------------
-score_docs_context_4() {
+score_docs_4() {
     local name
-    name="$(axr_criterion_name docs_context.4)"
+    name="$(axr_criterion_name docs.decision-log)"
 
     local adr_dirs=(docs/adr docs/adrs docs/decisions docs/architecture/decisions adr decisions architecture/decisions)
     local adr_files=(DECISIONS.md docs/DECISIONS.md)
@@ -144,7 +144,7 @@ score_docs_context_4() {
     done
 
     if [ -z "$found_dir" ] && [ -z "$found_file" ]; then
-        axr_emit_criterion "docs_context.4" "$name" script 0 "no decision log found"
+        axr_emit_criterion "docs.decision-log" "$name" script 0 "no decision log found"
         return
     fi
 
@@ -163,13 +163,13 @@ score_docs_context_4() {
         fi
 
         if [ "$md_count" -eq 0 ]; then
-            axr_emit_criterion "docs_context.4" "$name" script 0 "ADR directory exists but is empty" \
+            axr_emit_criterion "docs.decision-log" "$name" script 0 "ADR directory exists but is empty" \
                 "$found_dir (0 ADR files)"
         elif [ "$md_count" -le 2 ]; then
-            axr_emit_criterion "docs_context.4" "$name" script 2 "sparse ADR directory" \
+            axr_emit_criterion "docs.decision-log" "$name" script 2 "sparse ADR directory" \
                 "$found_dir ($md_count ADR files)" "sample: $sample"
         elif [ "$md_count" -le 9 ]; then
-            axr_emit_criterion "docs_context.4" "$name" script 3 "established ADR directory" \
+            axr_emit_criterion "docs.decision-log" "$name" script 3 "established ADR directory" \
                 "$found_dir ($md_count ADR files)" "sample: $sample"
         else
             # Check every ADR has Consequences or Context heading.
@@ -182,11 +182,11 @@ score_docs_context_4() {
                 fi
             done
             if [ "$full_structure" = "1" ]; then
-                axr_emit_criterion "docs_context.4" "$name" script 4 "mature ADR directory with full structure" \
+                axr_emit_criterion "docs.decision-log" "$name" script 4 "mature ADR directory with full structure" \
                     "$found_dir ($md_count ADR files)" "sample: $sample" \
                     "all ADRs include Consequences or Context heading"
             else
-                axr_emit_criterion "docs_context.4" "$name" script 3 "large ADR directory, inconsistent structure" \
+                axr_emit_criterion "docs.decision-log" "$name" script 3 "large ADR directory, inconsistent structure" \
                     "$found_dir ($md_count ADR files)" "sample: $sample"
             fi
         fi
@@ -199,10 +199,10 @@ score_docs_context_4() {
     local sample_titles
     sample_titles="$(first_three_titles_joined "$found_file")"
     if [ "$entries" -lt 3 ]; then
-        axr_emit_criterion "docs_context.4" "$name" script 1 "decision log has <3 entries" \
+        axr_emit_criterion "docs.decision-log" "$name" script 1 "decision log has <3 entries" \
             "$found_file ($entries entries)" "sample: $sample_titles"
     else
-        axr_emit_criterion "docs_context.4" "$name" script 2 "single-file decision log with 3+ entries" \
+        axr_emit_criterion "docs.decision-log" "$name" script 2 "single-file decision log with 3+ entries" \
             "$found_file ($entries entries)" "sample: $sample_titles"
     fi
 }
@@ -210,10 +210,10 @@ score_docs_context_4() {
 # ---------------------------------------------------------------------------
 # Run all four scoring steps, then emit JSON.
 # ---------------------------------------------------------------------------
-score_docs_context_1
-score_docs_context_2
-axr_defer_criterion "docs_context.3" "$(axr_criterion_name docs_context.3)" "Deferred to judgment subagent (docs-reviewer)"
-score_docs_context_4
-axr_defer_criterion "docs_context.5" "$(axr_criterion_name docs_context.5)" "Deferred to judgment subagent (docs-reviewer)"
+score_docs_1
+score_docs_2
+axr_defer_criterion "docs.subsystem-readmes" "$(axr_criterion_name docs.subsystem-readmes)" "Deferred to judgment subagent (docs-reviewer)"
+score_docs_4
+axr_defer_criterion "docs.glossary" "$(axr_criterion_name docs.glossary)" "Deferred to judgment subagent (docs-reviewer)"
 
 axr_finalize_output
