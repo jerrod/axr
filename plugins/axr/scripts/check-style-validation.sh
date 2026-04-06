@@ -11,6 +11,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 # shellcheck source=lib/workflow-helpers.sh
 source "$SCRIPT_DIR/lib/workflow-helpers.sh"
 
+axr_package_scope "$@"
 axr_init_output style_validation "script:check-style-validation.sh"
 
 STACK_JSON="$(axr_detect_stack)"

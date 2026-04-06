@@ -19,6 +19,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 # shellcheck source=lib/markdown-helpers.sh
 source "$SCRIPT_DIR/lib/markdown-helpers.sh"
 
+axr_package_scope "$@"
 axr_init_output docs_context "script:check-docs-context.sh"
 
 # ---------------------------------------------------------------------------

@@ -265,12 +265,76 @@ Fall back to language-agnostic checks on unsupported stacks and note the limitat
 4. **Timebox awareness.** Target 20 minutes of tool-use time per run. If exceeded, complete current dimension and note incomplete dimensions.
 5. **Carryover supported.** If `.axr/latest.json` exists with same `rubric_version`, offer to reuse evidence for criteria where underlying files haven't changed (check via `git log --since=<last_run>` on evidence paths).
 
+## Monorepo Support
+
+AXR auto-detects monorepo workspaces and scores each package independently.
+
+### Detection
+
+The following workspace indicators are checked (in order):
+
+- **lerna** — `lerna.json`
+- **nx** — `nx.json`
+- **turbo** — `turbo.json`
+- **pnpm** — `pnpm-workspace.yaml`
+- **Gradle multi-project** — `settings.gradle.kts` or `settings.gradle` with `include` directives
+- **Cargo workspace** — `Cargo.toml` with `[workspace]` section
+
+If none are found, the repo is treated as a single-package project.
+
+### Per-package dimensions (4)
+
+These dimensions are scored independently for each package because they reflect package-level concerns:
+
+- `tests_ci` — each package has its own test suite and CI signal
+- `docs_context` — each package may have its own README and local docs
+- `style_validation` — linter/formatter config may vary per package
+- `tooling` — build and bootstrap tooling is often per-package
+
+### Repo-level dimensions (5)
+
+These dimensions are scored once at the repo root because they reflect repo-wide concerns:
+
+- `safety_rails` — branch protection, secrets policy, HITL checkpoints
+- `structure` — module boundaries and dependency direction across the whole repo
+- `change_surface` — integration points and context packing at the repo level
+- `execution_visibility` — logging and observability infrastructure
+- `workflow_realism` — sandbox flows and regression artifacts
+
+### Aggregation
+
+Per-package dimension scores are averaged across all packages. The final total combines averaged per-package scores with repo-level scores, then rounds to the nearest integer for band assignment.
+
+## CI Fast-Path
+
+`scripts/axr-ci.sh` provides a non-interactive entry point for CI pipelines.
+
+### Usage
+
+```bash
+scripts/axr-ci.sh                          # defaults
+scripts/axr-ci.sh --config .axr/config.json  # custom config
+```
+
+### Configuration (`.axr/config.json`)
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `ci_minimum_band` | `"Agent-Hostile"` | Minimum acceptable band. Exit 1 if score falls below. |
+| `ci_fail_on_blockers` | `false` | Exit 1 if any blockers are present. |
+
+Band thresholds are read from `rubric/rubric.v2.json` (not hardcoded) so they stay in sync with rubric updates.
+
+### Exit codes
+
+- **0** — score meets or exceeds `ci_minimum_band`, and no blockers (if `ci_fail_on_blockers` is true)
+- **1** — score below threshold, or blockers present when `ci_fail_on_blockers` is true
+
 ## NOT in this phase
 
 - No GitHub App
 - No shared `axr-core` library (inline everything)
 - No dashboard or cross-repo aggregation
-- No CI integration
 - No policy enforcement
 
 ## Build phases
@@ -316,10 +380,17 @@ Fall back to language-agnostic checks on unsupported stacks and note the limitat
 2. `docs/remediation-strategies.md` — LLM-driven per-criterion strategy catalog (8 criteria). The agent reads the strategy and applies fixes using Write/Edit tools, adapting to the target repo's structure. No `fix-*.sh` scripts — remediations are non-deterministic LLM actions, not scripted templates.
 3. Re-runs relevant dimension checker after each fix via `aggregate.sh --patch-dimension` and reports score delta via `diff-scores.sh`
 
-### Phases 6-7 (deferred)
+### Phase 6 — Monorepo Awareness + CI Fast-Path
 
-- Phase 6: Calibration pilot on two reference repos
-- Phase 7: Distribution via the jerrod/axr marketplace
+1. `scripts/lib/monorepo-helpers.sh` — workspace detection (`axr_detect_monorepo`), package listing (`axr_list_packages`), and per-package scope helpers (`axr_package_scope`)
+2. All 9 checkers accept `--package <path>` to scope checks to a single package directory
+3. `scripts/axr-ci.sh` — non-interactive CI entry point with config-driven thresholds and exit codes
+4. Monorepo fan-out: CI script runs checkers per-package for the 4 per-package dimensions, once at repo root for the 5 repo-level dimensions, and averages per-package scores
+
+### Phases 7-8 (deferred)
+
+- Phase 7: Calibration pilot on two reference repos
+- Phase 8: Distribution via the jerrod/axr marketplace
 
 ## Success criteria for v1
 
