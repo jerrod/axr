@@ -17,7 +17,10 @@ Worked examples demonstrating axr usage and extension.
 # Compare to previous run
 /axr-diff
 
-# Fix low-scoring criteria
+# Fix all low-scoring criteria
+/axr-fix all
+
+# Or just the top 3 blockers
 /axr-fix blockers
 ```
 

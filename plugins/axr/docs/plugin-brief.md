@@ -114,6 +114,7 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 Auto-remediation command. Reads `.axr/latest.json` and applies automated fixes to improve low-scoring criteria.
 
 **Usage:**
+- `/axr-fix all` — fix every low-scoring criterion that has a strategy
 - `/axr-fix blockers` — fix top 3 blockers
 - `/axr-fix docs_context.1` — fix a specific criterion
 - `/axr-fix safety_rails` — fix all low-scoring criteria in a dimension
