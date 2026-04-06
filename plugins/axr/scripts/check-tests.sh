@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/check-tests-ci.sh — deterministic checker for tests_ci dimension.
+# scripts/check-tests-ci.sh — deterministic checker for tests dimension.
 # Scores 4 mechanical criteria (.1, .3, .4, .5). Defers .2 to judgment.
 
 set -euo pipefail
@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 axr_package_scope "$@"
-axr_init_output tests_ci "script:check-tests-ci.sh"
+axr_init_output tests "script:check-tests.sh"
 
 # ---------------------------------------------------------------------------
 # Collect test workflow filenames (basename only). A workflow is "test-like"
@@ -32,11 +32,11 @@ collect_test_workflows() {
 }
 
 # ---------------------------------------------------------------------------
-# tests_ci.1 — Deterministic test suite under 10 min
+# tests.deterministic-suite — Deterministic test suite under 10 min
 # ---------------------------------------------------------------------------
-score_tests_ci_1() {
+score_tests_1() {
     local name
-    name="$(axr_criterion_name tests_ci.1)"
+    name="$(axr_criterion_name tests.deterministic-suite)"
 
     local workflows=()
     while IFS= read -r w; do
@@ -56,10 +56,10 @@ score_tests_ci_1() {
 
     if [ "${#workflows[@]}" -eq 0 ]; then
         if [ "${#test_evidence[@]}" -gt 0 ]; then
-            axr_emit_criterion "tests_ci.1" "$name" script 1 "test suite found but no CI workflows" \
+            axr_emit_criterion "tests.deterministic-suite" "$name" script 1 "test suite found but no CI workflows" \
                 "${test_evidence[*]}"
         else
-            axr_emit_criterion "tests_ci.1" "$name" script 0 "no test workflows in .github/workflows/"
+            axr_emit_criterion "tests.deterministic-suite" "$name" script 0 "no test workflows in .github/workflows/"
         fi
         return
     fi
@@ -70,7 +70,7 @@ score_tests_ci_1() {
     [ "$gh_ok" = "1" ] && ! gh auth status >/dev/null 2>&1 && gh_ok=0
 
     if [ "$gh_ok" = "0" ]; then
-        axr_emit_criterion "tests_ci.1" "$name" script 1 "unknown CI cadence, defaulted to 1 per rubric rule" \
+        axr_emit_criterion "tests.deterministic-suite" "$name" script 1 "unknown CI cadence, defaulted to 1 per rubric rule" \
             "gh unavailable or not authenticated; ${#workflows[@]} test workflow(s) detected"
         return
     fi
@@ -96,7 +96,7 @@ score_tests_ci_1() {
     done
 
     if [ "$total_runs" -lt 3 ]; then
-        axr_emit_criterion "tests_ci.1" "$name" script 1 "unknown CI cadence, defaulted to 1 per rubric rule" \
+        axr_emit_criterion "tests.deterministic-suite" "$name" script 1 "unknown CI cadence, defaulted to 1 per rubric rule" \
             "insufficient CI run history — $total_runs runs found across ${#workflows[@]} workflow(s)"
         return
     fi
@@ -105,23 +105,23 @@ score_tests_ci_1() {
     local pass_pct=$(( (passes * 100) / total_runs ))
 
     if [ "$avg_dur" -gt 600 ]; then
-        axr_emit_criterion "tests_ci.1" "$name" script 2 "avg duration exceeds 10 minutes" \
+        axr_emit_criterion "tests.deterministic-suite" "$name" script 2 "avg duration exceeds 10 minutes" \
             "avg ${avg_dur}s across $total_runs runs" "pass rate ${pass_pct}%"
     elif [ "$pass_pct" -ge 90 ]; then
-        axr_emit_criterion "tests_ci.1" "$name" script 3 "sub-10min avg with strong pass rate" \
+        axr_emit_criterion "tests.deterministic-suite" "$name" script 3 "sub-10min avg with strong pass rate" \
             "avg ${avg_dur}s across $total_runs runs" "pass rate ${pass_pct}%"
     else
-        axr_emit_criterion "tests_ci.1" "$name" script 2 "sub-10min avg but weak pass rate" \
+        axr_emit_criterion "tests.deterministic-suite" "$name" script 2 "sub-10min avg but weak pass rate" \
             "avg ${avg_dur}s across $total_runs runs" "pass rate ${pass_pct}%"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# tests_ci.3 — Flaky tests tracked and quarantined
+# tests.flaky-tracking — Flaky tests tracked and quarantined
 # ---------------------------------------------------------------------------
-score_tests_ci_3() {
+score_tests_3() {
     local name
-    name="$(axr_criterion_name tests_ci.3)"
+    name="$(axr_criterion_name tests.flaky-tracking)"
 
     local marker_count=0 marker_sample=""
     if command -v grep >/dev/null 2>&1; then
@@ -169,21 +169,21 @@ score_tests_ci_3() {
     fi
 
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "tests_ci.3" "$name" script 0 "no flaky tracking signals"
+        axr_emit_criterion "tests.flaky-tracking" "$name" script 0 "no flaky tracking signals"
     else
-        axr_emit_criterion "tests_ci.3" "$name" script "$score" "flaky tracking signals" "${ev[@]}"
+        axr_emit_criterion "tests.flaky-tracking" "$name" script "$score" "flaky tracking signals" "${ev[@]}"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# tests_ci.4 — CI failures map to actionable messages
+# tests.actionable-ci — CI failures map to actionable messages
 # ---------------------------------------------------------------------------
-score_tests_ci_4() {
+score_tests_4() {
     local name
-    name="$(axr_criterion_name tests_ci.4)"
+    name="$(axr_criterion_name tests.actionable-ci)"
 
     if [ ! -d .github/workflows ]; then
-        axr_emit_criterion "tests_ci.4" "$name" script 0 "no workflows directory"
+        axr_emit_criterion "tests.actionable-ci" "$name" script 0 "no workflows directory"
         return
     fi
 
@@ -208,7 +208,7 @@ score_tests_ci_4() {
     local score=0
     if [ "$has_verbose" = "0" ] && [ "$has_annot" = "0" ]; then
         score=1
-        axr_emit_criterion "tests_ci.4" "$name" script 1 "workflows exist but no verbosity/annotation"
+        axr_emit_criterion "tests.actionable-ci" "$name" script 1 "workflows exist but no verbosity/annotation"
         return
     elif [ "$has_verbose" = "1" ] && [ "$has_annot" = "1" ]; then
         score=3
@@ -216,15 +216,15 @@ score_tests_ci_4() {
         score=2
     fi
 
-    axr_emit_criterion "tests_ci.4" "$name" script "$score" "CI actionability signals" "${ev[@]}"
+    axr_emit_criterion "tests.actionable-ci" "$name" script "$score" "CI actionability signals" "${ev[@]}"
 }
 
 # ---------------------------------------------------------------------------
-# tests_ci.5 — Fast-fail pre-commit/pre-push checks
+# tests.fast-fail-hooks — Fast-fail pre-commit/pre-push checks
 # ---------------------------------------------------------------------------
-score_tests_ci_5() {
+score_tests_5() {
     local name
-    name="$(axr_criterion_name tests_ci.5)"
+    name="$(axr_criterion_name tests.fast-fail-hooks)"
 
     local cfg="" hook_count=0 f=""
     if [ -f .pre-commit-config.yaml ] || [ -f .pre-commit-config.yml ]; then
@@ -243,7 +243,7 @@ score_tests_ci_5() {
     fi
 
     if [ -z "$cfg" ]; then
-        axr_emit_criterion "tests_ci.5" "$name" script 0 "no pre-commit/pre-push config"
+        axr_emit_criterion "tests.fast-fail-hooks" "$name" script 0 "no pre-commit/pre-push config"
         return
     fi
 
@@ -263,13 +263,13 @@ score_tests_ci_5() {
     local ev=("$cfg with $hook_count hook(s)")
     [ "$has_lint_tools" = "1" ] && ev+=("lint tools detected in hooks")
 
-    axr_emit_criterion "tests_ci.5" "$name" script "$score" "$hook_count hook(s) in $cfg" "${ev[@]}"
+    axr_emit_criterion "tests.fast-fail-hooks" "$name" script "$score" "$hook_count hook(s) in $cfg" "${ev[@]}"
 }
 
-score_tests_ci_1
-axr_defer_criterion "tests_ci.2" "$(axr_criterion_name tests_ci.2)" "deferred to Phase 3 judgment subagent"
-score_tests_ci_3
-score_tests_ci_4
-score_tests_ci_5
+score_tests_1
+axr_defer_criterion "tests.boundary-coverage" "$(axr_criterion_name tests.boundary-coverage)" "deferred to Phase 3 judgment subagent"
+score_tests_3
+score_tests_4
+score_tests_5
 
 axr_finalize_output

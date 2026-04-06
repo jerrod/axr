@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/check-change-surface.sh — deterministic checker for change_surface.
+# scripts/check-change-surface.sh — deterministic checker for change.
 # Scores 2 mechanical criteria (.3, .5). Defers .1, .2, .4 to judgment.
 
 set -euo pipefail
@@ -10,14 +10,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 axr_package_scope "$@"
-axr_init_output change_surface "script:check-change-surface.sh"
+axr_init_output change "script:check-change.sh"
 
 # ---------------------------------------------------------------------------
-# change_surface.3 — Integration points documented
+# change.contracts-documented — Integration points documented
 # ---------------------------------------------------------------------------
-score_change_surface_3() {
+score_change_3() {
     local name
-    name="$(axr_criterion_name change_surface.3)"
+    name="$(axr_criterion_name change.contracts-documented)"
 
     local types_found=()
     local ev=()
@@ -92,18 +92,18 @@ score_change_surface_3() {
     fi
 
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "change_surface.3" "$name" script 0 "no API/contract spec files found"
+        axr_emit_criterion "change.contracts-documented" "$name" script 0 "no API/contract spec files found"
     else
-        axr_emit_criterion "change_surface.3" "$name" script "$score" "$n spec type(s) found" "${ev[@]}"
+        axr_emit_criterion "change.contracts-documented" "$name" script "$score" "$n spec type(s) found" "${ev[@]}"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# change_surface.5 — Context packing
+# change.context-packing — Context packing
 # ---------------------------------------------------------------------------
-score_change_surface_5() {
+score_change_5() {
     local name
-    name="$(axr_criterion_name change_surface.5)"
+    name="$(axr_criterion_name change.context-packing)"
 
     local configs=""
     for f in repomix.config.json repomix.toml code2prompt.toml aider.conf.yml; do
@@ -137,16 +137,16 @@ score_change_surface_5() {
     fi
 
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "change_surface.5" "$name" script 0 "no context packing tools configured"
+        axr_emit_criterion "change.context-packing" "$name" script 0 "no context packing tools configured"
     else
-        axr_emit_criterion "change_surface.5" "$name" script "$score" "context packing signals" "${ev[@]}"
+        axr_emit_criterion "change.context-packing" "$name" script "$score" "context packing signals" "${ev[@]}"
     fi
 }
 
-axr_defer_criterion "change_surface.1" "$(axr_criterion_name change_surface.1)" "deferred to Phase 3 judgment subagent"
-axr_defer_criterion "change_surface.2" "$(axr_criterion_name change_surface.2)" "deferred to Phase 3 judgment subagent"
-score_change_surface_3
-axr_defer_criterion "change_surface.4" "$(axr_criterion_name change_surface.4)" "deferred to Phase 3 judgment subagent"
-score_change_surface_5
+axr_defer_criterion "change.locatable-logic" "$(axr_criterion_name change.locatable-logic)" "deferred to Phase 3 judgment subagent"
+axr_defer_criterion "change.explicit-boundaries" "$(axr_criterion_name change.explicit-boundaries)" "deferred to Phase 3 judgment subagent"
+score_change_3
+axr_defer_criterion "change.examples" "$(axr_criterion_name change.examples)" "deferred to Phase 3 judgment subagent"
+score_change_5
 
 axr_finalize_output

@@ -7,7 +7,7 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
 
 ## Steps
 
-1. **Verify prerequisites.** Confirm `${CLAUDE_PLUGIN_ROOT}` is set and `${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v2.json` exists. If missing, abort with a clear error.
+1. **Verify prerequisites.** Confirm `${CLAUDE_PLUGIN_ROOT}` is set and `${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v3.json` exists. If missing, abort with a clear error.
 
 2. **Detect stack.** Run:
    ```bash
@@ -41,19 +41,19 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
    Dispatch these 5 Task calls **simultaneously** (do not wait for one before starting the next):
 
    - **docs-reviewer** -> `.axr/tmp/agent-docs.json`
-     Prompt: "Score docs_context.3 and docs_context.5 for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
+     Prompt: "Score docs.subsystem-readmes and docs.glossary for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
 
    - **architecture-reviewer** -> `.axr/tmp/agent-architecture.json`
-     Prompt: "Score change_surface.1, change_surface.2, change_surface.4, structure.1, structure.3, structure.4 for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
+     Prompt: "Score change.locatable-logic, change.explicit-boundaries, change.examples, structure.module-boundaries, structure.scoped-files, structure.searchable-naming for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
 
    - **safety-reviewer** -> `.axr/tmp/agent-safety.json`
-     Prompt: "Score safety_rails.1 and safety_rails.2 for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
+     Prompt: "Score safety.hitl-checkpoints and safety.reversible-default for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
 
    - **observability-reviewer** -> `.axr/tmp/agent-observability.json`
-     Prompt: "Score execution_visibility.1, execution_visibility.2, execution_visibility.4 for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
+     Prompt: "Score visibility.structured-logging, visibility.telemetry, visibility.local-diagnostics for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
 
    - **workflow-reviewer** -> `.axr/tmp/agent-workflow.json`
-     Prompt: "Score tests_ci.2, workflow_realism.1, workflow_realism.2, workflow_realism.4 for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
+     Prompt: "Score tests.boundary-coverage, workflow.fixtures, workflow.sandbox-parity, workflow.golden-paths for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
 
    As each agent returns, **immediately write its JSON output** to the corresponding file path above. Then verify each output parses:
    ```bash
@@ -80,7 +80,7 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
 
    To compute J (total judgment criteria):
    ```bash
-   jq '[.dimensions[].criteria[] | select(.checker_type=="judgment")] | length' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v2.json"
+   jq '[.dimensions[].criteria[] | select(.checker_type=="judgment")] | length' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v3.json"
    ```
 
    Top 3 blockers:

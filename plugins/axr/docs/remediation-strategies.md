@@ -13,7 +13,7 @@ The `/axr-fix` command looks up strategies by section heading `## <criterion_id>
 
 ---
 
-## docs_context.1 — Root CLAUDE.md or AGENTS.md
+## docs.agent-context — Root CLAUDE.md or AGENTS.md
 
 **Target score:** 2-3 (Functional to Strong)
 
@@ -34,7 +34,7 @@ The `/axr-fix` command looks up strategies by section heading `## <criterion_id>
 
 ---
 
-## docs_context.2 — README covers setup in ≤5 commands
+## docs.readme-setup — README covers setup in ≤5 commands
 
 **Target score:** 2-3
 
@@ -58,7 +58,7 @@ The `/axr-fix` command looks up strategies by section heading `## <criterion_id>
 
 ---
 
-## docs_context.4 — ADRs or decision log
+## docs.decision-log — ADRs or decision log
 
 **Target score:** 0-2
 
@@ -76,7 +76,7 @@ The `/axr-fix` command looks up strategies by section heading `## <criterion_id>
 
 ---
 
-## safety_rails.3 — Secrets not in repo
+## safety.no-secrets — Secrets not in repo
 
 **Target score:** 0-3
 
@@ -98,12 +98,12 @@ The `/axr-fix` command looks up strategies by section heading `## <criterion_id>
 
 ---
 
-## safety_rails.5 — Agent boundaries documented
+## safety.agent-boundaries — Agent boundaries documented
 
 **Target score:** 0-2
 
 **Strategy:**
-1. Read CLAUDE.md (create if missing — apply docs_context.1 strategy first).
+1. Read CLAUDE.md (create if missing — apply docs.agent-context strategy first).
 2. Add an "Agent Permissions" or "Agent Boundaries" section documenting:
    - What agents SHOULD do (write code, run tests, create PRs, run linters)
    - What agents MUST NOT do (deploy to production, modify infrastructure,
@@ -116,7 +116,7 @@ The `/axr-fix` command looks up strategies by section heading `## <criterion_id>
 
 ---
 
-## style_validation.5 — Editor/IDE config shared
+## style.editor-config — Editor/IDE config shared
 
 **Target score:** 0-3
 
@@ -150,7 +150,7 @@ The `/axr-fix` command looks up strategies by section heading `## <criterion_id>
 
 ---
 
-## tooling.2 — One-command local bootstrap
+## tooling.bootstrap — One-command local bootstrap
 
 **Target score:** 0-3
 
@@ -172,7 +172,7 @@ The `/axr-fix` command looks up strategies by section heading `## <criterion_id>
 
 ---
 
-## tooling.4 — Dev container or codespace support
+## tooling.devcontainer — Dev container or codespace support
 
 **Target score:** 0-2
 

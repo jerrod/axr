@@ -14,4 +14,4 @@ We will use Architecture Decision Records (ADRs) in `docs/adr/` to document sign
 
 - Decisions are discoverable and searchable
 - New contributors can understand rationale without archeology
-- The axr rubric itself scores repos on having ADRs (docs_context.4)
+- The axr rubric itself scores repos on having ADRs (docs.decision-log)

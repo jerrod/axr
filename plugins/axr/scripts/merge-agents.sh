@@ -8,7 +8,7 @@
 #              of criterion objects with id/name/score/evidence/notes/reviewer)
 # <input-dir>: directory with mechanical <dim_id>.json files (the originals)
 # <output-dir>: where merged <dim_id>.json copies are written (must exist)
-# <dim_id...>: one or more dimension ids (e.g., docs_context tests_ci ...)
+# <dim_id...>: one or more dimension ids (e.g., docs tests ...)
 #
 # Validation (dies on first failure):
 #   - Agent criterion id must match ^[a-z_]+\.[0-9]+$ (prevents path traversal)
@@ -52,7 +52,7 @@ for af in "${agent_files[@]}"; do
             die "agent criterion missing id in $af (index $i)"
         fi
         # Validate id format — prevents path traversal.
-        [[ "$crit_id" =~ ^[a-z_]+\.[0-9]+$ ]] || die "agent criterion id '$crit_id' does not match format in $af (index $i)"
+        [[ "$crit_id" =~ ^[a-z]+\.[a-z0-9-]+$ ]] || die "agent criterion id '$crit_id' does not match format in $af (index $i)"
         case "$crit_score" in
             0|1|2|3) : ;;
             *) die "agent criterion $crit_id has invalid score=$crit_score (must be 0-3) in $af" ;;

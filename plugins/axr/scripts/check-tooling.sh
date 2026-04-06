@@ -3,7 +3,7 @@
 # Scores 5 mechanical criteria (.1 through .5). No judgment criteria.
 #
 # v2.0 renumbering: old .3→.1, .4→.2, .5→.3; new .4 (devcontainer), .5 (build cache).
-# Old .1 and .2 moved to style_validation dimension.
+# Old .1 and .2 moved to style dimension.
 
 set -euo pipefail
 
@@ -22,11 +22,11 @@ axr_package_scope "$@"
 axr_init_output tooling "script:check-tooling.sh"
 
 # ---------------------------------------------------------------------------
-# tooling.1 — Reproducible hermetic build (was tooling.3)
+# tooling.hermetic-build — Reproducible hermetic build (was tooling.pinned-deps)
 # ---------------------------------------------------------------------------
 score_tooling_1() {
     local name
-    name="$(axr_criterion_name tooling.1)"
+    name="$(axr_criterion_name tooling.hermetic-build)"
 
     local lockfound envfound container_found
     lockfound="$(list_lockfiles | paste -sd, -)"
@@ -48,18 +48,18 @@ score_tooling_1() {
     fi
 
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "tooling.1" "$name" script 0 "no lockfile found"
+        axr_emit_criterion "tooling.hermetic-build" "$name" script 0 "no lockfile found"
     else
-        axr_emit_criterion "tooling.1" "$name" script "$score" "reproducibility signals" "${ev[@]}"
+        axr_emit_criterion "tooling.hermetic-build" "$name" script "$score" "reproducibility signals" "${ev[@]}"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# tooling.2 — One-command bootstrap (was tooling.4)
+# tooling.bootstrap — One-command bootstrap (was tooling.devcontainer)
 # ---------------------------------------------------------------------------
 score_tooling_2() {
     local name
-    name="$(axr_criterion_name tooling.2)"
+    name="$(axr_criterion_name tooling.bootstrap)"
 
     local found="" executable=0
     local candidates=(bin/setup bin/bootstrap scripts/setup scripts/bootstrap)
@@ -92,20 +92,20 @@ score_tooling_2() {
     fi
 
     if [ -z "$found" ]; then
-        axr_emit_criterion "tooling.2" "$name" script 0 "no bootstrap script found"
+        axr_emit_criterion "tooling.bootstrap" "$name" script 0 "no bootstrap script found"
     elif [ "$executable" = "1" ]; then
-        axr_emit_criterion "tooling.2" "$name" script 3 "bootstrap present and executable" "$found"
+        axr_emit_criterion "tooling.bootstrap" "$name" script 3 "bootstrap present and executable" "$found"
     else
-        axr_emit_criterion "tooling.2" "$name" script 2 "bootstrap present but not executable" "$found"
+        axr_emit_criterion "tooling.bootstrap" "$name" script 2 "bootstrap present but not executable" "$found"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# tooling.3 — Pinned dependencies + upgrade path (was tooling.5)
+# tooling.pinned-deps — Pinned dependencies + upgrade path (was tooling.build-cache)
 # ---------------------------------------------------------------------------
 score_tooling_3() {
     local name
-    name="$(axr_criterion_name tooling.3)"
+    name="$(axr_criterion_name tooling.pinned-deps)"
 
     local lock_count
     lock_count="$(count_lockfiles)"
@@ -139,18 +139,18 @@ score_tooling_3() {
     fi
 
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "tooling.3" "$name" script 0 "no lockfile — cannot pin dependencies"
+        axr_emit_criterion "tooling.pinned-deps" "$name" script 0 "no lockfile — cannot pin dependencies"
     else
-        axr_emit_criterion "tooling.3" "$name" script "$score" "dependency pinning evaluation" "${ev[@]}"
+        axr_emit_criterion "tooling.pinned-deps" "$name" script "$score" "dependency pinning evaluation" "${ev[@]}"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# tooling.4 — Dev container or codespace support (NEW)
+# tooling.devcontainer — Dev container or codespace support (NEW)
 # ---------------------------------------------------------------------------
 score_tooling_4() {
     local name
-    name="$(axr_criterion_name tooling.4)"
+    name="$(axr_criterion_name tooling.devcontainer)"
 
     local devcontainer=0 gitpod=0 codespace=0
     local ev=()
@@ -185,18 +185,18 @@ score_tooling_4() {
     done
 
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "tooling.4" "$name" script 0 "no devcontainer or codespace config"
+        axr_emit_criterion "tooling.devcontainer" "$name" script 0 "no devcontainer or codespace config"
     else
-        axr_emit_criterion "tooling.4" "$name" script "$score" "dev container evaluation" "${ev[@]}"
+        axr_emit_criterion "tooling.devcontainer" "$name" script "$score" "dev container evaluation" "${ev[@]}"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# tooling.5 — Build cache or incremental feedback (NEW)
+# tooling.build-cache — Build cache or incremental feedback (NEW)
 # ---------------------------------------------------------------------------
 score_tooling_5() {
     local name
-    name="$(axr_criterion_name tooling.5)"
+    name="$(axr_criterion_name tooling.build-cache)"
 
     local local_cache=0 ci_cache=0
     local ev=()
@@ -240,9 +240,9 @@ score_tooling_5() {
     fi
 
     if [ "$score" -eq 0 ]; then
-        axr_emit_criterion "tooling.5" "$name" script 0 "no build cache or incremental build config"
+        axr_emit_criterion "tooling.build-cache" "$name" script 0 "no build cache or incremental build config"
     else
-        axr_emit_criterion "tooling.5" "$name" script "$score" "build cache evaluation" "${ev[@]}"
+        axr_emit_criterion "tooling.build-cache" "$name" script "$score" "build cache evaluation" "${ev[@]}"
     fi
 }
 

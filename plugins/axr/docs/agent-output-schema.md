@@ -17,7 +17,7 @@ by parsing the `id` prefix.
 
 | Field | Type | Rules |
 |---|---|---|
-| `id` | string | Must match a rubric criterion id exactly (e.g., `docs_context.3`). |
+| `id` | string | Must match a rubric criterion id exactly (e.g., `docs.subsystem-readmes`). |
 | `name` | string | Copy verbatim from the rubric criterion name. |
 | `score` | integer | 0, 1, 2, or 3. **Never 4** — score 4 requires human confirmation per `anchors_literal: true`. |
 | `evidence` | array of strings | Concrete file paths, line numbers, greppable patterns. **Non-empty for score ≥ 2.** For score 0/1, may be empty. Max 20 elements, each ≤500 chars. Enforced by `merge-agents.sh`. |
@@ -37,7 +37,7 @@ by parsing the `id` prefix.
 ```json
 [
   {
-    "id": "docs_context.3",
+    "id": "docs.subsystem-readmes",
     "name": "Local READMEs for non-obvious subsystems",
     "score": 2,
     "evidence": [
@@ -49,7 +49,7 @@ by parsing the `id` prefix.
     "reviewer": "agent-draft"
   },
   {
-    "id": "docs_context.5",
+    "id": "docs.glossary",
     "name": "Domain glossary",
     "score": 1,
     "evidence": [],
