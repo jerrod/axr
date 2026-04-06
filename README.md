@@ -10,6 +10,22 @@ Agent eXecution Readiness scoring. Grades a repository against a 100-point rubri
 
 See `plugins/axr/README.md` for details.
 
+## Quickstart
+
+```bash
+# Install the marketplace in Claude Code
+# /plugin → Add Marketplace → jerrod/axr
+
+# Validate the plugin structure
+bin/validate
+
+# Run linting (shellcheck + JSON + frontmatter)
+bin/lint
+
+# Run tests (validates all checkers produce schema-valid JSON)
+bin/test
+```
+
 ## Installation
 
 In Claude Code:

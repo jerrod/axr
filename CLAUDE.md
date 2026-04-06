@@ -30,6 +30,14 @@ All paths here are **repo-root-relative** (paths inside a plugin's own docs are 
 3. If the plugin needs schema checks the marketplace validator doesn't cover (e.g., rubric integrity), add an executable `plugins/<new-name>/bin/validate` — marketplace `bin/validate` will invoke it automatically.
 4. Run `bin/validate` at repo root to confirm the new plugin integrates.
 
+## Agent Boundaries
+
+**Agents SHOULD:** write code, run bin/ gate scripts, create feature branches, create PRs, run `/axr` scoring.
+
+**Agents MUST NOT:** push directly to main, delete branches without confirmation, modify `.claude-plugin/marketplace.json` plugin entries without review, edit rubric JSON files in place (bump version instead), run `git push --force` to main.
+
+**Review checkpoints:** all PRs require human merge approval. The rq workflow enforces build → review → ship with proof at each stage.
+
 ## Rubric stability (plugins that carry rubrics)
 
 Rubrics are versioned source-of-truth documents. Never edit weights, criteria, or anchor text in place — bump `rubric_version` instead. Trend data depends on version stability.

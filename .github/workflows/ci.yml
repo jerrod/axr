@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate marketplace + plugin structure
+        run: bin/validate
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Lint (shellcheck + JSON + frontmatter)
+        run: bin/lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test (all checkers produce valid JSON)
+        run: bin/test
+
+  axr-score:
+    runs-on: ubuntu-latest
+    needs: [validate, lint, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run AXR CI scoring
+        run: plugins/axr/scripts/axr-ci.sh

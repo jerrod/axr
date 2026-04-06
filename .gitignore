@@ -22,3 +22,19 @@ node_modules/
 __pycache__/
 *.pyc
 .venv/
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+!.env.test
+*.pem
+*.key
+*.p12
+credentials.json
+service-account*.json
+*.secret
+*.secrets
+.aws/
+.gcp/
+.azure/
