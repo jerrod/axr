@@ -18,6 +18,7 @@ source "$SCRIPT_DIR/lib/workflow-helpers.sh"
 # shellcheck source=lib/tooling-helpers.sh
 source "$SCRIPT_DIR/lib/tooling-helpers.sh"
 
+axr_package_scope "$@"
 axr_init_output tooling "script:check-tooling.sh"
 
 # ---------------------------------------------------------------------------

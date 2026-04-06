@@ -186,5 +186,5 @@ main() {
 }
 
 _CLEANUP_DIRS=()
-trap 'for _d in "${_CLEANUP_DIRS[@]}"; do rm -rf "$_d"; done' EXIT
+trap 'rm -rf "${_CLEANUP_DIRS[@]}"' EXIT
 main "$@"
