@@ -10,6 +10,9 @@ source "$SCRIPT_DIR/lib/common.sh"
 # shellcheck source-path=SCRIPTDIR
 # shellcheck source=lib/workflow-helpers.sh
 source "$SCRIPT_DIR/lib/workflow-helpers.sh"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib/tooling-helpers.sh
+source "$SCRIPT_DIR/lib/tooling-helpers.sh"
 
 axr_package_scope "$@"
 axr_init_output style_validation "script:check-style-validation.sh"
@@ -18,102 +21,88 @@ STACK_JSON="$(axr_detect_stack)"
 score_style_validation_1() {
     local name
     name="$(axr_criterion_name style_validation.1)"
-    local has_node=0 has_python=0
+    local has_node=0 has_python=0 has_compiled=0 has_php=0
     axr_has_stack_tag node && has_node=1
     axr_has_stack_tag python && has_python=1
-    if [ "$has_node" = "0" ] && [ "$has_python" = "0" ]; then
-        axr_emit_criterion "style_validation.1" "$name" script 0 "no type-checkable language — no type-checker signal for agents" \
-            "stack: $STACK_JSON (no node/python detected)"
+    axr_has_stack_tag php && has_php=1
+    { axr_has_stack_tag java || axr_has_stack_tag csharp || axr_has_stack_tag swift; } && has_compiled=1
+    if [ "$has_node" = "0" ] && [ "$has_python" = "0" ] && [ "$has_compiled" = "0" ] && [ "$has_php" = "0" ]; then
+        axr_emit_criterion "style_validation.1" "$name" script 0 \
+            "no type-checkable language — no type-checker signal for agents" \
+            "stack: $STACK_JSON (no supported language detected)"
         return
     fi
-    local node_score=-1 py_score=-1
-    local evidence=()
+    local scores=() evidence=()
     if [ "$has_node" = "1" ]; then
         if [ -f tsconfig.json ]; then
             if jq -e '.compilerOptions.strict == true' tsconfig.json >/dev/null 2>&1; then
-                node_score=3
-                evidence+=("tsconfig.json with compilerOptions.strict=true")
+                scores+=(3); evidence+=("tsconfig.json with compilerOptions.strict=true")
             else
-                node_score=2
-                evidence+=("tsconfig.json present without strict mode")
+                scores+=(2); evidence+=("tsconfig.json present without strict mode")
             fi
         else
             local dts_count
             dts_count="$(find -P . -maxdepth 4 -type f -not -type l -name '*.d.ts' \
                 -not -path './node_modules/*' 2>/dev/null | wc -l | tr -d ' ')"
             if [ "$dts_count" -gt 0 ]; then
-                node_score=1
-                evidence+=("no tsconfig.json but $dts_count .d.ts files found")
+                scores+=(1); evidence+=("no tsconfig.json but $dts_count .d.ts files found")
             else
-                node_score=0
-                evidence+=("node stack but no tsconfig.json or .d.ts files")
+                scores+=(0); evidence+=("node stack but no tsconfig.json or .d.ts files")
             fi
         fi
     fi
     if [ "$has_python" = "1" ]; then
-        local cfg=""
-        if [ -f mypy.ini ]; then cfg="mypy.ini"
-        elif [ -f .mypy.ini ]; then cfg=".mypy.ini"
-        elif [ -f pyrightconfig.json ]; then cfg="pyrightconfig.json"
-        elif [ -f pyproject.toml ] && grep -qE '^\[tool\.(mypy|pyright)\]' pyproject.toml 2>/dev/null; then
-            cfg="pyproject.toml"
-        fi
+        local cfg
+        cfg="$(list_type_check_configs | grep -vE 'tsconfig|phpstan|psalm' | head -1)"
         if [ -z "$cfg" ]; then
-            py_score=0
-            evidence+=("python stack but no mypy/pyright config found")
+            scores+=(0); evidence+=("python stack but no mypy/pyright config found")
+        elif grep -qE '(strict[[:space:]]*=[[:space:]]*(true|True))|"strict"[[:space:]]*:[[:space:]]*true|strictMode' "$cfg" 2>/dev/null; then
+            scores+=(3); evidence+=("$cfg with strict mode")
         else
-            if grep -qE '(strict[[:space:]]*=[[:space:]]*(true|True))|"strict"[[:space:]]*:[[:space:]]*true|strictMode' "$cfg" 2>/dev/null; then
-                py_score=3
-                evidence+=("$cfg with strict mode")
-            else
-                py_score=2
-                evidence+=("$cfg present without strict mode")
-            fi
+            scores+=(2); evidence+=("$cfg present without strict mode")
         fi
     fi
-    local final=-1
-    if [ "$node_score" -ge 0 ] && [ "$py_score" -ge 0 ]; then
-        final=$(( node_score < py_score ? node_score : py_score ))
-    elif [ "$node_score" -ge 0 ]; then
-        final=$node_score
-    else
-        final=$py_score
+    if [ "$has_compiled" = "1" ]; then
+        local sa_configs
+        sa_configs="$(list_lint_configs | grep -E 'checkstyle|pmd|spotbugs' | head -1)"
+        if [ -n "$sa_configs" ]; then
+            scores+=(3); evidence+=("compiled language with static analysis ($sa_configs)")
+        else
+            scores+=(2); evidence+=("compiled language — compiler provides type checking")
+        fi
     fi
-    axr_emit_criterion "style_validation.1" "$name" script "$final" "type checker config evaluation" \
-        "${evidence[@]}"
+    if [ "$has_php" = "1" ]; then
+        local php_tc
+        php_tc="$(list_type_check_configs | grep -E 'phpstan|psalm' | head -1)"
+        if [ -n "$php_tc" ]; then
+            scores+=(2); evidence+=("PHP type checker config: $php_tc")
+        else
+            scores+=(0); evidence+=("PHP stack but no phpstan/psalm config found")
+        fi
+    fi
+    local final=${scores[0]}
+    local s; for s in "${scores[@]}"; do
+        [ "$s" -lt "$final" ] && final=$s
+    done
+    axr_emit_criterion "style_validation.1" "$name" script "$final" \
+        "type checker config evaluation" "${evidence[@]}"
 }
 score_style_validation_2() {
     local name
     name="$(axr_criterion_name style_validation.2)"
     local lint_found="" format_found=""
-    local lint_configs=(.eslintrc .eslintrc.js .eslintrc.json .eslintrc.yml .eslintrc.yaml
-        .eslintrc.cjs biome.json .ruff.toml ruff.toml .rubocop.yml .golangci.yml
-        .golangci.yaml .clippy.toml)
-    local f
-    for f in "${lint_configs[@]}"; do
-        if [ -e "$f" ]; then lint_found="$f"; break; fi
-    done
-    if [ -z "$lint_found" ] && [ -f pyproject.toml ] && grep -qE '^\[tool\.(ruff|pylint)\]' pyproject.toml 2>/dev/null; then
-        lint_found="pyproject.toml:[tool.ruff|pylint]"
-    fi
+    lint_found="$(list_lint_configs | head -1)"
     if [ -z "$lint_found" ] && [ -f .editorconfig ] && grep -qiE 'ktlint' .editorconfig 2>/dev/null; then
         lint_found=".editorconfig:ktlint"
     fi
-    local fmt_configs=(.prettierrc .prettierrc.js .prettierrc.json .prettierrc.yml
-        .prettierrc.yaml .prettierrc.cjs .editorconfig)
-    for f in "${fmt_configs[@]}"; do
-        if [ -e "$f" ]; then format_found="$f"; break; fi
-    done
-    if [ -z "$format_found" ] && [ -f pyproject.toml ] && grep -qE '^\[tool\.(black|isort)\]' pyproject.toml 2>/dev/null; then
-        format_found="pyproject.toml:[tool.black|isort]"
-    fi
+    format_found="$(list_format_configs | head -1)"
     local ci_match=0 ci_tool=""
     local run_lines
     run_lines="$(extract_workflow_run_lines 2>/dev/null || true)"
     if [ -n "$run_lines" ]; then
-        if printf '%s\n' "$run_lines" | grep -qE '\b(eslint|biome|ruff|pylint|rubocop|golangci|clippy|ktlint|prettier|black|isort|gofmt)\b'; then
+        if printf '%s\n' "$run_lines" | grep -qE '\b(eslint|biome|ruff|pylint|rubocop|golangci|clippy|ktlint|prettier|black|isort|gofmt|checkstyle|pmd|spotbugs|phpcs|php-cs-fixer|phpstan|swiftlint|swiftformat|dotnet format)\b'; then
             ci_match=1
-            ci_tool="$(printf '%s\n' "$run_lines" | grep -oE '\b(eslint|biome|ruff|pylint|rubocop|golangci|clippy|ktlint|prettier|black|isort|gofmt)\b' | sort -u | head -3 | tr '\n' ',' | sed 's/,$//')"
+            ci_tool="$(printf '%s\n' "$run_lines" | grep -oE '\b(eslint|biome|ruff|pylint|rubocop|golangci|clippy|ktlint|prettier|black|isort|gofmt|checkstyle|pmd|spotbugs|phpcs|php-cs-fixer|phpstan|swiftlint|swiftformat|dotnet format)\b' | sort -u | head -3 | tr '\n' ',' | sed 's/,$//')"
         fi
     fi
     local ev=()
@@ -209,14 +198,21 @@ score_style_validation_4() {
     fi
     # SonarQube/SonarCloud
     if [ -f sonar-project.properties ]; then
-        local_found=1
-        ev+=("sonar-project.properties present")
+        local_found=1; ev+=("sonar-project.properties present")
+    fi
+    # Java static analysis
+    if [ -f checkstyle.xml ] || [ -f spotbugs.xml ] || [ -f pmd.xml ]; then
+        local_found=1; ev+=("Java static analysis config present")
+    fi
+    # PHP static analysis
+    if [ -f phpstan.neon ] || [ -f phpstan.neon.dist ] || [ -f psalm.xml ] || [ -f psalm.xml.dist ]; then
+        local_found=1; ev+=("PHP static analysis config present")
     fi
     # Check CI for static analysis steps
     local run_lines
     run_lines="$(extract_workflow_run_lines 2>/dev/null || true)"
     if [ -n "$run_lines" ]; then
-        if printf '%s\n' "$run_lines" | grep -qiE '\b(semgrep|codeql|sonar|cargo clippy)\b'; then
+        if printf '%s\n' "$run_lines" | grep -qiE '\b(semgrep|codeql|sonar|cargo clippy|spotbugs|checkstyle|phpstan|psalm|dotnet format)\b'; then
             ci_found=1
             ev+=("CI step with static analysis tool")
         fi
