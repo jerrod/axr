@@ -21,8 +21,10 @@ jq empty "$FROM_FILE" 2>/dev/null || die "invalid JSON: $FROM_FILE"
 jq empty "$TO_FILE"   2>/dev/null || die "invalid JSON: $TO_FILE"
 
 # Extract top-level fields from both files.
-FROM_SCORE="$(jq '.total_score // 0' "$FROM_FILE")"
-TO_SCORE="$(jq '.total_score // 0' "$TO_FILE")"
+# Integer-guard scores to prevent bash arithmetic injection via crafted JSON
+# (e.g., "total_score": "a[$(evil_cmd)]" would be expanded by $(( ))).
+FROM_SCORE="$(jq '.total_score // 0' "$FROM_FILE" | grep -Eo '^-?[0-9]+$' || echo 0)"
+TO_SCORE="$(jq '.total_score // 0' "$TO_FILE" | grep -Eo '^-?[0-9]+$' || echo 0)"
 DELTA=$((TO_SCORE - FROM_SCORE))
 
 FROM_BAND="$(jq -r '.band.label // "Unknown"' "$FROM_FILE")"

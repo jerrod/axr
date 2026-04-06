@@ -62,16 +62,18 @@ DIM_NAME="$(jq -r --arg id "$DIM_ID" '.dimensions[] | select(.id == $id) | .name
 
 # Compute raw_score and weighted_score for the patched dimension.
 RAW_SCORE="$(jq '[.[] | .score] | add // 0' <<<"$RESOLVED_CRITERIA")"
-WEIGHTED="$(awk -v r="$RAW_SCORE" -v w="$WEIGHT" 'BEGIN { printf "%.6f", (r/20.0)*w }')"
+MAX_RAW="$(jq --arg id "$DIM_ID" '.dimensions[] | select(.id==$id) | (.criteria | length) * 4' "$_AXR_RUBRIC_PATH")"
+WEIGHTED="$(awk -v r="$RAW_SCORE" -v m="$MAX_RAW" -v w="$WEIGHT" 'BEGIN { printf "%.6f", (r/m)*w }')"
 
 # Build the patched dimension object.
 PATCHED_DIM="$(jq -n \
     --arg name "$DIM_NAME" \
     --argjson weight "$WEIGHT" \
     --argjson raw_score "$RAW_SCORE" \
+    --argjson max_raw "$MAX_RAW" \
     --argjson weighted_score "$WEIGHTED" \
     --argjson criteria "$RESOLVED_CRITERIA" \
-    '{name: $name, weight: $weight, raw_score: $raw_score, max_raw: 20, weighted_score: $weighted_score, criteria: $criteria}')"
+    '{name: $name, weight: $weight, raw_score: $raw_score, max_raw: $max_raw, weighted_score: $weighted_score, criteria: $criteria}')"
 
 # Overlay the patched dimension into the existing dimensions object.
 DIMENSIONS_JSON="$(jq -c --arg id "$DIM_ID" --argjson obj "$PATCHED_DIM" \
@@ -104,7 +106,8 @@ TOP_BLOCKERS="$(jq -c '
 ' <<<"$BLOCKERS_JSON")"
 
 # Metadata from existing latest.json.
-RUBRIC_VERSION="$(jq -r '.rubric_version' <<<"$EXISTING")"
+# Read rubric_version from the RUBRIC (not latest.json) so upgrades propagate.
+RUBRIC_VERSION="$(jq -r '.rubric_version' "$_AXR_RUBRIC_PATH")"
 REPO_NAME="$(jq -r '.repo' <<<"$EXISTING" | tr -d '{}')"
 SCORED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
@@ -113,7 +116,7 @@ PREV_TOTAL="$(jq -r '.total_score // empty' <<<"$EXISTING" 2>/dev/null || echo "
 PREV_DATE="$(jq -r '.scored_at // empty' <<<"$EXISTING" 2>/dev/null || echo "")"
 
 if [ -n "$PREV_TOTAL" ] && [ "$PREV_TOTAL" != "null" ]; then
-    PREV_TOTAL="$(printf '%.0f' "$PREV_TOTAL")"
+    PREV_TOTAL="$(printf '%.0f' "$PREV_TOTAL" 2>/dev/null | grep -Eo '^[0-9]+$' || echo 0)"
     DELTA=$((TOTAL_SCORE - PREV_TOTAL))
     TREND_JSON="$(jq -nc --argjson prev "$PREV_TOTAL" --argjson delta "$DELTA" --arg date "$PREV_DATE" \
         '{previous_score: $prev, delta: $delta, previous_date: $date}')"
