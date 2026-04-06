@@ -56,6 +56,36 @@ Emit a single JSON array of 3 criterion objects to stdout. Follow `plugins/axr/d
 - **2** — dev mode defaults to useful output (verbose by default locally).
 - **3** — rich diagnostic output + documented log/artifact locations.
 
+## Timebox
+
+Complete your assessment within 3 minutes of tool-use time. Score conservatively (1) with a note if you cannot fully assess.
+
+## Scored examples
+
+### `execution_visibility.1` — Structured logging with consistent fields
+
+**Score 1:** `evidence: ["logging module imported in 8 files", "mix of logger.info('message') and logger.info({'event': ...}) styles"]` — logger present but inconsistent format across files.
+
+**Score 2:** `evidence: ["structlog configured in src/logging.py", "5 sampled handlers use consistent request_id, user_id fields", "event names follow verb_noun pattern"]` — structured logger with mostly consistent fields.
+
+**Score 3:** `evidence: ["typed LogEvent dataclass enforces required fields (request_id, user_id, event, level)", "all 12 handler files use the typed logger", "logging config validates field schema at startup"]` — enforced field schema with rich event names.
+
+### `execution_visibility.2` — Agent-touchable paths expose telemetry
+
+**Score 1:** `evidence: ["no opentelemetry or prometheus imports found", "only stdlib logging present"]` — basic logging only, no traces or metrics.
+
+**Score 2:** `evidence: ["prometheus_client Counter for http_requests_total in src/api/middleware.py", "/metrics endpoint exposed", "no distributed tracing"]` — metrics at some boundaries but no traces.
+
+**Score 3:** `evidence: ["opentelemetry spans on all HTTP handlers and DB queries", "prometheus metrics for request latency, queue depth, error rate", "/healthz and /readyz endpoints", "trace context propagated across service boundaries"]` — full observability stack.
+
+### `execution_visibility.4` — Local dev preserves diagnostic output
+
+**Score 1:** `evidence: [".env.example has LOG_LEVEL=info", "must set DEBUG=1 manually for verbose output"]` — verbose mode exists but not default.
+
+**Score 2:** `evidence: [".env.example sets LOG_LEVEL=debug", "docker-compose.yml mounts ./logs volume", "dev server prints request logs to stdout by default"]` — dev defaults to useful output.
+
+**Score 3:** `evidence: [".env.example sets LOG_LEVEL=debug and OTEL_TRACES_EXPORTER=console", "docs/local-dev.md documents log locations and debug flags", "make dev-logs tails all service logs with structured formatting"]` — rich diagnostics with documented locations.
+
 ## Evidence-gathering strategy
 
 - `Grep` for logging libraries: `structlog|pino|winston|zap|slog|loguru`.

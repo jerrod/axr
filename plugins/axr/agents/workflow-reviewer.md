@@ -69,6 +69,44 @@ Emit a single JSON array of 4 criterion objects to stdout. Follow `plugins/axr/d
 - **2** — named golden paths for primary workflows.
 - **3** — comprehensive golden-path coverage for all critical flows.
 
+## Timebox
+
+Complete your assessment within 3 minutes of tool-use time. Score conservatively (1) with a note if you cannot fully assess.
+
+## Scored examples
+
+### `tests_ci.2` — Meaningful coverage at module boundaries
+
+**Score 1:** `evidence: ["tests/ has 20 files, all unit tests", "every test file uses mock.patch on internal collaborators", "no integration/ or contract/ directory"]` — pure unit tests with no boundary coverage.
+
+**Score 2:** `evidence: ["tests/integration/ has 12 files hitting real DB", "tests/unit/ has 30 files with minimal mocking", "mock.patch used only for external HTTP calls"]` — integration suite exists alongside units.
+
+**Score 3:** `evidence: ["tests/integration/ covers all service boundaries", "tests/contract/ validates API schemas against OpenAPI spec", "CI runs integration suite on every PR", "coverage report shows 90%+ on boundary modules"]` — deliberate boundary coverage with CI enforcement.
+
+### `workflow_realism.1` — Representative fixtures
+
+**Score 1:** `evidence: ["tests/fixtures/ has 2 JSON files", "fixtures contain {\"id\": 1, \"name\": \"test\"} style stubs"]` — minimal and unrealistic.
+
+**Score 2:** `evidence: ["fixtures/orders.json has 15 records with realistic amounts and timestamps", "fixtures/users.json mirrors prod schema fields", "factories/order_factory.py generates realistic test data"]` — covers core workflows with realistic data.
+
+**Score 3:** `evidence: ["fixtures/orders.json has 50 records including edge cases (zero-amount, refunded, multi-currency)", "fixtures include full relation chains (user → order → line_items → payments)", "fixtures/README.md documents data generation methodology"]` — rich fixtures mirroring real data with edge cases.
+
+### `workflow_realism.2` — Sandbox mirrors production
+
+**Score 1:** `evidence: ["docker-compose.yml runs SQLite locally, prod uses PostgreSQL", "no queue service in local setup"]` — significant divergence from prod.
+
+**Score 2:** `evidence: ["docker-compose.yml runs postgres + redis matching prod versions", "db/seeds.rb loads realistic development data", "same service topology as prod minus CDN"]` — close mirror with same services.
+
+**Score 3:** `evidence: ["docker-compose.yml matches prod 1:1 (postgres, redis, queue, object storage)", "docs/local-dev.md documents prod vs local differences (none for services)", "make seed loads 30-day anonymized prod snapshot"]` — complete parity with documentation.
+
+### `workflow_realism.4` — Golden-path scenarios
+
+**Score 1:** `evidence: ["tests/e2e/ has 3 files but they test individual endpoints, not flows"]` — E2E exists but not scenario-organized.
+
+**Score 2:** `evidence: ["tests/e2e/test_user_signup_flow.py covers registration through first purchase", "tests/e2e/test_data_ingest_pipeline.py covers upload through processing"]` — named golden paths for primary workflows.
+
+**Score 3:** `evidence: ["tests/e2e/ has 8 scenario files covering all critical flows", "docs/scenarios.md maps each golden path to business requirements", "CI runs scenarios nightly with production-like data volume"]` — comprehensive coverage with documentation.
+
 ## Evidence-gathering strategy
 
 - `Glob` for test dirs: `**/tests/`, `**/spec/`, `**/__tests__/`, `**/e2e/`, `**/integration/`.

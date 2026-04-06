@@ -81,6 +81,60 @@ find . -type f \( -name '*.py' -o -name '*.js' -o -name '*.ts' -o -name '*.tsx' 
 - **2** — naming conventions followed across most of codebase.
 - **3** — highly greppable; concept X always lives at predictable path.
 
+## Timebox
+
+Complete your assessment within 3 minutes of tool-use time. Score conservatively (1) with a note if you cannot fully assess.
+
+## Scored examples
+
+### `change_surface.1` — Business logic locatable by responsibility
+
+**Score 1:** `evidence: ["src/utils/ has 34 files spanning auth, billing, and email logic", "src/helpers/misc.py is 800 lines"]` — dumping grounds hold cross-domain logic.
+
+**Score 2:** `evidence: ["top-level: src/auth/, src/billing/, src/ingest/", "src/utils/ exists but only has 3 pure-utility files"]` — domain-aligned dirs; small utils dir.
+
+**Score 3:** `evidence: ["every domain concept maps to a dir: src/auth/, src/billing/, src/ingest/, src/scoring/", "no utils/ or helpers/ dirs found", "grep for cross-domain imports finds 0 violations"]` — every concept has a clear home.
+
+### `change_surface.2` — Module boundaries and public interfaces
+
+**Score 1:** `evidence: ["src/auth/ has no index file", "tests import src/auth/internal/token_store directly"]` — no export discipline.
+
+**Score 2:** `evidence: ["src/auth/__init__.py exports 4 public functions", "src/billing/index.ts re-exports public API"]` — clear exports but no internal/ convention.
+
+**Score 3:** `evidence: ["src/auth/__init__.py exports public API", "src/auth/internal/ dir with _private prefix on helpers", "ARCHITECTURE.md documents public vs internal policy"]` — explicit public/internal split.
+
+### `change_surface.4` — Examples and reference implementations
+
+**Score 1:** `evidence: ["examples/ dir has 1 stale file from 2022", "README mentions 'see examples' but link is broken"]` — minimal or broken.
+
+**Score 2:** `evidence: ["examples/ has 4 working scripts: auth_flow.py, batch_ingest.py, scoring_run.py, webhook_setup.py"]` — covers core workflows.
+
+**Score 3:** `evidence: ["examples/ has 8 scripts with fixtures", "docs/tutorials/ has 3 walkthroughs", "examples/README.md indexes all examples by use case"]` — comprehensive with walkthroughs.
+
+### `structure.1` — Clear module boundaries / sane deps
+
+**Score 1:** `evidence: ["src/billing/invoice.py imports from src/auth/internal/session", "src/workers/job.py imports from src/api/routes"]` — upward/back deps exist.
+
+**Score 2:** `evidence: ["import graph flows downward: api → services → models", "one exception: src/auth/middleware imports src/billing/plans for feature gating"]` — clean with minor exceptions.
+
+**Score 3:** `evidence: ["docs/ARCHITECTURE.md defines layer rules", "CI lint enforces no upward imports", "zero violations in import scan"]` — explicit architecture with enforcement.
+
+### `structure.3` — Files scoped for local reasoning
+
+**Score 1:** `evidence: ["src/core/engine.py is 1240 lines", "src/api/routes.ts is 890 lines", "4 files exceed 500 lines"]` — several oversized files.
+
+**Score 2:** `evidence: ["95% of files under 300 lines", "largest file is src/scoring/aggregate.py at 380 lines (justified: single algorithm)"]` — mostly small with justified exceptions.
+
+**Score 3:** `evidence: ["max file is 250 lines", "median file is 85 lines", "no file requires opening 5+ others to understand"]` — consistently small.
+
+### `structure.4` — Consistent searchable naming
+
+**Score 1:** `evidence: ["mix of camelCase and snake_case in same dir", "src/auth/AuthService.ts vs src/auth/token_helper.ts"]` — inconsistent.
+
+**Score 2:** `evidence: ["snake_case used across all Python files", "consistent _service.py, _repository.py suffixes in src/"]` — conventions followed broadly.
+
+**Score 3:** `evidence: ["every module follows {domain}_{role}.py pattern", "grep for any concept name finds it at predictable path", "naming convention documented in CONTRIBUTING.md"]` — highly greppable with docs.
+
 ## Evidence-gathering strategy
 
 - `Glob` for entrypoints: `**/index.{ts,js}`, `**/__init__.py`, `**/main.go`.

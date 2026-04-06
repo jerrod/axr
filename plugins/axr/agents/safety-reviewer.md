@@ -59,6 +59,28 @@ Emit a single JSON array of 2 criterion objects to stdout. Follow `plugins/axr/d
 - **2** — most mutations reversible; rollback appears tested.
 - **3** — every mutation path has documented reversal procedure.
 
+## Timebox
+
+Complete your assessment within 3 minutes of tool-use time. Score conservatively (1) with a note if you cannot fully assess.
+
+## Scored examples
+
+### `safety_rails.1` — HITL checkpoints on destructive operations
+
+**Score 1:** `evidence: ["bin/deploy.sh runs terraform apply with no confirmation", "DELETE /api/users has no confirmation step", "migrations run automatically in CI"]` — destructive ops exist with gaps in HITL coverage.
+
+**Score 2:** `evidence: ["bin/deploy has --dry-run default", "DELETE endpoints require X-Confirm header", "migrations run via manual invoke only"]` — most destructive ops guarded; CI deploy path still automatic.
+
+**Score 3:** `evidence: ["bin/deploy defaults to --dry-run, requires --confirm to execute", "CODEOWNERS requires 2 approvals for migration PRs", "all DELETE endpoints behind feature flag + confirmation", "RUNBOOK.md documents approval workflow for each destructive path"]` — comprehensive HITL with documented workflow.
+
+### `safety_rails.2` — Reversible by default
+
+**Score 1:** `evidence: ["3 of 8 Alembic migrations have downgrade() as pass", "no rollback documentation found"]` — some rollback capability but inconsistent.
+
+**Score 2:** `evidence: ["all 12 Alembic migrations have working downgrade()", "soft-delete pattern (deleted_at column) on User and Order models", "docker-compose supports blue/green via profiles"]` — most mutations reversible.
+
+**Score 3:** `evidence: ["every migration has tested downgrade()", "ROLLBACK.md documents reversal for each deploy step", "soft-delete on all domain models", "automated backup before each migration in CI"]` — every mutation path has documented reversal.
+
 ## Evidence-gathering strategy
 
 - `Glob` for migration dirs: `**/migrations/**`, `**/alembic/**`, `**/db/migrate/**`.
