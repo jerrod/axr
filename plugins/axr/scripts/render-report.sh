@@ -92,6 +92,72 @@ AGENT_DRAFT_LIST="$(jq -r --argjson dims "$DIMENSIONS_JSON" \
     end
 ')"
 write_token agent_draft_section "$AGENT_DRAFT_LIST"
+
+# --- Comprehension Debt Index ---
+# Harmonic mean of 4 criterion scores:
+#   legibility.context-window-fit, legibility.decision-coverage,
+#   docs.decision-log, patterns.single-approach
+# Scaled to 0-10 range.
+
+extract_criterion_score() {
+    local crit_id="$1"
+    jq -r --arg id "$crit_id" --argjson dims "$DIMENSIONS_JSON" -n \
+        '[$dims | to_entries[].value.criteria[] | select(.id == $id) | .score][0] // empty'
+}
+
+CWF_RAW="$(extract_criterion_score "legibility.context-window-fit")"
+DC_RAW="$(extract_criterion_score "legibility.decision-coverage")"
+DL_RAW="$(extract_criterion_score "docs.decision-log")"
+SA_RAW="$(extract_criterion_score "patterns.single-approach")"
+
+# Floor nulls/empties to 0.5 (deferred = unknown, not absent)
+floor_score() {
+    local s="${1:-}"
+    if [ -z "$s" ] || [ "$s" = "null" ]; then echo "0.5"; else echo "$s"; fi
+}
+
+CWF_S="$(floor_score "$CWF_RAW")"
+DC_S="$(floor_score "$DC_RAW")"
+DL_S="$(floor_score "$DL_RAW")"
+SA_S="$(floor_score "$SA_RAW")"
+
+# Weighted harmonic mean, floor each to 0.1 to avoid div/0
+# Result in 0-4 range, scaled to 0-10 by multiplying by 2.5
+COMP_DEBT_SCORE="$(awk -v a="$CWF_S" -v b="$DC_S" -v c="$DL_S" -v d="$SA_S" 'BEGIN {
+    if (a < 0.1) a = 0.1; if (b < 0.1) b = 0.1
+    if (c < 0.1) c = 0.1; if (d < 0.1) d = 0.1
+    hm = 4.0 / (1/a + 1/b + 1/c + 1/d)
+    scaled = hm * 2.5
+    printf "%.1f", (scaled > 10 ? 10 : scaled)
+}')"
+
+# Map to label
+if awk -v s="$COMP_DEBT_SCORE" 'BEGIN { exit (s >= 8) ? 0 : 1 }'; then
+    COMP_DEBT_LABEL="Agent-Clear"
+elif awk -v s="$COMP_DEBT_SCORE" 'BEGIN { exit (s >= 5) ? 0 : 1 }'; then
+    COMP_DEBT_LABEL="Agent-Readable"
+elif awk -v s="$COMP_DEBT_SCORE" 'BEGIN { exit (s >= 2) ? 0 : 1 }'; then
+    COMP_DEBT_LABEL="Agent-Murky"
+else
+    COMP_DEBT_LABEL="Agent-Opaque"
+fi
+
+write_token comp_debt_score "$COMP_DEBT_SCORE"
+write_token comp_debt_label "$COMP_DEBT_LABEL"
+write_token cwf_score "${CWF_RAW:-deferred}"
+write_token dc_score "${DC_RAW:-deferred}"
+write_token dl_score "${DL_RAW:-deferred}"
+write_token sa_score "${SA_RAW:-deferred}"
+
+# --- Agent ROI Predictor ---
+case "$BAND_LABEL" in
+    "Agent-Native")    roi_stmt="Agents productive with light supervision" ;;
+    "Agent-Ready")     roi_stmt="~35-40% fewer agent-generated bugs vs Agent-Hazardous (Ox Security)" ;;
+    "Agent-Assisted")  roi_stmt="Agents useful for scoped tasks; 12% first-year cost overhead (Codebridge)" ;;
+    "Agent-Hazardous") roi_stmt="1.7x more issues, agents create more cleanup than value (Ox Security)" ;;
+    *)                 roi_stmt="4x maintenance cost by year 2 (Codebridge); comprehension wall at week 7 (Osmani)" ;;
+esac
+write_token roi_statement "$roi_stmt"
 # next_improvements was previously identical to blockers (dead duplication).
 # Removed — the "Top 3 Blockers" section IS the actionable improvement list.
 # Phase 4 may add a distinct LLM-generated recommendations section.
@@ -103,6 +169,9 @@ awk -v d="$RENDER_TMP" '
         tokens["scored_at"]=1; tokens["trend_section"]=1
         tokens["dimension_table"]=1; tokens["blockers"]=1
         tokens["next_improvements"]=1; tokens["agent_draft_section"]=1
+        tokens["comp_debt_score"]=1; tokens["comp_debt_label"]=1
+        tokens["cwf_score"]=1; tokens["dc_score"]=1; tokens["dl_score"]=1; tokens["sa_score"]=1
+        tokens["roi_statement"]=1
         for (k in tokens) {
             val=""
             while ((getline line < (d"/"k)) > 0) {
