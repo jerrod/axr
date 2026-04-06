@@ -1,0 +1,28 @@
+{
+  "dimension_id": "example_dim",
+  "stack": [
+    "markdown"
+  ],
+  "reviewer": "script:check-example.sh",
+  "criteria": [
+    {
+      "id": "example_dim.1",
+      "name": "Example criterion",
+      "score": 2,
+      "evidence": [
+        "evidence line"
+      ],
+      "notes": "sample",
+      "reviewer": "script"
+    },
+    {
+      "id": "example_dim.2",
+      "name": "Deferred criterion",
+      "score": null,
+      "evidence": [],
+      "notes": "Deferred to judgment subagent",
+      "reviewer": "judgment",
+      "deferred": true
+    }
+  ]
+}
