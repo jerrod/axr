@@ -6,7 +6,7 @@ Claude Code plugin marketplace by [jerrod](https://github.com/jerrod).
 
 ### axr
 
-Agent eXecution Readiness scoring. Grades a repository against a 100-point rubric across 8 dimensions (tests & CI, docs, change surface, safety rails, structure, tooling, execution visibility, workflow realism) using deterministic bash checkers and judgment subagents. Produces a machine-readable JSON report and a human-readable markdown report per run.
+Agent eXecution Readiness scoring. Grades a repository against a 100-point rubric across 9 dimensions (tests & CI, docs, change surface, safety rails, structure, tooling, execution visibility, workflow realism) using deterministic bash checkers and judgment subagents. Produces a machine-readable JSON report and a human-readable markdown report per run.
 
 See `plugins/axr/README.md` for details.
 
