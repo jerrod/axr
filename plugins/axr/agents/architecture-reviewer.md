@@ -138,8 +138,8 @@ Complete your assessment within 3 minutes of tool-use time. Score conservatively
 ## Evidence-gathering strategy
 
 - `Glob` for entrypoints: `**/index.{ts,js}`, `**/__init__.py`, `**/main.go`.
-- `Bash find` for directory structure at depth 1-3.
-- `Bash wc -l` for file size distribution (see structure.3 above).
+- `Glob` for directory structure: `**/*` at targeted depths, then filter results.
+- `Glob` + `Read` for file size distribution (see structure.3 method above).
 - `Grep` for import statements to assess layering (structure.1).
 - `Grep` for dumping-ground dir names: `utils|helpers|misc|common`.
 - `Read` sample files (3-5) to assess naming consistency.

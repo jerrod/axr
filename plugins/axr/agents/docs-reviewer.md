@@ -73,7 +73,7 @@ Complete your assessment within 3 minutes of tool-use time. Score conservatively
 ## Evidence-gathering strategy
 
 - Use `Glob` to enumerate subdirectories: e.g., `**/README.md` to map documented areas.
-- Use `Bash` with `find -type d -maxdepth 4 -not -path './.git/*' ...` to enumerate subsystems.
+- Use `Glob` with targeted patterns (e.g., `**/*/`) to enumerate subsystem directories at depth 2-4.
 - Use `Grep` to search for glossary-like files: `glossary|terms|dictionary`.
 - Read 2-3 sample READMEs to assess quality.
 

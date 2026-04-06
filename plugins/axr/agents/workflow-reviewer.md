@@ -114,7 +114,7 @@ Complete your assessment within 3 minutes of tool-use time. Score conservatively
 - `Grep` for mock patterns across test files to assess mock ubiquity (count matches vs test-file count).
 - `Glob` for compose files: `**/docker-compose*.yml`.
 - `Read` 2-3 sample fixtures to assess realism.
-- `Bash find` + `wc` to count integration vs unit test files.
+- `Glob` for integration vs unit test file counts: `**/tests/integration/**` vs `**/tests/unit/**`.
 
 ## Discipline
 
