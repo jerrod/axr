@@ -34,6 +34,18 @@ Every run writes:
 - `.axr/latest.md` — human-readable report with band (`Agent-Native` through `Agent-Hostile`), top blockers, and next improvements
 - `.axr/history/<timestamp>.json` — archive for trend tracking
 
+## Monorepo
+
+AXR auto-detects monorepo workspaces (lerna, nx, turbo, pnpm, Gradle multi-project, Cargo workspace). Per-package dimensions (tests_ci, docs_context, style_validation, tooling) are scored independently for each package; repo-level dimensions are scored once at the root. Scores are averaged across packages.
+
+## CI Integration
+
+`scripts/axr-ci.sh` runs a non-interactive assessment for CI pipelines. Configure thresholds via `.axr/config.json` (`ci_minimum_band`, `ci_fail_on_blockers`). See `docs/plugin-brief.md` for details.
+
+```bash
+scripts/axr-ci.sh --config .axr/config.json
+```
+
 ## Status
 
 **Rubric v2.0.** All 9 dimensions have deterministic checkers for mechanical criteria; 5 judgment subagents score the 17 judgment criteria. See `docs/plugin-brief.md` for the authoritative spec.
