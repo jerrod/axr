@@ -15,6 +15,8 @@
 #        c. scripts/ directory present with at least one *.sh, all executable.
 #        d. If bin/validate exists and is executable, invoke it (plugin-local
 #           validation hook — e.g., rubric schema checks).
+#        e. If agents/ directory exists, every *.md (except SCHEMA.md/README.md)
+#           must have closed YAML frontmatter with a description: field.
 
 set -uo pipefail
 
@@ -197,7 +199,35 @@ else
             fi
         fi
 
-        # 3d. plugin-local validate hook — refuse symlinks entirely, then
+        # 3d. agents/ directory (optional) — if present, every *.md must have
+        # closed YAML frontmatter with description: (same rules as commands).
+        # SCHEMA.md and other non-agent docs are exempt (no frontmatter expected).
+        if [ -d "$plugin_dir/agents" ]; then
+            AGENT_FILES=()
+            while IFS= read -r -d '' f; do
+                AGENT_FILES+=("$f")
+            done < <(find -P "$plugin_dir/agents" -maxdepth 1 -type f -not -type l -name '*.md' -print0 2>/dev/null)
+
+            for f in "${AGENT_FILES[@]}"; do
+                base=$(basename "$f")
+                # Skip docs files that aren't agent definitions.
+                case "$base" in
+                    SCHEMA.md|README.md) continue ;;
+                esac
+                if ! has_closed_frontmatter "$f"; then
+                    fail "$plugin_name: $f missing or unclosed YAML frontmatter"
+                    continue
+                fi
+                FM=$(awk 'NR==1 && /^---$/ {inside=1; next} inside && /^---$/ {exit} inside {print}' "$f")
+                if printf '%s\n' "$FM" | grep -Eq '^[[:space:]]*description:[[:space:]]*.+'; then
+                    pass "$plugin_name: $f frontmatter has description"
+                else
+                    fail "$plugin_name: $f frontmatter missing description:"
+                fi
+            done
+        fi
+
+        # 3e. plugin-local validate hook — refuse symlinks entirely, then
         # containment-check the resolved parent dir. Rejecting symlinked
         # validate files eliminates the symlink-escape bypass and also
         # narrows the TOCTOU window by doing -L + exec back-to-back.
@@ -208,10 +238,10 @@ else
             pv_parent_real="$(cd "$(dirname "$plugin_validate")" 2>/dev/null && pwd -P)" || pv_parent_real=""
             case "$pv_parent_real" in
                 "$REPO_ROOT_REAL"/*)
-                    if "$plugin_validate"; then
+                    if timeout 60 "$plugin_validate"; then
                         pass "$plugin_name: plugin-local validate passed"
                     else
-                        fail "$plugin_name: plugin-local validate failed (see output above)"
+                        fail "$plugin_name: plugin-local validate failed or timed out (60s limit)"
                     fi
                     ;;
                 *)

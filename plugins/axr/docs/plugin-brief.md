@@ -129,7 +129,7 @@ Every run writes two files to `.axr/` at repo root.
             "pytest config: pyproject.toml line 42"
           ],
           "notes": "Flaky tests in tests/integration/test_sync.py occasionally add 2–3min",
-          "reviewer": "agent"
+          "reviewer": "script"
         }
       ]
     }
@@ -168,13 +168,36 @@ For every criterion resolvable from the filesystem, use tools (Read, Bash with `
 - **tests_ci.1:** Parse `.github/workflows/*.yml` for test jobs. Use `gh run list --workflow=<test> --limit 10 --json conclusion,createdAt,updatedAt` for avg duration and flake rate.
 - **structure.2:** Run static analysis for the stack (`madge` for JS/TS, `pydeps` for Python, Gradle reports for Kotlin) to detect circular imports.
 
-### Pass 2 — Judgment checks
+### Pass 2 — Judgment checks (Phase 3)
 
-For qualitative criteria (is the glossary good enough, are module boundaries meaningful, do fixtures represent real workflows), read relevant files and make a preliminary call, flagged `reviewer: "agent-draft"` and surfaced prominently for human confirmation.
+5 specialized subagents under `plugins/axr/agents/` score the 17 judgment criteria:
+
+| Agent | Criteria |
+|---|---|
+| `docs-reviewer` | docs_context.3, .5 |
+| `architecture-reviewer` | change_surface.1, .2, .4; structure.1, .3, .4 |
+| `safety-reviewer` | safety_rails.1, .2 |
+| `observability-reviewer` | execution_visibility.1, .2, .4 |
+| `workflow-reviewer` | tests_ci.2; workflow_realism.1, .2, .4 |
+
+Agents score 0-3 autonomously. Score 4 requires human confirmation. Every agent-emitted criterion carries `reviewer: "agent-draft"` so downstream consumers know to confirm before treating as final.
+
+### Pass 2.5 — Agent merge
+
+`aggregate.sh --merge-agents <agent-dir>` overlays agent-draft scores onto the per-dimension JSONs into a temp merged directory (never mutating the original mechanical outputs). Each agent criterion is matched by `id`, validated (score 0-3, known id), and overlaid. Criteria not covered by any agent remain at their defaulted score of 1 with `reviewer: "judgment"`.
 
 ### Pass 3 — Aggregation
 
-Compute weighted scores, determine band, identify top 3 blockers (criteria scoring 0–1 in high-weight dimensions), compute delta vs. previous run if `.axr/latest.json` exists, write both output files.
+Compute weighted scores, determine band, identify top 3 blockers (criteria scoring 0-1 in high-weight dimensions), compute delta vs. previous run if `.axr/latest.json` exists, write both output files.
+
+### `reviewer` field values
+
+| Value | Meaning |
+|---|---|
+| `"script"` | Scored by a mechanical check script (deterministic). |
+| `"agent-draft"` | Scored by a judgment subagent (needs human confirmation). |
+| `"judgment"` | Deferred to judgment but no agent scored it yet (defaulted to 1). |
+| `"human-confirmed"` | Agent-draft score confirmed by a human reviewer. |
 
 ## Orchestrator performance requirements
 
