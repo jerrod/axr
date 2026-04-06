@@ -1,6 +1,8 @@
 # AXR v2 Plan: Competitive Gap Closure
 
 > Based on three-way analysis of axr, [kodustech/agent-readiness](https://github.com/kodustech/agent-readiness), and [Factory.ai Agent Readiness](https://factory.ai/news/agent-readiness).
+>
+> Rebased on main after Phase 4 (`/axr-diff`, `patch-dimension.sh`, incremental `/axr-check`) landed via PR #6.
 
 ## Guiding principle
 
@@ -76,13 +78,27 @@ Turbo, Nx, Gradle build cache, ccache, or equivalent. Agents iterate frequently 
 1. **`rubric/rubric.v2.json`** — new file, full 9-dimension rubric. Do NOT edit v1 in place.
 2. **`scripts/check-style-validation.sh`** — new checker. Extract scoring logic for .1 and .2 from `check-tooling.sh`, add .3–.5.
 3. **`scripts/check-tooling.sh`** — rewrite. Renumber criteria (old .3→.1, .4→.2, .5→.3), add new .4 and .5.
-4. **`scripts/aggregate.sh`** — update to read 9 dimensions, reference rubric v2.
-5. **`commands/axr.md`** — update orchestrator to dispatch 9 checkers.
-6. **`commands/axr-check.md`** — add `style_validation` as valid dimension argument.
-7. **`docs/plugin-brief.md`** — update rubric section.
-8. **`CLAUDE.md`** (plugin-level) — note rubric version bump.
-9. **`bin/validate`** — update to validate rubric v2 schema.
-10. **Score bands** — unchanged (they're percentile-based, still 0–100).
+4. **`commands/axr.md`** — hardcodes `rubric/rubric.v1.json` (line 10) and "all 8 dimensions" (description + step 4). Update rubric path and dimension count references.
+5. **`commands/axr-check.md`** — three hardcoded v1 references:
+   - Line 10: dimension ID list is hardcoded to 8 values. Add `style_validation`.
+   - Line 14: validates against `rubric/rubric.v1.json` path. Change to v2.
+   - Line 29: says "all 8 checkers". Change to 9.
+   - Line 42: hardcodes `Raw score: <sum>/20`. Make dynamic (criteria count × 4).
+6. **`scripts/aggregate.sh`** — already dynamic (reads dimension IDs from rubric). Only needs rubric path updated if it's hardcoded, otherwise just point `$_AXR_RUBRIC_PATH` to v2.
+7. **`scripts/patch-dimension.sh`** — already dynamic (reads weight/name from rubric). No code changes needed if `$_AXR_RUBRIC_PATH` points to v2.
+8. **`scripts/diff-scores.sh`** — fully dynamic, no changes needed.
+9. **`scripts/lib/common.sh`** — update `$_AXR_RUBRIC_PATH` default to `rubric.v2.json`.
+10. **`docs/plugin-brief.md`** — update rubric section (dimensions, weights, criteria).
+11. **`CLAUDE.md`** (plugin-level) — note rubric version bump.
+12. **`bin/validate`** — update to validate rubric v2 schema.
+13. **Score bands** — unchanged (they're percentile-based, still 0–100).
+
+### What already works for 9 dimensions (verified post-rebase)
+
+- `aggregate.sh` reads dimension IDs from rubric dynamically (`jq -r '.dimensions[].id'`)
+- `patch-dimension.sh` reads weight/name from rubric per-dimension
+- `diff-scores.sh` iterates over whatever dimensions exist in the scored JSONs
+- The `for checker in scripts/check-*.sh` loop in `axr.md` auto-discovers new checker scripts
 
 ### Risk: tests_ci.5 overlap
 
@@ -94,7 +110,7 @@ Turbo, Nx, Gradle build cache, ccache, or equivalent. Agents iterate frequently 
 
 ### Why this is the highest-leverage work
 
-17 of 40 criteria (42%) currently default to score 1 with `reviewer: "judgment"`. This means:
+17 of 45 criteria (38% in v2; was 42% of 40 in v1) default to score 1 with `reviewer: "judgment"`. This means:
 - The weighted scoring model (axr's key differentiator) is undermined
 - Change Surface Clarity (14pts) has 3/5 criteria inert
 - Structure & Modularity (8pts) has 3/5 criteria inert
@@ -109,7 +125,7 @@ Turbo, Nx, Gradle build cache, ccache, or equivalent. Agents iterate frequently 
 - `observability-reviewer.md` — execution_visibility.1, .2, .4
 - `workflow-reviewer.md` — tests_ci.2; workflow_realism.1, .2, .4
 
-`SCHEMA.md` defines the output contract. `merge-agents.sh` handles overlay.
+`SCHEMA.md` defines the output contract. `merge-agents.sh` handles overlay. The `/axr` orchestrator (`commands/axr.md`) already dispatches all 5 agents in parallel via Task tool (wired in Phase 3 / PR #5).
 
 ### Work required
 
@@ -118,9 +134,8 @@ Turbo, Nx, Gradle build cache, ccache, or equivalent. Agents iterate frequently 
    - Per-criterion scoring rubric with examples for each score level
    - Timebox (3 min per agent, 15 min total for all 5)
    - Output format per SCHEMA.md
-2. **Update agent criteria for v2 rubric.** The split creates no new judgment criteria (all Style & Validation is mechanical), but IDs for tooling criteria change.
-3. **Wire into `/axr` orchestrator.** Dispatch 5 agents in parallel after mechanical pass completes. Write outputs to `.axr/tmp/agent-*.json`.
-4. **Calibrate on 2–3 reference repos.** Run agents, compare to manual review, tune prompts.
+2. **Update agent criteria for v2 rubric.** The split creates no new judgment criteria (all Style & Validation is mechanical), but the architecture-reviewer's structure criteria IDs are unchanged so no impact there.
+3. **Calibrate on 2–3 reference repos.** Run full `/axr` end-to-end, compare agent scores to manual review, tune prompts.
 
 ### Acceptance
 
@@ -244,11 +259,23 @@ For each new language:
 ## Sequencing summary
 
 ```
+DONE      Phase 1–4 (skeleton, mechanical checkers, judgment scaffolding, /axr-diff + patch-dimension)
+─────────────────────────────────────────────────────────────────────────
 Phase 2A  Rubric v2.0 (Style split, reweight, new criteria)     ← do first, free restructure window
-Phase 2B  Judgment subagents (ship all 5, calibrate)             ← unlocks core differentiator
+Phase 2B  Judgment subagents (finalize prompts, calibrate)       ← unlocks core differentiator
 Phase 3   /axr-fix (auto-remediation)                            ← unique advantage as Claude Code plugin
 Phase 4   Monorepo awareness + CI fast-path                      ← broadens adoption surface
 Phase 5   Java, C#, PHP, Swift support                           ← incremental language reach
 ```
 
 Each phase is independently shippable. Phase 2A must precede 2B (subagents need stable criterion IDs). Phases 3–5 are independent of each other and can be reordered based on user demand.
+
+## Post-rebase notes (PR #6 merged)
+
+Phase 4 of the original plugin-brief (`/axr-diff`, `patch-dimension.sh`, incremental `/axr-check`) shipped in PR #6. Key findings from reviewing the new code:
+
+- **`diff-scores.sh`** and **`aggregate.sh`** are rubric-dynamic — they read dimension IDs and weights from the rubric JSON at runtime. No code changes needed for 9 dimensions.
+- **`patch-dimension.sh`** is also dynamic — reads weight/name per-dimension from the rubric.
+- **`commands/axr-check.md`** has 4 hardcoded v1 references (dimension list, rubric path, "8 checkers", hardcoded `/20` max) that must be updated in Phase 2A.
+- **`commands/axr.md`** has hardcoded `rubric.v1.json` path and "8 dimensions" in its description.
+- **`scripts/lib/common.sh`** sets `$_AXR_RUBRIC_PATH` — updating this one location propagates to all dynamic scripts.
