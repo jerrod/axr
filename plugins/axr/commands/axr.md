@@ -41,21 +41,21 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
    Dispatch these 5 Task calls **simultaneously** (do not wait for one before starting the next):
 
    - **docs-reviewer** -> `.axr/tmp/agent-docs.json`
-     Prompt: "Score docs_context.3 and docs_context.5 for this repository. Output ONLY a JSON array of criterion objects per docs/agent-output-schema.md. No markdown wrapping."
+     Prompt: "Score docs_context.3 and docs_context.5 for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
 
    - **architecture-reviewer** -> `.axr/tmp/agent-architecture.json`
-     Prompt: "Score change_surface.1, change_surface.2, change_surface.4, structure.1, structure.3, structure.4 for this repository. Output ONLY a JSON array of criterion objects per docs/agent-output-schema.md. No markdown wrapping."
+     Prompt: "Score change_surface.1, change_surface.2, change_surface.4, structure.1, structure.3, structure.4 for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
 
    - **safety-reviewer** -> `.axr/tmp/agent-safety.json`
-     Prompt: "Score safety_rails.1 and safety_rails.2 for this repository. Output ONLY a JSON array of criterion objects per docs/agent-output-schema.md. No markdown wrapping."
+     Prompt: "Score safety_rails.1 and safety_rails.2 for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
 
    - **observability-reviewer** -> `.axr/tmp/agent-observability.json`
-     Prompt: "Score execution_visibility.1, execution_visibility.2, execution_visibility.4 for this repository. Output ONLY a JSON array of criterion objects per docs/agent-output-schema.md. No markdown wrapping."
+     Prompt: "Score execution_visibility.1, execution_visibility.2, execution_visibility.4 for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
 
    - **workflow-reviewer** -> `.axr/tmp/agent-workflow.json`
-     Prompt: "Score tests_ci.2, workflow_realism.1, workflow_realism.2, workflow_realism.4 for this repository. Output ONLY a JSON array of criterion objects per docs/agent-output-schema.md. No markdown wrapping."
+     Prompt: "Score tests_ci.2, workflow_realism.1, workflow_realism.2, workflow_realism.4 for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
 
-   After all 5 agents return, **write each agent's JSON output** to the corresponding file path above. Then verify each output parses:
+   As each agent returns, **immediately write its JSON output** to the corresponding file path above. Then verify each output parses:
    ```bash
    for f in .axr/tmp/agent-*.json; do
        jq empty "$f" || { echo "FAIL: agent output $f is invalid JSON" >&2; cat "$f"; exit 1; }
@@ -64,6 +64,7 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
 
 6. **Aggregate with agent merge.** Run:
    ```bash
+   # aggregate.sh --merge-agents <agent-dir> <input-dir> <output-dir>
    "${CLAUDE_PLUGIN_ROOT}/scripts/aggregate.sh" --merge-agents .axr/tmp .axr/tmp .axr
    ```
 
@@ -77,7 +78,10 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
    <N> of <J> judgment criteria scored by agents (draft, needs human confirmation)
    <M> judgment criteria still defaulted to 1 (agent did not return output)
 
-   To compute J (total judgment criteria): `jq '[.dimensions[].criteria[] | select(.checker_type=="judgment")] | length' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v2.json"`
+   To compute J (total judgment criteria):
+   ```bash
+   jq '[.dimensions[].criteria[] | select(.checker_type=="judgment")] | length' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v2.json"
+   ```
 
    Top 3 blockers:
    1. <blocker 1>

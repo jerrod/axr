@@ -58,9 +58,13 @@ for af in "${agent_files[@]}"; do
         # Validate reviewer field.
         crit_reviewer="$(jq -r '.reviewer' <<<"$crit_json")"
         [ "$crit_reviewer" = "agent-draft" ] || die "agent criterion $crit_id has reviewer=$crit_reviewer (must be agent-draft) in $af"
-        # Validate evidence is a JSON array.
+        # Validate evidence is a JSON array, max 20 elements, each ≤500 chars.
         ev_type="$(jq 'if .evidence | type == "array" then "ok" else "bad" end' <<<"$crit_json")"
         [ "$ev_type" = '"ok"' ] || die "agent criterion $crit_id evidence must be a JSON array in $af"
+        ev_count="$(jq '.evidence | length' <<<"$crit_json")"
+        [ "$ev_count" -le 20 ] || die "agent criterion $crit_id evidence has $ev_count elements (max 20) in $af"
+        ev_oversize="$(jq '[.evidence[] | select(length > 500)] | length' <<<"$crit_json")"
+        [ "$ev_oversize" -eq 0 ] || die "agent criterion $crit_id has $ev_oversize evidence elements >500 chars in $af"
         # Validate notes is a string (not array/object) and ≤500 chars.
         notes_type="$(jq -r '.notes | type' <<<"$crit_json")"
         [ "$notes_type" = "string" ] || die "agent criterion $crit_id notes must be a string (got $notes_type) in $af"
