@@ -249,13 +249,21 @@ If evidence cannot be found, score defaults to **1**, not higher. This is the "u
 
 Before running, detect the repo's stack to pick the right tools:
 
-- **Python:** `pyproject.toml`, `requirements.txt`, `setup.py`
-- **Node:** `package.json`
-- **Kotlin/JVM:** `build.gradle.kts`, `build.gradle`, `pom.xml`
-- **Ruby:** `Gemfile`
-- **Multi-language:** detect all, run appropriate checkers per subtree
+| Stack | Detection markers |
+|-------|------------------|
+| Python | `pyproject.toml`, `requirements.txt`, `setup.py`, `Pipfile` |
+| Node/TypeScript | `package.json` |
+| Kotlin | `build.gradle`, `build.gradle.kts`, `settings.gradle.kts` |
+| Java | `pom.xml`, or `*.java` files with Gradle markers |
+| Ruby | `Gemfile`, `*.gemspec` |
+| Rust | `Cargo.toml` |
+| Go | `go.mod` |
+| C#/.NET | `*.csproj`, `*.sln`, `Directory.Build.props` |
+| PHP | `composer.json` |
+| Swift | `Package.swift`, `*.xcodeproj`, `*.xcworkspace` |
+| Markdown | `README.md`, `CLAUDE.md`, `AGENTS.md` (fallback when no other stack detected) |
 
-Fall back to language-agnostic checks on unsupported stacks and note the limitation in the report.
+Multi-language repos: all matching stacks are detected; appropriate checkers run per subtree.
 
 ## Operational rules (enforced by command prompts)
 

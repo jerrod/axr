@@ -96,9 +96,9 @@ axr_criterion_name() {
 
 # ---------------------------------------------------------------------------
 # axr_detect_stack — print a JSON array of stack tags detected from marker
-# files in the repo root. Recognised tags: python, node, kotlin, ruby, rust,
-# go, markdown. The markdown tag is only added when no other tags match (so
-# polyglot repos don't carry a weak tag).
+# files in the repo root. Recognised tags: python, node, kotlin, java, ruby,
+# rust, go, csharp, php, swift, markdown. The markdown tag is only added when
+# no other tags match (so polyglot repos don't carry a weak tag).
 # ---------------------------------------------------------------------------
 axr_detect_stack() {
     local root
@@ -122,6 +122,27 @@ axr_detect_stack() {
     fi
     if [ -f "$root/go.mod" ]; then
         tags+=("go")
+    fi
+    # Java: pom.xml (Maven) is definitive. Gradle alone tags "kotlin" above,
+    # so only add "java" for Gradle when *.java source files actually exist.
+    if [ -f "$root/pom.xml" ]; then
+        tags+=("java")
+    elif { [ -f "$root/build.gradle" ] || [ -f "$root/build.gradle.kts" ]; } \
+         && find -P "$root/src" -maxdepth 4 -name '*.java' -type f 2>/dev/null | grep -q .; then
+        tags+=("java")
+    fi
+    if compgen -G "$root/"*.csproj >/dev/null 2>&1 \
+       || compgen -G "$root/"*.sln >/dev/null 2>&1 \
+       || [ -f "$root/Directory.Build.props" ]; then
+        tags+=("csharp")
+    fi
+    if [ -f "$root/composer.json" ]; then
+        tags+=("php")
+    fi
+    if [ -f "$root/Package.swift" ] \
+       || compgen -G "$root/"*.xcodeproj >/dev/null 2>&1 \
+       || compgen -G "$root/"*.xcworkspace >/dev/null 2>&1; then
+        tags+=("swift")
     fi
     # Markdown is a fallback tag — only when no other stack was detected.
     if [ ${#tags[@]} -eq 0 ] && { [ -f "$root/README.md" ] || [ -f "$root/CLAUDE.md" ] || [ -f "$root/AGENTS.md" ]; }; then

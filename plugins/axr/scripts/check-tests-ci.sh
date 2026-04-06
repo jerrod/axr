@@ -25,7 +25,7 @@ collect_test_workflows() {
     [ "${#files[@]}" -eq 0 ] && return 0
     local f
     for f in "${files[@]}"; do
-        if grep -qiE '\b(test|pytest|jest|vitest|mocha|go test|rspec|cargo test)\b' "$f" 2>/dev/null; then
+        if grep -qiE '\b(test|pytest|jest|vitest|mocha|go test|rspec|cargo test|mvn|gradle|dotnet|phpunit|pest|xcodebuild)\b' "$f" 2>/dev/null; then
             basename "$f"
         fi
     done
@@ -43,8 +43,24 @@ score_tests_ci_1() {
         [ -n "$w" ] && workflows+=("$w")
     done < <(collect_test_workflows)
 
+    # Local test evidence: directories/files that indicate a test suite exists
+    local test_evidence=()
+    [ -d "src/test" ] && test_evidence+=("src/test/ directory")
+    for d in *.Tests *.Test; do
+        [ -d "$d" ] && test_evidence+=("$d/ (.NET test project)")
+    done
+    for f in phpunit.xml phpunit.xml.dist; do
+        [ -f "$f" ] && test_evidence+=("$f present")
+    done
+    [ -d "Tests" ] && test_evidence+=("Tests/ directory (Swift SPM)")
+
     if [ "${#workflows[@]}" -eq 0 ]; then
-        axr_emit_criterion "tests_ci.1" "$name" script 0 "no test workflows in .github/workflows/"
+        if [ "${#test_evidence[@]}" -gt 0 ]; then
+            axr_emit_criterion "tests_ci.1" "$name" script 1 "test suite found but no CI workflows" \
+                "${test_evidence[*]}"
+        else
+            axr_emit_criterion "tests_ci.1" "$name" script 0 "no test workflows in .github/workflows/"
+        fi
         return
     fi
 
@@ -231,15 +247,23 @@ score_tests_ci_5() {
         return
     fi
 
+    # Check for fast-fail linting tools in hook config
+    local has_lint_tools=0
+    if [ -n "$f" ] && grep -qiE '\b(eslint|rubocop|ruff|clippy|golangci-lint|checkstyle|phpcs|swiftlint|dotnet)\b' "$f" 2>/dev/null; then
+        has_lint_tools=1
+    fi
+
     local score=1
-    if [ "$hook_count" -ge 3 ]; then
+    if [ "$hook_count" -ge 3 ] || { [ "$hook_count" -ge 1 ] && [ "$has_lint_tools" = "1" ]; }; then
         score=3
     elif [ "$hook_count" -ge 1 ]; then
         score=2
     fi
 
-    axr_emit_criterion "tests_ci.5" "$name" script "$score" "$hook_count hook(s) in $cfg" \
-        "$cfg with $hook_count hook(s)"
+    local ev=("$cfg with $hook_count hook(s)")
+    [ "$has_lint_tools" = "1" ] && ev+=("lint tools detected in hooks")
+
+    axr_emit_criterion "tests_ci.5" "$name" script "$score" "$hook_count hook(s) in $cfg" "${ev[@]}"
 }
 
 score_tests_ci_1
