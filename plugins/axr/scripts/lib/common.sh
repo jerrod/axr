@@ -36,6 +36,11 @@ _AXR_CRITERIA_JSON="[]"
 # locate rubric/rubric.v2.json regardless of target repo CWD.
 _AXR_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 _AXR_RUBRIC_PATH="$_AXR_PLUGIN_ROOT/rubric/rubric.v2.json"
+
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=monorepo-helpers.sh
+source "$(dirname "${BASH_SOURCE[0]}")/monorepo-helpers.sh"
+
 _AXR_RUBRIC_NAMES_LOADED=0
 declare -gA _AXR_CRITERION_NAME_BY_ID
 
@@ -97,7 +102,8 @@ axr_criterion_name() {
 # ---------------------------------------------------------------------------
 axr_detect_stack() {
     local root
-    root="$(axr_repo_root)"
+    root="${_AXR_PACKAGE_PATH:+$PWD}"
+    root="${root:-$(axr_repo_root)}"
     local tags=()
     if [ -f "$root/pyproject.toml" ] || [ -f "$root/requirements.txt" ] || [ -f "$root/setup.py" ] || [ -f "$root/Pipfile" ]; then
         tags+=("python")
