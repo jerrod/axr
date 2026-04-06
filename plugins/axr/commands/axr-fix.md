@@ -1,6 +1,6 @@
 ---
 description: Fix low-scoring AXR criteria by applying automated remediations.
-argument-hint: "<criterion-id | dimension-id | blockers>"
+argument-hint: "<all | blockers | criterion-id | dimension-id>"
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
 
@@ -12,19 +12,22 @@ You are the `/axr-fix` orchestrator. Read `.axr/latest.json`, identify low-scori
 
 2. **Parse arguments.** `$ARGUMENTS` determines the fix scope:
 
+   - `all` — fix every criterion scoring ≤ 2 that has a remediation strategy
    - `blockers` — fix the top 3 blockers from `.axr/latest.json` (the `blockers[]` array, excluding any with `defaulted_from_deferred: true`)
    - A criterion id (e.g., `docs_context.1`) — fix that single criterion
-   - A dimension id (e.g., `safety_rails`) — fix all criteria in that dimension scoring ≤ 1
+   - A dimension id (e.g., `safety_rails`) — fix all criteria in that dimension scoring ≤ 2
 
-   If `$ARGUMENTS` is empty, abort with usage: `/axr-fix <blockers | criterion-id | dimension-id>`.
+   If `$ARGUMENTS` is empty, abort with usage: `/axr-fix <all | blockers | criterion-id | dimension-id>`.
 
    Validate against the rubric:
    ```bash
    # Empty check
-   [ -n "$ARGUMENTS" ] || { echo "Usage: /axr-fix <blockers | criterion-id | dimension-id>"; exit 1; }
+   [ -n "$ARGUMENTS" ] || { echo "Usage: /axr-fix <all | blockers | criterion-id | dimension-id>"; exit 1; }
 
-   # Check if it's "blockers"
-   if [ "$ARGUMENTS" = "blockers" ]; then
+   # Check if it's "all" or "blockers"
+   if [ "$ARGUMENTS" = "all" ]; then
+       echo "Mode: fix all low-scoring criteria"
+   elif [ "$ARGUMENTS" = "blockers" ]; then
        echo "Mode: fix top 3 blockers"
    # Check if it's a criterion id (contains a dot followed by digits)
    elif echo "$ARGUMENTS" | grep -qE '^\w+\.\d+$'; then
@@ -43,6 +46,11 @@ You are the `/axr-fix` orchestrator. Read `.axr/latest.json`, identify low-scori
    ```
 
 3. **Build target list.** Read `.axr/latest.json` and collect criteria to fix:
+
+   For `all` mode — every criterion scoring ≤ 2 across all dimensions:
+   ```bash
+   jq -r '[.dimensions | to_entries[].value.criteria[] | select(.score != null and .score <= 2)] | .[].id' .axr/latest.json
+   ```
 
    For `blockers` mode (blockers array is pre-filtered by aggregate.sh to exclude `defaulted_from_deferred`, but filter defensively):
    ```bash
@@ -143,4 +151,4 @@ You are the `/axr-fix` orchestrator. Read `.axr/latest.json`, identify low-scori
 - No remediation strategy for a criterion → skip with message "No automated remediation available for <id>", continue to next target.
 - Checker script fails after remediation → report the error, do not update scores for that dimension, continue with remaining dimensions.
 - All targeted criteria already score ≥ 3 → report "Nothing to fix — all targets already scoring well" and stop.
-- `$ARGUMENTS` is empty → abort with usage: `/axr-fix <blockers | criterion-id | dimension-id>`.
+- `$ARGUMENTS` is empty → abort with usage: `/axr-fix <all | blockers | criterion-id | dimension-id>`.
