@@ -264,10 +264,22 @@ Fall back to language-agnostic checks on unsupported stacks and note the limitat
 
 **Stop at end of Phase 2 for human review.**
 
-### Phases 3–6 (deferred)
+### Phase 3 — Judgment subagents
 
-- Phase 3: Judgment checkers
-- Phase 4: Output generation (templates, history archival, `/axr-diff`)
+1. 5 specialized subagents score 17 judgment criteria (docs-reviewer, architecture-reviewer, safety-reviewer, observability-reviewer, workflow-reviewer)
+2. `aggregate.sh --merge-agents` overlays agent-draft scores onto mechanical outputs
+3. Agent criteria carry `reviewer: "agent-draft"` for downstream auditability
+
+### Phase 4 — Diff + Incremental scoring (v1 complete)
+
+1. `scripts/diff-scores.sh` — compares two AXR result JSONs, emits structured diff (score delta, band change, per-dimension deltas, criteria flips, blocker changes)
+2. `commands/axr-diff.md` — `/axr-diff` command compares most recent history entry to current latest.json (or two specified files)
+3. `scripts/patch-dimension.sh` — replaces one dimension's criteria in latest.json and recomputes totals/band/blockers. Archives prior latest.json to history/
+4. `aggregate.sh --patch-dimension` — delegates to patch-dimension.sh for incremental single-dimension updates
+5. `commands/axr-check.md` — `/axr-check <dim>` now patches latest.json after running the single checker, enabling incremental scoring without re-running all 8 checkers + 5 agents
+
+### Phases 5-6 (deferred)
+
 - Phase 5: Calibration pilot on two reference repos
 - Phase 6: Distribution via the jerrod/axr marketplace
 

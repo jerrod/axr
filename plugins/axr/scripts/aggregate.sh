@@ -26,6 +26,12 @@ _cleanup() { for d in "${_CLEANUP_DIRS[@]}"; do rm -rf "$d"; done; }
 trap _cleanup EXIT
 AGENT_DIR=""
 
+# --patch-dimension mode: delegate entirely to patch-dimension.sh.
+if [ $# -ge 1 ] && [ "$1" = "--patch-dimension" ]; then
+    [ $# -eq 4 ] || die "usage: aggregate.sh --patch-dimension <dim-id> <dim-json> <latest-json>"
+    exec "$SCRIPT_DIR/patch-dimension.sh" "$2" "$3" "$4"
+fi
+
 if [ $# -ge 1 ] && [ "$1" = "--merge-agents" ]; then
     [ $# -ge 2 ] || die "usage: aggregate.sh [--merge-agents <agent-dir>] <input-dir> <output-dir>"
     AGENT_DIR="$2"

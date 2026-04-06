@@ -1,5 +1,5 @@
 ---
-description: Re-run a single dimension checker and print its summary.
+description: Re-run a single dimension checker and update .axr/latest.json incrementally.
 argument-hint: "<dimension-id>"
 ---
 
@@ -16,7 +16,7 @@ You are the `/axr-check` orchestrator for a single dimension.
 
    If invalid, abort with a list of valid ids.
 
-2. **Run the single checker.** Convert dim_id to script name: `tests_ci` → `check-tests-ci.sh` (swap `_` → `-`).
+2. **Run the single checker.** Convert dim_id to script name: `tests_ci` -> `check-tests-ci.sh` (swap `_` -> `-`).
 
    ```bash
    dim="$ARGUMENTS"
@@ -26,18 +26,27 @@ You are the `/axr-check` orchestrator for a single dimension.
    jq empty ".axr/tmp-$dim.json" || { echo "FAIL: invalid JSON output"; exit 1; }
    ```
 
-3. **Print summary:**
+3. **Patch latest.json (if it exists).** Use `--patch-dimension` to update `.axr/latest.json` incrementally without re-running all 8 checkers.
+
+   ```bash
+   if [ -f .axr/latest.json ]; then
+       "${CLAUDE_PLUGIN_ROOT}/scripts/aggregate.sh" --patch-dimension "$dim" ".axr/tmp-$dim.json" .axr/latest.json
+   else
+       echo "No .axr/latest.json found. Run /axr first to generate a full score, then use /axr-check to update individual dimensions."
+   fi
+   ```
+
+4. **Print summary.** Read `.axr/latest.json` (if it was patched) and print:
    ```
    Dimension: <dim>
    Raw score: <sum>/20
    Criteria:
-   - <id>: <score>/4 — <notes> (evidence: <count>)
+   - <id>: <score>/4 -- <notes> (evidence: <count>)
    ...
-   To re-score the full repo: /axr
+
+   Total: <total_score>/100 | Band: <band_label>
    ```
 
-4. **Clean up:** `rm -f ".axr/tmp-$dim.json"`.
+   If `.axr/latest.json` does not exist, print only the dimension summary without totals.
 
-## Notes
-
-Phase 2's `/axr-check` prints the single-dimension output without patching `.axr/latest.json`. The Phase 4 PR adds `aggregate.sh --patch-dimension` mode so `/axr-check` can update `.axr/latest.json` in place without re-running all 8 checkers.
+5. **Clean up:** `rm -f ".axr/tmp-$dim.json"`.
