@@ -11,6 +11,16 @@
 
 {{dimension_table}}
 
+## Comprehension Debt
+
+Comprehension Debt: {{comp_debt_score}}/10 · {{comp_debt_label}}
+
+Contributing signals: context-window-fit={{cwf_score}}, decision-coverage={{dc_score}}, decision-log={{dl_score}}, single-approach={{sa_score}}
+
+## Agent ROI
+
+At this score ({{band_label}}), research suggests: {{roi_statement}}
+
 ## Top 3 Blockers
 
 {{blockers}}

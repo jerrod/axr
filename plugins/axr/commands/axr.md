@@ -1,5 +1,5 @@
 ---
-description: Score the current repository against the AXR rubric (all 9 dimensions, including judgment subagents).
+description: Score the current repository against the AXR rubric (all 12 dimensions, including judgment subagents).
 allowed-tools: Bash, Read, Task
 ---
 
@@ -7,7 +7,7 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
 
 ## Steps
 
-1. **Verify prerequisites.** Confirm `${CLAUDE_PLUGIN_ROOT}` is set and `${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v3.json` exists. If missing, abort with a clear error.
+1. **Verify prerequisites.** Confirm `${CLAUDE_PLUGIN_ROOT}` is set and `${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v4.json` exists. If missing, abort with a clear error.
 
 2. **Detect stack.** Run:
    ```bash
@@ -17,7 +17,7 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
 
 3. **Prepare output dirs.** `mkdir -p .axr/tmp .axr/history`.
 
-4. **Run all dimension checkers in parallel.** Each writes its JSON output to `.axr/tmp/<dimension_id>.json` (stdout only) and stderr to a separate file so checker warnings do not corrupt the JSON:
+4. **Run all 12 dimension checkers in parallel.** Each writes its JSON output to `.axr/tmp/<dimension_id>.json` (stdout only) and stderr to a separate file so checker warnings do not corrupt the JSON:
 
    ```bash
    for checker in "${CLAUDE_PLUGIN_ROOT}"/scripts/check-*.sh; do
@@ -36,9 +36,9 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
 
    Any non-empty stderr files should be surfaced in the summary but do not fail the run.
 
-5. **Dispatch 5 judgment subagents in parallel.** Use the Task tool to dispatch all 5 agents concurrently. Each agent reads the target repo, scores its criteria cluster (0-3 only), and emits a JSON array. Write each output to `.axr/tmp/agent-<name>.json`.
+5. **Dispatch 8 judgment subagents in parallel.** Use the Task tool to dispatch all 8 agents concurrently. Each agent reads the target repo, scores its criteria cluster (0-3 only), and emits a JSON array. Write each output to `.axr/tmp/agent-<name>.json`.
 
-   Dispatch these 5 Task calls **simultaneously** (do not wait for one before starting the next):
+   Dispatch these 8 Task calls **simultaneously** (do not wait for one before starting the next):
 
    - **docs-reviewer** -> `.axr/tmp/agent-docs.json`
      Prompt: "Score docs.subsystem-readmes and docs.glossary for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
@@ -54,6 +54,15 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
 
    - **workflow-reviewer** -> `.axr/tmp/agent-workflow.json`
      Prompt: "Score tests.boundary-coverage, workflow.fixtures, workflow.sandbox-parity, workflow.golden-paths for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
+
+   - **legibility-reviewer** -> `.axr/tmp/agent-legibility.json`
+     Prompt: "Score legibility.decision-coverage for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
+
+   - **patterns-reviewer** -> `.axr/tmp/agent-patterns.json`
+     Prompt: "Score patterns.single-approach, patterns.no-competing-patterns, patterns.error-consistency for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
+
+   - **supply-chain-reviewer** -> `.axr/tmp/agent-supply-chain.json`
+     Prompt: "Score supply-chain.minimal-surface for this repository. Output ONLY a JSON array of criterion objects per your output contract. No markdown wrapping."
 
    As each agent returns, **immediately write its JSON output** to the corresponding file path above. Then verify each output parses:
    ```bash
@@ -80,7 +89,7 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
 
    To compute J (total judgment criteria):
    ```bash
-   jq '[.dimensions[].criteria[] | select(.checker_type=="judgment")] | length' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v3.json"
+   jq '[.dimensions[].criteria[] | select(.checker_type=="judgment")] | length' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v4.json"
    ```
 
    Top 3 blockers:

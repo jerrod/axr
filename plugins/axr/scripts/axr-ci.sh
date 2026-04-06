@@ -18,8 +18,8 @@ die() { printf 'axr-ci.sh: %s\n' "$*" >&2; exit 1; }
 _CLEANUP_DIRS=()
 trap 'rm -rf "${_CLEANUP_DIRS[@]}"' EXIT
 
-PACKAGE_SCOPED_DIMS=(tests docs style tooling)
-GLOBAL_DIMS=(safety structure change visibility workflow)
+PACKAGE_SCOPED_DIMS=(tests docs style tooling supply-chain)
+GLOBAL_DIMS=(safety structure change visibility workflow legibility patterns)
 
 CONFIG_FILE=".axr/config.json"
 MIN_BAND="Agent-Hostile"

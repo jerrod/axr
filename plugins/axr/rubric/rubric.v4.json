@@ -1,0 +1,836 @@
+{
+  "rubric_version": "4.0",
+  "name": "AXR: Agent eXecution Readiness",
+  "description": "A 100-point rubric measuring how safely and productively a software repository can be operated by coding agents.",
+  "total_points": 100,
+  "scoring_scale": {
+    "0": {
+      "label": "Absent",
+      "description": "Nothing in place. Agents operate blind."
+    },
+    "1": {
+      "label": "Ad hoc",
+      "description": "Exists but inconsistent, stale, undocumented, or unreliable."
+    },
+    "2": {
+      "label": "Functional",
+      "description": "Works, but agents need human scaffolding to use it reliably."
+    },
+    "3": {
+      "label": "Strong",
+      "description": "Agents can use it autonomously in most normal cases."
+    },
+    "4": {
+      "label": "Exemplary",
+      "description": "Intentionally designed for agentic consumption; self-reinforcing, discoverable, and safe."
+    }
+  },
+  "score_bands": [
+    {
+      "min": 85,
+      "max": 100,
+      "label": "Agent-Native",
+      "description": "Agents can drive meaningful work with light supervision."
+    },
+    {
+      "min": 70,
+      "max": 84,
+      "label": "Agent-Ready",
+      "description": "Productive with targeted human review at defined checkpoints."
+    },
+    {
+      "min": 50,
+      "max": 69,
+      "label": "Agent-Assisted",
+      "description": "Useful for scoped tasks; humans still steer architecture and validation."
+    },
+    {
+      "min": 30,
+      "max": 49,
+      "label": "Agent-Hazardous",
+      "description": "Agents likely create more cleanup than value."
+    },
+    {
+      "min": 0,
+      "max": 29,
+      "label": "Agent-Hostile",
+      "description": "Fix foundations before enabling agentic workflows."
+    }
+  ],
+  "review_rules": {
+    "evidence_required_above_score": 1,
+    "unknown_defaults_to": 1,
+    "anchors_literal": true,
+    "timebox_minutes": 20,
+    "carryover_supported": true
+  },
+  "dimensions": [
+    {
+      "id": "tests",
+      "name": "Tests & CI Signal",
+      "weight": 14,
+      "question": "Can the agent trust feedback when it changes code?",
+      "criteria": [
+        {
+          "id": "tests.deterministic-suite",
+          "name": "Deterministic test suite under 10 minutes",
+          "description": "Test suite runs deterministically in under 10 minutes for common local and CI paths.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "CI workflow files (.github/workflows/*.yml, .circleci/config.yml)",
+            "gh run list --workflow=<test> --limit 10 --json conclusion,createdAt,updatedAt",
+            "Test runner config (pyproject.toml, package.json, build.gradle.kts)"
+          ]
+        },
+        {
+          "id": "tests.boundary-coverage",
+          "name": "Meaningful coverage at module boundaries",
+          "description": "Coverage is meaningful at module boundaries and critical workflows, not vanity percentage.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Coverage config and reports",
+            "Presence of integration/workflow tests vs unit-only",
+            "Test file organization relative to module structure"
+          ]
+        },
+        {
+          "id": "tests.flaky-tracking",
+          "name": "Flaky tests tracked and quarantined",
+          "description": "Flaky tests are explicitly tracked and quarantined, not silently tolerated.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "Quarantine/skip markers in test code",
+            "Flaky test tracking issues or labels",
+            "CTRF, github-test-reporter, or equivalent integration",
+            "CI retry configuration"
+          ]
+        },
+        {
+          "id": "tests.actionable-ci",
+          "name": "CI failures map to actionable messages",
+          "description": "CI failures produce precise, actionable error messages rather than opaque output.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "Recent failed CI runs via gh run view",
+            "Test output configuration (verbose, structured)",
+            "Error grouping/annotation in workflow config"
+          ]
+        },
+        {
+          "id": "tests.fast-fail-hooks",
+          "name": "Fast-fail pre-commit/pre-push checks",
+          "description": "Fast-fail checks exist pre-commit or pre-push for lint, format, type, and obvious breakage.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            ".pre-commit-config.yaml",
+            "husky, lefthook, or equivalent config",
+            ".git/hooks/ managed by tooling",
+            "package.json scripts or Makefile targets"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "docs",
+      "name": "Docs & Agent Context",
+      "weight": 14,
+      "question": "Does the repo explain itself to a cold-start agent?",
+      "criteria": [
+        {
+          "id": "docs.agent-context",
+          "name": "Root CLAUDE.md or AGENTS.md",
+          "description": "A root-level CLAUDE.md, AGENTS.md, or equivalent explains architecture, conventions, sharp edges, and operating rules.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "CLAUDE.md, AGENTS.md, or .claude/CLAUDE.md at repo root",
+            "File size and section headings",
+            "Presence of architecture, conventions, gotchas sections"
+          ]
+        },
+        {
+          "id": "docs.readme-setup",
+          "name": "README covers setup in ≤5 commands",
+          "description": "README covers setup, run, test, and deploy in five commands or fewer for common workflows.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "README.md at repo root",
+            "Presence of Quickstart, Setup, or Getting Started section",
+            "Command count in setup instructions"
+          ]
+        },
+        {
+          "id": "docs.subsystem-readmes",
+          "name": "Local READMEs for non-obvious subsystems",
+          "description": "Non-obvious subsystems have local documentation or module READMEs.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "README.md files in subdirectories",
+            "Ratio of documented to undocumented modules",
+            "Quality of subsystem documentation"
+          ]
+        },
+        {
+          "id": "docs.decision-log",
+          "name": "ADRs or decision log",
+          "description": "ADRs or decision logs explain why important patterns, tradeoffs, and constraints exist.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "docs/adr/, docs/decisions/, or ADR directory",
+            "DECISIONS.md or similar",
+            "Dated entries with context and consequences"
+          ]
+        },
+        {
+          "id": "docs.glossary",
+          "name": "Domain glossary",
+          "description": "Domain glossary exists for critical business language, especially in regulated or specialized domains.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "GLOSSARY.md, docs/glossary.md, or similar",
+            "Domain terms defined in CLAUDE.md or README",
+            "Coverage of domain-specific vocabulary"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "change",
+      "name": "Change Surface Clarity",
+      "weight": 10,
+      "question": "Can the agent find the right place to change and understand what the change will affect?",
+      "criteria": [
+        {
+          "id": "change.locatable-logic",
+          "name": "Business logic locatable by responsibility",
+          "description": "Business logic is easy to locate by responsibility, not hidden across unrelated files.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Directory structure aligned with domain concepts",
+            "File naming reflects responsibility",
+            "Absence of god files or misc/utils dumping grounds"
+          ]
+        },
+        {
+          "id": "change.explicit-boundaries",
+          "name": "Module boundaries and public interfaces explicit",
+          "description": "Module boundaries and public interfaces are explicit and discoverable.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Explicit exports (index.ts, __init__.py, module declarations)",
+            "Public vs internal distinction",
+            "Interface files or type declarations"
+          ]
+        },
+        {
+          "id": "change.contracts-documented",
+          "name": "Integration points and contracts documented",
+          "description": "Integration points, schemas, contracts, and event boundaries are documented or enforced.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "OpenAPI/Swagger specs",
+            "Protobuf or GraphQL schemas",
+            "Event schemas or AsyncAPI specs",
+            "Contract test suites"
+          ]
+        },
+        {
+          "id": "change.examples",
+          "name": "Examples and reference implementations for key workflows",
+          "description": "Examples, fixtures, or reference implementations exist for key workflows.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "examples/ or samples/ directory",
+            "Fixture files for core workflows",
+            "Tutorial or walkthrough documentation"
+          ]
+        },
+        {
+          "id": "change.context-packing",
+          "name": "Context packing support",
+          "description": "Repository supports generating bounded context maps (repo tree, module summaries, repomix/llm-tree output) that fit standard agent windows without overflow.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "repomix.config.json or equivalent",
+            "llm-tree, code2prompt, or similar tool config",
+            "Scripts that generate repo context bundles",
+            "Per-module summary files or generated indexes"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "safety",
+      "name": "Safety Rails",
+      "weight": 10,
+      "question": "What stops the agent when it is wrong?",
+      "criteria": [
+        {
+          "id": "safety.hitl-checkpoints",
+          "name": "HITL checkpoints on destructive operations",
+          "description": "Human-in-the-loop checkpoints exist for destructive or high-risk operations: migrations, production writes, external API side effects, irreversible actions.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Confirmation prompts in CLI tooling",
+            "Dry-run flags as defaults",
+            "Documented approval workflows",
+            "Feature flags or kill switches"
+          ]
+        },
+        {
+          "id": "safety.reversible-default",
+          "name": "Reversible by default",
+          "description": "Operations are reversible by default where practical: migrations, deploys, data changes, bulk updates.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Migration rollback scripts",
+            "Blue/green or canary deploy config",
+            "Soft-delete patterns",
+            "Backup/restore procedures"
+          ]
+        },
+        {
+          "id": "safety.no-secrets",
+          "name": "Secrets not in repo",
+          "description": "Secrets are never stored in-repo, and access is scoped through environment or vault controls.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            ".gitignore coverage of .env and credential files",
+            "Secret scanning config (gitleaks, trufflehog)",
+            ".env.example without real values",
+            "Vault, GCP Secret Manager, or equivalent references"
+          ]
+        },
+        {
+          "id": "safety.branch-protection",
+          "name": "Branch protection on main",
+          "description": "Branch protection and required review guard critical branches.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "gh api repos/{owner}/{repo}/branches/main/protection",
+            "Required reviews count",
+            "Required status checks",
+            "Admin enforcement setting"
+          ]
+        },
+        {
+          "id": "safety.agent-boundaries",
+          "name": "Agent boundaries documented",
+          "description": "Agent permissions and operational boundaries are explicitly documented, including what it may and may not touch.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "CLAUDE.md section on agent permissions",
+            ".claude/settings.json or managed settings",
+            "Allowed/denied tool lists",
+            "Documented escalation paths"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "legibility",
+      "name": "Legibility",
+      "weight": 8,
+      "question": "Can an agent read and navigate the codebase without human explanation?",
+      "criteria": [
+        {
+          "id": "legibility.context-window-fit",
+          "name": "Typical change fits one context window",
+          "description": "Source files have low median LOC, reducing context window overflow risk for agent-driven changes.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "Source file line counts",
+            "Median and max LOC statistics"
+          ]
+        },
+        {
+          "id": "legibility.tiered-context",
+          "name": "Tiered context beyond root README",
+          "description": "Agent-specific context tooling exists beyond the root README — context maps, repomix configs, or per-module agent instructions.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            ".claude/context-map.md",
+            "repomix.config.json or .repomix.json",
+            "Per-module .claude/ directories"
+          ]
+        },
+        {
+          "id": "legibility.instruction-consistency",
+          "name": "Agent instructions don't contradict",
+          "description": "Multiple instruction files (CLAUDE.md, .cursorrules, AGENTS.md) are cross-referenced or consolidated. Single unified file scores higher than fragmented.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "CLAUDE.md, AGENTS.md, .cursorrules, .github/copilot-instructions.md",
+            "Cross-reference links between files"
+          ]
+        },
+        {
+          "id": "legibility.convention-enforced",
+          "name": "Conventions enforced not just documented",
+          "description": "Conventions documented in CLAUDE.md are backed by matching lint rules or CI checks.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "CLAUDE.md convention sections",
+            "Lint config files matching documented conventions"
+          ]
+        },
+        {
+          "id": "legibility.decision-coverage",
+          "name": "Non-obvious decisions documented",
+          "description": "ADRs and inline comments cover architectural choices; commit messages explain 'why' not just 'what'.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "ADR directory coverage",
+            "Inline comments on non-obvious logic",
+            "Commit message quality"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "patterns",
+      "name": "Patterns",
+      "weight": 8,
+      "question": "Does the codebase use one way to do each thing?",
+      "criteria": [
+        {
+          "id": "patterns.duplication-scanning",
+          "name": "Duplication scanning configured",
+          "description": "Code duplication detection tools (jscpd, CPD, SonarQube duplication) are configured locally or in CI.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            ".jscpd.json config",
+            "sonar-project.properties duplication settings",
+            "CI workflow steps with jscpd/cpd"
+          ]
+        },
+        {
+          "id": "patterns.single-approach",
+          "name": "Single approach per concern",
+          "description": "Each cross-cutting concern (error handling, logging, HTTP clients, config loading) uses one consistent approach.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Error handling patterns",
+            "Logging library usage",
+            "HTTP client instantiation patterns"
+          ]
+        },
+        {
+          "id": "patterns.no-competing-patterns",
+          "name": "No competing patterns",
+          "description": "The codebase does not contain competing frameworks, libraries, or architectural patterns doing the same job.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Duplicate dependency detection",
+            "Multiple ORMs or HTTP frameworks",
+            "Inconsistent state management"
+          ]
+        },
+        {
+          "id": "patterns.import-depth",
+          "name": "Shallow import depth",
+          "description": "Import chains are shallow, reducing cognitive and context-window overhead.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "Python relative import depth",
+            "Node ../../../ hop counts",
+            "Go package path segment counts"
+          ]
+        },
+        {
+          "id": "patterns.error-consistency",
+          "name": "Consistent error handling",
+          "description": "Error handling follows a single pattern: consistent error types, propagation style, and user-facing messages.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Error class hierarchy",
+            "Try/catch vs Result type patterns",
+            "Error message formatting"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "style",
+      "name": "Style & Validation",
+      "weight": 8,
+      "question": "Is code quality enforced mechanically before review?",
+      "criteria": [
+        {
+          "id": "style.type-checker",
+          "name": "Type checker clean or baselined",
+          "description": "Type checker runs clean or against an enforced baseline.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "tsconfig.json, mypy.ini, pyrightconfig.json",
+            "CI type check step",
+            "Baseline file for incremental adoption"
+          ]
+        },
+        {
+          "id": "style.lint-format",
+          "name": "Linter and formatter in local and CI",
+          "description": "Linter and formatter run consistently locally and in CI.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "ESLint, Ruff, ktlint, Rubocop config",
+            "Prettier, Black, ktfmt config",
+            "CI lint step",
+            "Pre-commit hook coverage"
+          ]
+        },
+        {
+          "id": "style.format-enforced",
+          "name": "Formatting actively enforced",
+          "description": "Formatting is actively enforced via pre-commit hooks and CI, not just configured.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            ".pre-commit-config.yaml with formatter hooks",
+            "CI workflow steps running format-check",
+            "package.json or Makefile format-check targets"
+          ]
+        },
+        {
+          "id": "style.static-analysis",
+          "name": "Static analysis beyond linting",
+          "description": "Static analysis tools beyond basic linting are configured and integrated.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "Semgrep config (.semgrep.yml, .semgrepignore)",
+            "CodeQL workflow or config (.github/codeql/)",
+            "SonarQube/SonarCloud config (sonar-project.properties)",
+            "Complexity analysis tools"
+          ]
+        },
+        {
+          "id": "style.editor-config",
+          "name": "Editor/IDE config shared",
+          "description": "Editor and IDE configuration is shared in the repository for consistent developer experience.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            ".editorconfig file",
+            ".vscode/settings.json or .vscode/extensions.json",
+            "IDE-specific committed configs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "structure",
+      "name": "Structure & Modularity",
+      "weight": 6,
+      "question": "Can the agent change one thing without breaking ten?",
+      "criteria": [
+        {
+          "id": "structure.module-boundaries",
+          "name": "Clear module boundaries and sane dependencies",
+          "description": "Module boundaries are clear and dependency direction is sane.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Directory structure",
+            "Import graphs",
+            "Layered architecture indicators"
+          ]
+        },
+        {
+          "id": "structure.no-circular-deps",
+          "name": "No circular dependencies",
+          "description": "Circular or backdoor dependencies are prevented or rare.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "madge --circular (JS/TS)",
+            "pydeps or pylint circular import detection (Python)",
+            "Gradle dependency reports (Kotlin)"
+          ]
+        },
+        {
+          "id": "structure.scoped-files",
+          "name": "Files scoped for local reasoning",
+          "description": "Files and functions are scoped so changes can be understood without opening half the repo.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Average and max file sizes",
+            "Function length distribution",
+            "Absence of 2000+ line god files"
+          ]
+        },
+        {
+          "id": "structure.searchable-naming",
+          "name": "Consistent searchable naming",
+          "description": "Naming conventions are consistent and searchable.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Naming patterns across modules",
+            "Convention documentation",
+            "Grep-ability of key concepts"
+          ]
+        },
+        {
+          "id": "structure.dead-code-removed",
+          "name": "Dead code removed",
+          "description": "Dead code is removed rather than left behind as misleading clutter.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "Commented-out code blocks",
+            "Unused exports (ts-prune, vulture)",
+            "Orphaned files"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tooling",
+      "name": "Tooling & Reproducibility",
+      "weight": 6,
+      "question": "Are the local feedback loops fast, reproducible, and unambiguous?",
+      "criteria": [
+        {
+          "id": "tooling.hermetic-build",
+          "name": "Reproducible hermetic build",
+          "description": "Build/dev environment is reproducible and reasonably hermetic.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "Lock files (package-lock.json, poetry.lock, Gemfile.lock)",
+            "Dockerfile or devcontainer.json",
+            "Nix, asdf, or mise config",
+            ".tool-versions"
+          ]
+        },
+        {
+          "id": "tooling.bootstrap",
+          "name": "One-command local bootstrap",
+          "description": "One-command local bootstrap exists (bin/setup, make dev, etc.).",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "bin/setup, scripts/bootstrap",
+            "Makefile with dev or setup target",
+            "package.json scripts.setup",
+            "Documented in README"
+          ]
+        },
+        {
+          "id": "tooling.pinned-deps",
+          "name": "Pinned dependencies with upgrade path",
+          "description": "Dependency versions are pinned, and upgrade paths or procedures are documented.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "Lock files committed",
+            "Renovate or Dependabot config",
+            "Documented upgrade procedures"
+          ]
+        },
+        {
+          "id": "tooling.devcontainer",
+          "name": "Dev container or codespace support",
+          "description": "Development container or cloud codespace configuration exists for reproducible environments.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            ".devcontainer/devcontainer.json",
+            ".devcontainer/Dockerfile",
+            ".gitpod.yml or Gitpod config",
+            "GitHub Codespace references in .github/"
+          ]
+        },
+        {
+          "id": "tooling.build-cache",
+          "name": "Build cache or incremental feedback",
+          "description": "Build caching or incremental build tools are configured for fast feedback loops.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "turbo.json (Turborepo) or nx.json (Nx)",
+            "Gradle build cache config",
+            "CI cache steps (actions/cache with build patterns)",
+            "ccache or equivalent config"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "supply-chain",
+      "name": "Supply Chain",
+      "weight": 6,
+      "question": "Are dependencies managed, audited, and current?",
+      "criteria": [
+        {
+          "id": "supply-chain.no-vulnerabilities",
+          "name": "Vulnerability scanning configured",
+          "description": "Dependency vulnerability scanning is configured via audit tools or CI integration.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            ".nsprc, .audit-ci.json, .pip-audit.toml",
+            ".snyk, sonatype-lift.yml, cargo-audit.toml",
+            "CI audit steps"
+          ]
+        },
+        {
+          "id": "supply-chain.lockfile-verified-in-ci",
+          "name": "Lockfile verified in CI",
+          "description": "CI installs from lockfile with frozen/locked flags to prevent drift.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "--frozen-lockfile in CI",
+            "npm ci usage",
+            "--locked or --require-hashes flags"
+          ]
+        },
+        {
+          "id": "supply-chain.upgrades-merged",
+          "name": "Automated dependency upgrades",
+          "description": "Renovate, Dependabot, or equivalent configured with auto-merge for safe updates.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "renovate.json or .github/dependabot.yml",
+            "Auto-merge configuration",
+            "CI testing of update PRs"
+          ]
+        },
+        {
+          "id": "supply-chain.freshness",
+          "name": "Dependencies are fresh",
+          "description": "Lockfiles are recently updated, indicating active dependency maintenance.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "Lockfile last-modified date via git log",
+            "Age in days of most recent lockfile update"
+          ]
+        },
+        {
+          "id": "supply-chain.minimal-surface",
+          "name": "Minimal dependency surface",
+          "description": "Dependencies are justified — no redundant packages, abandoned libraries, or excessive dep count relative to project complexity.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Package manifest dependency counts",
+            "Abandoned package detection (no updates 2+ years)",
+            "Redundant dependency pairs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "visibility",
+      "name": "Execution Visibility",
+      "weight": 5,
+      "question": "Can the agent see what it did and what happened afterward?",
+      "criteria": [
+        {
+          "id": "visibility.structured-logging",
+          "name": "Structured logging with consistent fields",
+          "description": "Structured logging uses consistent fields and meaningful event names.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Logging library config (structlog, pino, logback)",
+            "Log format consistency",
+            "Field naming conventions"
+          ]
+        },
+        {
+          "id": "visibility.telemetry",
+          "name": "Agent-touchable paths expose telemetry",
+          "description": "Agent-touchable code paths expose useful logs, traces, metrics, or artifacts.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "OpenTelemetry integration",
+            "Prometheus metrics",
+            "Tracing spans at key boundaries"
+          ]
+        },
+        {
+          "id": "visibility.error-routing",
+          "name": "Errors route to single searchable place",
+          "description": "Errors route to a single searchable place.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "Sentry, Rollbar, or equivalent config",
+            "Centralized error handler",
+            "Error dashboard references in docs"
+          ]
+        },
+        {
+          "id": "visibility.local-diagnostics",
+          "name": "Local dev preserves diagnostic output",
+          "description": "Local development preserves enough output to diagnose failures without guessing.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Verbose mode defaults in dev",
+            "Log file locations documented",
+            "Debug configuration"
+          ]
+        },
+        {
+          "id": "visibility.test-artifacts",
+          "name": "Test failures preserve logs and artifacts",
+          "description": "Test and run failures preserve logs, stack traces, and artifacts needed for root-cause analysis.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "CI artifact upload steps",
+            "Test output configuration",
+            "Failure screenshot/log capture"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "workflow",
+      "name": "Workflow Realism",
+      "weight": 5,
+      "question": "Can the agent safely rehearse real work in conditions that resemble production behavior?",
+      "criteria": [
+        {
+          "id": "workflow.fixtures",
+          "name": "Representative fixtures for core workflows",
+          "description": "Representative fixtures, sample data, or synthetic records exist for core workflows.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "fixtures/, seeds/, or test-data/ directories",
+            "Sample inputs for core business flows",
+            "Realism of sample data"
+          ]
+        },
+        {
+          "id": "workflow.sandbox-parity",
+          "name": "Sandbox mirrors production",
+          "description": "Sandbox or dev flows mirror real operational paths closely enough to validate business behavior.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "Local dev environment setup",
+            "Docker Compose with realistic services",
+            "Seeded dev database"
+          ]
+        },
+        {
+          "id": "workflow.stubable-integrations",
+          "name": "External integrations stubable",
+          "description": "External integrations can be simulated or stubbed meaningfully.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "VCR cassettes, WireMock, MSW configuration",
+            "Mock server definitions",
+            "Fake/stub implementations for external APIs"
+          ]
+        },
+        {
+          "id": "workflow.golden-paths",
+          "name": "Golden-path scenarios",
+          "description": "Golden-path scenarios exist for critical user or business flows.",
+          "checker_type": "judgment",
+          "evidence_hints": [
+            "E2E test suites",
+            "Scenario documentation",
+            "Named workflow tests"
+          ]
+        },
+        {
+          "id": "workflow.regression-artifacts",
+          "name": "Regression artifacts for important outputs",
+          "description": "Regression artifacts or before/after comparisons exist for important outputs.",
+          "checker_type": "mechanical",
+          "evidence_hints": [
+            "Snapshot tests",
+            "Golden file tests",
+            "Visual regression setup"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -6,7 +6,7 @@ This is the `axr` Claude Code plugin. It scores repositories against the Agent e
 
 - `.claude-plugin/plugin.json` — plugin manifest
 - `commands/*.md` — slash command definitions (`/axr`, `/axr-check`, `/axr-diff`, `/axr-fix`)
-- `rubric/rubric.v2.json` — versioned rubric, source of truth for scoring (v3.0: 9 dimensions, 45 criteria)
+- `rubric/rubric.v4.json` — versioned rubric, source of truth for scoring (v4.0: 12 dimensions, 60 criteria)
 - `rubric/rubric.v1.json` — preserved for history comparison
 - `scripts/check-*.sh` — per-dimension deterministic checkers
 - `scripts/lib/` — shared bash helpers (common.sh, markdown-helpers.sh, workflow-helpers.sh, tooling-helpers.sh, monorepo-helpers.sh)
@@ -24,7 +24,7 @@ Monorepo detection (`scripts/lib/monorepo-helpers.sh`) identifies workspace type
 
 The rubric is the source of truth. Never edit weights, criteria, or anchor text in place — bump `rubric_version` instead. Trend data depends on version stability.
 
-Current: v3.0 (9 dimensions, 45 criteria). Style & Validation split from Tooling in Phase 2A.
+Current: v4.0 (12 dimensions, 60 criteria). Added Legibility, Patterns, Supply Chain in v4. Rebalanced weights toward operational readiness.
 
 ## Testing
 
