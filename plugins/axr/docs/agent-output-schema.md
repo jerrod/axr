@@ -1,5 +1,7 @@
 # Agent Output Schema (axr judgment subagents)
 
+**Schema version:** 1.0
+
 Canonical output contract for all 5 `axr` judgment subagents. Every agent emits
 a **JSON array of criterion objects** to stdout. The orchestrator writes each
 array to `.axr/tmp/agent-<name>.json`, then `aggregate.sh --merge-agents`
@@ -18,8 +20,8 @@ by parsing the `id` prefix.
 | `id` | string | Must match a rubric criterion id exactly (e.g., `docs_context.3`). |
 | `name` | string | Copy verbatim from the rubric criterion name. |
 | `score` | integer | 0, 1, 2, or 3. **Never 4** — score 4 requires human confirmation per `anchors_literal: true`. |
-| `evidence` | array of strings | Concrete file paths, line numbers, greppable patterns. **Non-empty for score ≥ 2.** For score 0/1, may be empty. |
-| `notes` | string | Short qualitative justification (1–2 sentences). |
+| `evidence` | array of strings | Concrete file paths, line numbers, greppable patterns. **Non-empty for score ≥ 2.** For score 0/1, may be empty. Max 20 elements, each ≤500 chars. Enforced by `merge-agents.sh`. |
+| `notes` | string | Short qualitative justification (1–2 sentences). ≤500 chars. Enforced by `merge-agents.sh`. |
 | `reviewer` | string | Always the literal string `"agent-draft"`. |
 
 ## Scoring discipline
