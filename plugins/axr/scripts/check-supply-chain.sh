@@ -75,8 +75,9 @@ score_supply_chain_2() {
     else
         # Check if lockfile is committed (git tracked)
         local committed=0
-        local f
-        for f in $(list_lockfiles); do
+        local f _lf=()
+        while IFS= read -r f; do _lf+=("$f"); done < <(list_lockfiles)
+        for f in "${_lf[@]}"; do
             if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
                 committed=1
                 break
