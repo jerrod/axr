@@ -312,10 +312,9 @@ Fall back to language-agnostic checks on unsupported stacks and note the limitat
 
 ### Phase 5 — Auto-remediation
 
-1. `scripts/fix-*.sh` — per-criterion remediation scripts for 8 supported criteria
-2. `scripts/lib/fix-helpers.sh` — shared helpers for fix scripts (file generation, detection, delta reporting)
-3. `commands/axr-fix.md` — `/axr-fix <target>` command supporting blockers, criterion id, or dimension id targeting
-4. Re-runs relevant dimension checker after each fix and reports score delta
+1. `commands/axr-fix.md` — `/axr-fix <target>` command supporting blockers, criterion id, or dimension id targeting
+2. `docs/remediation-strategies.md` — LLM-driven per-criterion strategy catalog (8 criteria). The agent reads the strategy and applies fixes using Write/Edit tools, adapting to the target repo's structure. No `fix-*.sh` scripts — remediations are non-deterministic LLM actions, not scripted templates.
+3. Re-runs relevant dimension checker after each fix via `aggregate.sh --patch-dimension` and reports score delta via `diff-scores.sh`
 
 ### Phases 6-7 (deferred)
 
