@@ -15,6 +15,9 @@ source "$SCRIPT_DIR/lib/common.sh"
 
 die() { printf 'axr-ci.sh: %s\n' "$*" >&2; exit 1; }
 
+_CLEANUP_DIRS=()
+trap 'rm -rf "${_CLEANUP_DIRS[@]}"' EXIT
+
 PACKAGE_SCOPED_DIMS=(tests_ci docs_context style_validation tooling)
 GLOBAL_DIMS=(safety_rails structure change_surface execution_visibility workflow_realism)
 
@@ -57,14 +60,9 @@ run_checker() {
 }
 
 run_all() {
-    local tmp_dir="$1"
-    local mono_type packages=()
-
-    mono_type="$(axr_detect_monorepo)"
-    if [ -n "$mono_type" ]; then
-        mapfile -t packages < <(axr_list_packages)
-        echo "Monorepo detected ($mono_type): ${#packages[@]} packages" >&2
-    fi
+    local tmp_dir="$1" mono_type="$2"
+    shift 2
+    local packages=("$@")
 
     # Global dims: always at repo root
     for dim in "${GLOBAL_DIMS[@]}"; do
@@ -92,9 +90,7 @@ run_all() {
 }
 
 merge_package_scores() {
-    local tmp_dir="$1"
-    local mono_type
-    mono_type="$(axr_detect_monorepo)"
+    local tmp_dir="$1" mono_type="$2"
     [ -n "$mono_type" ] || return 0
 
     for dim in "${PACKAGE_SCOPED_DIMS[@]}"; do
@@ -113,6 +109,7 @@ merge_package_scores() {
 
         # Average non-null scores; deferred criteria pass through unaveraged
         jq -n \
+            --arg dim_id "$dim" \
             --argjson env "$first_envelope" \
             --slurpfile pkgs <(cat "${pkg_jsons[@]}" | jq -c '.criteria[]') '
             ($pkgs | group_by(.id) | map(
@@ -133,7 +130,7 @@ merge_package_scores() {
                 end
             )) as $merged |
             {
-                dimension_id: "'"$dim"'",
+                dimension_id: $dim_id,
                 stack: $env.stack,
                 reviewer: $env.reviewer,
                 criteria: $merged
@@ -147,13 +144,19 @@ main() {
     parse_args "$@"
     load_config
 
-    local tmp_dir
+    local tmp_dir mono_type packages=()
     tmp_dir="$(mktemp -d)"
     _CLEANUP_DIRS+=("$tmp_dir")
     mkdir -p .axr/history
 
-    run_all "$tmp_dir"
-    merge_package_scores "$tmp_dir"
+    mono_type="$(axr_detect_monorepo)"
+    if [ -n "$mono_type" ]; then
+        mapfile -t packages < <(axr_list_packages)
+        echo "Monorepo detected ($mono_type): ${#packages[@]} packages" >&2
+    fi
+
+    run_all "$tmp_dir" "$mono_type" "${packages[@]}"
+    merge_package_scores "$tmp_dir" "$mono_type"
 
     # Validate all dimension JSONs before aggregation
     for f in "$tmp_dir"/*.json; do
@@ -185,6 +188,4 @@ main() {
     exit "$exit_code"
 }
 
-_CLEANUP_DIRS=()
-trap 'rm -rf "${_CLEANUP_DIRS[@]}"' EXIT
 main "$@"

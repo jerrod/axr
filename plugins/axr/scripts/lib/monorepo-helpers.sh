@@ -57,14 +57,21 @@ _axr_list_workspaces() {
 }
 
 _axr_expand_js_globs() {
-    local root="$1" globs="$2" glob d rel
+    local root="$1" globs="$2" glob resolved
     while IFS= read -r glob; do
         [ -z "$glob" ] && continue
-        for d in $root/$glob; do
+        # Reject path traversal and absolute paths
+        [[ "$glob" == *..* || "$glob" == /* ]] && continue
+        local matches=()
+        # shellcheck disable=SC2206
+        matches=( $root/$glob )
+        local d
+        for d in "${matches[@]}"; do
             [ -d "$d" ] || continue
             [ -f "$d/package.json" ] || continue
-            rel="${d#"$root"/}"
-            printf '%s\n' "$rel"
+            resolved="$(cd "$d" && pwd)" || continue
+            [[ "$resolved/" == "$root/"* ]] || continue
+            printf '%s\n' "${resolved#"$root"/}"
         done
     done <<< "$globs"
 }
@@ -88,13 +95,19 @@ _axr_list_cargo() {
             [ -n "$val" ] && globs="${globs}${val}"$'\n'
         fi
     done < "$root/Cargo.toml"
-    local glob d rel
+    local glob resolved
     while IFS= read -r glob; do
         [ -z "$glob" ] && continue
-        for d in $root/$glob; do
+        [[ "$glob" == *..* || "$glob" == /* ]] && continue
+        local matches=()
+        # shellcheck disable=SC2206
+        matches=( $root/$glob )
+        local d
+        for d in "${matches[@]}"; do
             [ -d "$d" ] || continue
-            rel="${d#"$root"/}"
-            printf '%s\n' "$rel"
+            resolved="$(cd "$d" && pwd)" || continue
+            [[ "$resolved/" == "$root/"* ]] || continue
+            printf '%s\n' "${resolved#"$root"/}"
         done
     done <<< "$globs"
 }
@@ -106,12 +119,24 @@ axr_package_scope() {
     while [ "$#" -gt 0 ]; do
         if [ "$1" = "--package" ] && [ "$#" -ge 2 ]; then
             local pkg_path="$2"
+            # Reject absolute paths and traversal
+            if [[ "$pkg_path" == /* || "$pkg_path" == *..* ]]; then
+                printf 'axr_package_scope: unsafe path: %s\n' "$pkg_path" >&2
+                return 1
+            fi
             if [ ! -d "$root/$pkg_path" ]; then
                 printf 'axr_package_scope: %s not found under %s\n' \
                     "$pkg_path" "$root" >&2
                 return 1
             fi
             cd "$root/$pkg_path" || return 1
+            # Containment check: resolved path must be under repo root
+            local resolved
+            resolved="$(pwd)"
+            if [[ "$resolved/" != "$root/"* ]]; then
+                printf 'axr_package_scope: path escapes repo root: %s\n' "$pkg_path" >&2
+                return 1
+            fi
             _AXR_PACKAGE_PATH="$pkg_path"
             return 0
         fi
