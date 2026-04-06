@@ -43,8 +43,8 @@ Weight rationale: Tests/docs still #1/#2 (28 combined = 28% of total). New dimen
 
 | ID | Name | Type | What it measures |
 |---|---|---|---|
-| `legibility.scannable-files` | Files sized for agent context windows | mechanical | Median file LOC <200, no god-files >500 |
-| `legibility.tiered-context` | Tiered context strategy | mechanical | Root CLAUDE.md + subsystem READMEs + context-map/repomix config |
+| `legibility.context-window-fit` | Typical change fits one context window | mechanical | Import chain depth + file count for a typical change. Distinct from `structure.scoped-files` which measures function length and coupling — this measures whether an agent can load the FULL change context (files + deps) without overflow. |
+| `legibility.tiered-context` | Tiered context beyond root README | mechanical | Context-map, repomix config, or per-module agent instructions. Distinct from `docs.agent-context` (checks root CLAUDE.md existence) and `docs.subsystem-readmes` (checks README coverage) — this checks for AGENT-SPECIFIC context tooling that generates or organizes context for LLM consumption. |
 | `legibility.instruction-consistency` | Agent instructions don't contradict | mechanical | Multiple instruction files (CLAUDE.md, .cursorrules, AGENTS.md) cross-referenced. Single unified file scores HIGHER than fragmented files. |
 | `legibility.convention-enforced` | Conventions enforced not just documented | mechanical | CLAUDE.md conventions backed by lint rules or CI checks |
 | `legibility.decision-coverage` | Non-obvious decisions documented | judgment | ADRs/comments cover architectural choices, commit messages explain "why" |
@@ -63,7 +63,7 @@ Weight rationale: Tests/docs still #1/#2 (28 combined = 28% of total). New dimen
 |---|---|---|---|
 | `patterns.duplication-scanning` | Duplication detection configured | mechanical | jscpd, PMD CPD, sonar duplication config present; in CI = higher score |
 | `patterns.single-approach` | One pattern per concern | judgment | Consistent error handling, auth, API clients — not competing patterns |
-| `patterns.naming-greppable` | Architecture follows naming | judgment | Concept names map to file paths, grep for X finds the right file |
+| `patterns.no-competing-patterns` | No parallel implementations of same concern | judgment | No 3 different auth patterns, 2 error formats, etc. Distinct from `structure.searchable-naming` which checks naming convention consistency — this checks whether the same CONCERN (auth, errors, state) has ONE implementation, not whether names are consistent. |
 | `patterns.import-depth` | Shallow import graph | mechanical | Average direct import path depth <3 hops |
 | `patterns.error-consistency` | Error handling follows one pattern | judgment | Consistent error types, reporting, recovery across modules |
 
@@ -81,8 +81,8 @@ Weight rationale: Tests/docs still #1/#2 (28 combined = 28% of total). New dimen
 | ID | Name | Type | What it measures |
 |---|---|---|---|
 | `supply-chain.no-vulnerabilities` | No known dependency vulnerabilities | mechanical | Audit config (npm audit, pip-audit, cargo-audit, Snyk) + CI integration |
-| `supply-chain.lockfile-integrity` | Lockfiles committed and CI-verified | mechanical | Lockfile present, committed, CI checks --frozen-lockfile/npm ci |
-| `supply-chain.automated-upgrades` | Automated upgrade pipeline active | mechanical | Renovate/Dependabot config + CI references |
+| `supply-chain.lockfile-verified-in-ci` | CI rejects lockfile drift | mechanical | CI runs with --frozen-lockfile, npm ci, or --locked. Distinct from `tooling.pinned-deps` which checks lockfile PRESENCE + version pinning — this checks CI ENFORCEMENT of lockfile integrity. |
+| `supply-chain.upgrades-merged` | Automated upgrades actually land | mechanical | Renovate/Dependabot configured with auto-merge policy for patches. Distinct from `tooling.pinned-deps` which checks for upgrade config existence — this checks that upgrades are ACTIVE (PRs merging, not just opening). |
 | `supply-chain.freshness` | Dependencies reasonably current | mechanical | Lockfile age <90 days (separate from upgrade tooling — no double-counting) |
 | `supply-chain.minimal-surface` | Lean dependency tree | judgment | No bloat, abandoned packages, or redundant deps |
 
@@ -96,14 +96,18 @@ Weight rationale: Tests/docs still #1/#2 (28 combined = 28% of total). New dimen
 
 ### Comprehension Debt Index
 
-A composite metric derived from signals across multiple dimensions:
-- `legibility.scannable-files` score (file size distribution)
-- `legibility.decision-coverage` score (documented rationale)
-- `docs.decision-log` score (ADR coverage)
-- `patterns.single-approach` score (pattern consistency)
-- Code-to-documentation ratio (new mechanical signal in the report)
+A composite metric derived from 4 existing criterion scores (no new signal needed):
 
-Formula: weighted harmonic mean of the contributing criteria scores. Harmonic mean penalizes weak dimensions aggressively (per Jentic JAIRF's approach) — a repo with great docs but terrible file sizes still gets a low comprehension debt index.
+| Criterion | Weight | Why |
+|---|---|---|
+| `legibility.context-window-fit` | 0.3 | Can an agent hold the change context? |
+| `legibility.decision-coverage` | 0.3 | Are decisions documented with rationale? |
+| `docs.decision-log` | 0.2 | Do ADRs exist? |
+| `patterns.single-approach` | 0.2 | Is there one pattern per concern? |
+
+Formula: weighted harmonic mean = `1 / (w1/s1 + w2/s2 + w3/s3 + w4/s4)` where `s` is the criterion score (0-4, floored to 0.5 if 0 to avoid division by zero) and `w` sums to 1.0. Harmonic mean penalizes weak criteria aggressively — a repo with great docs but terrible file sizes still gets a low index.
+
+Computed by `render-report.sh` from the scores already in `.axr/latest.json`. No new checker or criterion needed.
 
 Displayed in the report as a secondary metric: `Comprehension Debt: <index>/10 (<label>)`. Labels: 8-10 "Agent-Clear", 5-7 "Agent-Readable", 2-4 "Agent-Murky", 0-1 "Agent-Opaque".
 
@@ -128,6 +132,40 @@ Displayed in the summary after the score: `At this score, research suggests: <im
 - **Dimension count**: bin/validate hardcodes the count — update from 9 to 12.
 - **Rubric versioning**: Create `rubric.v4.json`. Preserve v1, v2, v3 for history.
 - **Score drift**: v3→v4 reweight means scores change without code changes. The report MUST include a version note: "Rubric v4 rebalances toward operational readiness. Compare with /axr-diff."
+
+## Agent Criteria Assignments (v4)
+
+| Agent | Criteria | Count |
+|---|---|---|
+| docs-reviewer | docs.subsystem-readmes, docs.glossary | 2 |
+| architecture-reviewer | change.locatable-logic, change.explicit-boundaries, change.examples, structure.module-boundaries, structure.scoped-files, structure.searchable-naming | 6 |
+| safety-reviewer | safety.hitl-checkpoints, safety.reversible-default | 2 |
+| observability-reviewer | visibility.structured-logging, visibility.telemetry, visibility.local-diagnostics | 3 |
+| workflow-reviewer | tests.boundary-coverage, workflow.fixtures, workflow.sandbox-parity, workflow.golden-paths | 4 |
+| **legibility-reviewer** | legibility.decision-coverage | **1** (NEW) |
+| **patterns-reviewer** | patterns.single-approach, patterns.no-competing-patterns, patterns.error-consistency | **3** (NEW) |
+| **supply-chain-reviewer** | supply-chain.minimal-surface | **1** (NEW) |
+
+Total: 8 agents, 22 judgment criteria.
+
+## Report Section Placement
+
+The two new cross-dimensional features appear in `.axr/latest.md` AFTER the dimension table, BEFORE the blocker list:
+
+```
+## Dimensions
+<table>
+
+## Comprehension Debt
+Comprehension Debt: <index>/10 · <label>
+<breakdown of contributing criteria scores>
+
+## Agent ROI
+At this score (<band>), research suggests: <impact statement>
+
+## Top 3 Blockers
+...
+```
 
 ## Files to Create/Modify
 
