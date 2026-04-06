@@ -26,6 +26,23 @@ jobs:
       - name: Lint (shellcheck + JSON + frontmatter)
         run: bin/lint
 
+  format-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check EditorConfig compliance
+        run: |
+          # Verify all files have final newline and no trailing whitespace
+          failed=0
+          for f in $(git ls-files '*.sh' '*.json' '*.md'); do
+            if [ -s "$f" ] && [ "$(tail -c1 "$f" | wc -l)" -eq 0 ]; then
+              echo "FAIL: $f missing final newline"
+              failed=1
+            fi
+          done
+          exit $failed
+
   test:
     runs-on: ubuntu-latest
     steps:

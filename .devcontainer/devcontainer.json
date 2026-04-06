@@ -1,0 +1,19 @@
+{
+  "name": "axr",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {},
+    "ghcr.io/devcontainers-contrib/features/jq:1": {},
+    "ghcr.io/lukewiwa/features/shellcheck:0": {}
+  },
+  "postCreateCommand": "bin/setup",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "timonwong.shellcheck",
+        "foxundermoon.shell-format",
+        "EditorConfig.EditorConfig"
+      ]
+    }
+  }
+}
