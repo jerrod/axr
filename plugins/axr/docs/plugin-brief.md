@@ -107,6 +107,31 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 - `/axr` — Run full assessment on current repo. Default command.
 - `/axr-check <dimension>` — Run only one dimension. Used for iteration and debugging.
 - `/axr-diff` — Compare current score to `.axr/latest.json` and surface what changed.
+- `/axr-fix` — Auto-remediation for low-scoring criteria.
+
+### `/axr-fix`
+
+Auto-remediation command. Reads `.axr/latest.json` and applies automated fixes to improve low-scoring criteria.
+
+**Usage:**
+- `/axr-fix blockers` — fix top 3 blockers
+- `/axr-fix docs_context.1` — fix a specific criterion
+- `/axr-fix safety_rails` — fix all low-scoring criteria in a dimension
+
+**Supported remediations (8 criteria):**
+
+| Criterion | What it does |
+|-----------|-------------|
+| docs_context.1 | Generate/update CLAUDE.md with architecture, conventions, sharp edges |
+| docs_context.2 | Add quickstart section to README with ≤5 setup commands |
+| docs_context.4 | Scaffold `docs/adr/` with template and initial ADRs |
+| safety_rails.3 | Add missing secret patterns to .gitignore, create .env.example |
+| safety_rails.5 | Add agent permissions/boundaries section to CLAUDE.md |
+| style_validation.5 | Generate .editorconfig from detected project conventions |
+| tooling.2 | Create bin/setup bootstrap script from detected stack |
+| tooling.4 | Generate .devcontainer/devcontainer.json from detected stack |
+
+After each fix, re-runs the relevant dimension checker and reports the score delta.
 
 ## Output artifacts
 
@@ -246,7 +271,6 @@ Fall back to language-agnostic checks on unsupported stacks and note the limitat
 - No shared `axr-core` library (inline everything)
 - No dashboard or cross-repo aggregation
 - No CI integration
-- No automated remediation
 - No policy enforcement
 
 ## Build phases
@@ -286,10 +310,16 @@ Fall back to language-agnostic checks on unsupported stacks and note the limitat
 4. `aggregate.sh --patch-dimension` — delegates to patch-dimension.sh for incremental single-dimension updates
 5. `commands/axr-check.md` — `/axr-check <dim>` now patches latest.json after running the single checker, enabling incremental scoring without re-running all 9 checkers + 5 agents
 
-### Phases 5-6 (deferred)
+### Phase 5 — Auto-remediation
 
-- Phase 5: Calibration pilot on two reference repos
-- Phase 6: Distribution via the jerrod/axr marketplace
+1. `commands/axr-fix.md` — `/axr-fix <target>` command supporting blockers, criterion id, or dimension id targeting
+2. `docs/remediation-strategies.md` — LLM-driven per-criterion strategy catalog (8 criteria). The agent reads the strategy and applies fixes using Write/Edit tools, adapting to the target repo's structure. No `fix-*.sh` scripts — remediations are non-deterministic LLM actions, not scripted templates.
+3. Re-runs relevant dimension checker after each fix via `aggregate.sh --patch-dimension` and reports score delta via `diff-scores.sh`
+
+### Phases 6-7 (deferred)
+
+- Phase 6: Calibration pilot on two reference repos
+- Phase 7: Distribution via the jerrod/axr marketplace
 
 ## Success criteria for v1
 

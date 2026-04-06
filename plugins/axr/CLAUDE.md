@@ -5,7 +5,7 @@ This is the `axr` Claude Code plugin. It scores repositories against the Agent e
 ## Contents
 
 - `.claude-plugin/plugin.json` — plugin manifest
-- `commands/*.md` — slash command definitions (`/axr`, `/axr-check`, `/axr-diff`)
+- `commands/*.md` — slash command definitions (`/axr`, `/axr-check`, `/axr-diff`, `/axr-fix`)
 - `rubric/rubric.v2.json` — versioned rubric, source of truth for scoring (v2.0: 9 dimensions, 45 criteria)
 - `rubric/rubric.v1.json` — preserved for history comparison
 - `scripts/check-*.sh` — per-dimension deterministic checkers
