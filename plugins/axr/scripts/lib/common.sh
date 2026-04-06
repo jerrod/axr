@@ -33,9 +33,9 @@ _AXR_STACK_JSON="[]"
 _AXR_CRITERIA_JSON="[]"
 
 # Plugin root = scripts/lib/../../ = two levels up from this file. Used to
-# locate rubric/rubric.v1.json regardless of target repo CWD.
+# locate rubric/rubric.v2.json regardless of target repo CWD.
 _AXR_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-_AXR_RUBRIC_PATH="$_AXR_PLUGIN_ROOT/rubric/rubric.v1.json"
+_AXR_RUBRIC_PATH="$_AXR_PLUGIN_ROOT/rubric/rubric.v2.json"
 _AXR_RUBRIC_NAMES_LOADED=0
 declare -gA _AXR_CRITERION_NAME_BY_ID
 

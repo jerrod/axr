@@ -1,7 +1,7 @@
 {
   "name": "axr",
   "version": "0.1.0",
-  "description": "Agent eXecution Readiness scoring. Grades a repository against a 100-point rubric across 8 dimensions with deterministic bash checkers and judgment subagents.",
+  "description": "Agent eXecution Readiness scoring. Grades a repository against a 100-point rubric across 9 dimensions with deterministic bash checkers and judgment subagents.",
   "author": {
     "name": "jerrod"
   },

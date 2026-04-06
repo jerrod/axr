@@ -1,5 +1,5 @@
 ---
-description: Score the current repository against the AXR rubric (all 8 dimensions, including judgment subagents).
+description: Score the current repository against the AXR rubric (all 9 dimensions, including judgment subagents).
 allowed-tools: Bash, Read, Task
 ---
 
@@ -7,7 +7,7 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
 
 ## Steps
 
-1. **Verify prerequisites.** Confirm `${CLAUDE_PLUGIN_ROOT}` is set and `${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v1.json` exists. If missing, abort with a clear error.
+1. **Verify prerequisites.** Confirm `${CLAUDE_PLUGIN_ROOT}` is set and `${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v2.json` exists. If missing, abort with a clear error.
 
 2. **Detect stack.** Run:
    ```bash
@@ -17,7 +17,7 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
 
 3. **Prepare output dirs.** `mkdir -p .axr/tmp .axr/history`.
 
-4. **Run all 8 dimension checkers in parallel.** Each writes its JSON output to `.axr/tmp/<dimension_id>.json` (stdout only) and stderr to a separate file so checker warnings do not corrupt the JSON:
+4. **Run all dimension checkers in parallel.** Each writes its JSON output to `.axr/tmp/<dimension_id>.json` (stdout only) and stderr to a separate file so checker warnings do not corrupt the JSON:
 
    ```bash
    for checker in "${CLAUDE_PLUGIN_ROOT}"/scripts/check-*.sh; do
@@ -74,8 +74,10 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
    AXR Score: <total_score>/100 · <band_label>
    Rubric: v<rubric_version> · Scored: <scored_at>
 
-   <N> of 17 judgment criteria scored by agents (draft, needs human confirmation)
+   <N> of <J> judgment criteria scored by agents (draft, needs human confirmation)
    <M> judgment criteria still defaulted to 1 (agent did not return output)
+
+   To compute J (total judgment criteria): `jq '[.dimensions[].criteria[] | select(.checker_type=="judgment")] | length' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v2.json"`
 
    Top 3 blockers:
    1. <blocker 1>
