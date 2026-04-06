@@ -41,19 +41,19 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
    Dispatch these 5 Task calls **simultaneously** (do not wait for one before starting the next):
 
    - **docs-reviewer** -> `.axr/tmp/agent-docs.json`
-     Prompt: "Score docs_context.3 and docs_context.5 for this repository. Output ONLY a JSON array of criterion objects per SCHEMA.md. No markdown wrapping."
+     Prompt: "Score docs_context.3 and docs_context.5 for this repository. Output ONLY a JSON array of criterion objects per docs/agent-output-schema.md. No markdown wrapping."
 
    - **architecture-reviewer** -> `.axr/tmp/agent-architecture.json`
-     Prompt: "Score change_surface.1, change_surface.2, change_surface.4, structure.1, structure.3, structure.4 for this repository. Output ONLY a JSON array of criterion objects per SCHEMA.md. No markdown wrapping."
+     Prompt: "Score change_surface.1, change_surface.2, change_surface.4, structure.1, structure.3, structure.4 for this repository. Output ONLY a JSON array of criterion objects per docs/agent-output-schema.md. No markdown wrapping."
 
    - **safety-reviewer** -> `.axr/tmp/agent-safety.json`
-     Prompt: "Score safety_rails.1 and safety_rails.2 for this repository. Output ONLY a JSON array of criterion objects per SCHEMA.md. No markdown wrapping."
+     Prompt: "Score safety_rails.1 and safety_rails.2 for this repository. Output ONLY a JSON array of criterion objects per docs/agent-output-schema.md. No markdown wrapping."
 
    - **observability-reviewer** -> `.axr/tmp/agent-observability.json`
-     Prompt: "Score execution_visibility.1, execution_visibility.2, execution_visibility.4 for this repository. Output ONLY a JSON array of criterion objects per SCHEMA.md. No markdown wrapping."
+     Prompt: "Score execution_visibility.1, execution_visibility.2, execution_visibility.4 for this repository. Output ONLY a JSON array of criterion objects per docs/agent-output-schema.md. No markdown wrapping."
 
    - **workflow-reviewer** -> `.axr/tmp/agent-workflow.json`
-     Prompt: "Score tests_ci.2, workflow_realism.1, workflow_realism.2, workflow_realism.4 for this repository. Output ONLY a JSON array of criterion objects per SCHEMA.md. No markdown wrapping."
+     Prompt: "Score tests_ci.2, workflow_realism.1, workflow_realism.2, workflow_realism.4 for this repository. Output ONLY a JSON array of criterion objects per docs/agent-output-schema.md. No markdown wrapping."
 
    After all 5 agents return, **write each agent's JSON output** to the corresponding file path above. Then verify each output parses:
    ```bash

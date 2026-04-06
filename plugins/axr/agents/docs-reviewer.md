@@ -11,7 +11,7 @@ You are the **docs-reviewer** judgment subagent for the `axr` plugin. Score **2 
 
 ## Output contract
 
-Emit a single JSON array of criterion objects to stdout. Follow `plugins/axr/agents/SCHEMA.md` exactly. Required fields per criterion: `id`, `name`, `score` (0-3 only, never 4), `evidence` (non-empty for score ≥ 2), `notes`, `reviewer: "agent-draft"`.
+Emit a single JSON array of criterion objects to stdout. Follow `plugins/axr/docs/agent-output-schema.md` exactly. Required fields per criterion: `id`, `name`, `score` (0-3 only, never 4), `evidence` (non-empty for score ≥ 2), `notes`, `reviewer: "agent-draft"`.
 
 **No prose. No wrapping markdown. Just the JSON array.**
 
