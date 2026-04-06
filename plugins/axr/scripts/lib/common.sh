@@ -35,7 +35,7 @@ _AXR_CRITERIA_JSON="[]"
 # Plugin root = scripts/lib/../../ = two levels up from this file. Used to
 # locate rubric/rubric.v3.json regardless of target repo CWD.
 _AXR_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-_AXR_RUBRIC_PATH="$_AXR_PLUGIN_ROOT/rubric/rubric.v3.json"
+_AXR_RUBRIC_PATH="$_AXR_PLUGIN_ROOT/rubric/rubric.v4.json"
 
 # shellcheck source-path=SCRIPTDIR
 # shellcheck source=monorepo-helpers.sh

@@ -3,8 +3,8 @@
 #
 # Invoked by marketplace bin/validate (which walks plugins/*/bin/validate).
 # Validates axr-specific invariants that don't apply to every plugin:
-#   - Rubric file exists at rubric/rubric.v3.json
-#   - Rubric integrity: total_points=100, 9 dimensions, weights sum to 100,
+#   - Rubric file exists at rubric/rubric.v4.json
+#   - Rubric integrity: total_points=100, 12 dimensions, weights sum to 100,
 #     5 criteria per dimension, checker_type ∈ {mechanical, judgment},
 #     evidence_hints[] ≥ 1
 #
@@ -24,7 +24,7 @@ sanitize() { printf '%s' "$1" | tr -d "\$()\`\033"; }
 pass() { printf '  ✓ axr: %s\n' "$1"; }
 fail() { printf '  ✗ axr: %s\n' "$1"; ERRORS+=("$1"); }
 
-RUBRIC="rubric/rubric.v3.json"
+RUBRIC="rubric/rubric.v4.json"
 
 if [ ! -f "$RUBRIC" ]; then
     fail "$RUBRIC missing"
@@ -37,10 +37,10 @@ else
     fi
 
     DIM_COUNT=$(jq -r '.dimensions | length' "$RUBRIC")
-    if [ "$DIM_COUNT" = "9" ]; then
-        pass "rubric has 9 dimensions"
+    if [ "$DIM_COUNT" = "12" ]; then
+        pass "rubric has 12 dimensions"
     else
-        fail "rubric has $DIM_COUNT dimensions (expected 9)"
+        fail "rubric has $DIM_COUNT dimensions (expected 12)"
     fi
 
     WEIGHT_SUM=$(jq -r '(.dimensions | map(.weight) | add) // empty' "$RUBRIC")

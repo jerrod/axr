@@ -9,12 +9,12 @@ You are the `/axr-check` orchestrator for a single dimension.
 
 1. **Parse argument.** `$ARGUMENTS` must be a valid dimension_id from the rubric. Valid ids are read dynamically:
    ```bash
-   jq -r '.dimensions[].id' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v3.json"
+   jq -r '.dimensions[].id' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v4.json"
    ```
 
    Verify:
    ```bash
-   jq -e --arg id "$ARGUMENTS" '.dimensions[] | select(.id == $id)' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v3.json" >/dev/null
+   jq -e --arg id "$ARGUMENTS" '.dimensions[] | select(.id == $id)' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v4.json" >/dev/null
    ```
 
    If invalid, abort with a list of valid ids.

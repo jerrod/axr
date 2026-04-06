@@ -30,16 +30,16 @@ You are the `/axr-fix` orchestrator. Read `.axr/latest.json`, identify low-scori
    elif [ "$ARGUMENTS" = "blockers" ]; then
        echo "Mode: fix top 3 blockers"
    # Check if it's a criterion id (e.g., docs.readme-setup)
-   elif echo "$ARGUMENTS" | grep -qE '^[a-z]+\.[a-z0-9-]+$'; then
+   elif echo "$ARGUMENTS" | grep -qE '^[a-z][a-z-]*\.[a-z0-9-]+$'; then
        jq -e --arg id "$ARGUMENTS" \
            '[.dimensions[].criteria[] | select(.id == $id)] | length > 0' \
-           "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v3.json" >/dev/null \
+           "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v4.json" >/dev/null \
            || { echo "Unknown criterion: $ARGUMENTS"; exit 1; }
        echo "Mode: fix criterion $ARGUMENTS"
    # Check if it's a dimension id
    else
        jq -e --arg id "$ARGUMENTS" '.dimensions[] | select(.id == $id)' \
-           "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v3.json" >/dev/null \
+           "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v4.json" >/dev/null \
            || { echo "Unknown dimension or criterion: $ARGUMENTS"; exit 1; }
        echo "Mode: fix dimension $ARGUMENTS"
    fi
