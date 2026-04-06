@@ -203,3 +203,116 @@ The `/axr-fix` command looks up strategies by section heading `## <criterion_id>
    and reference it via `dockerComposeFile`.
 
 **Evidence that improves score:** `.devcontainer/devcontainer.json` exists with appropriate base image and post-create command.
+
+---
+
+## legibility.context-window-fit — Typical change fits one context window
+
+**Target score:** 2-3
+
+**Strategy:**
+1. Identify files over 300 lines (`wc -l` on source files).
+2. Split large files by extracting functions, classes, or modules into separate files.
+3. Use barrel/index files to maintain clean imports after splitting.
+4. Target: median file under 200 lines, no files over 500 lines.
+
+---
+
+## legibility.tiered-context — Tiered context beyond root README
+
+**Target score:** 2-3
+
+**Strategy:**
+1. Create `.claude/context-map.md` listing key modules, their purpose, and entry points.
+2. Add a repomix config (`.repomix.json`) or equivalent for context generation.
+3. Add per-module `.claude/` directories for complex subsystems.
+
+---
+
+## legibility.instruction-consistency — Agent instructions don't contradict
+
+**Target score:** 2-3
+
+**Strategy:**
+1. Consolidate instruction files into a single authoritative CLAUDE.md (preferred).
+2. If multiple files needed, add explicit cross-references between them.
+3. Remove stale `.cursorrules` or `.github/copilot-instructions.md` that duplicate CLAUDE.md.
+
+---
+
+## legibility.convention-enforced — Conventions enforced not just documented
+
+**Target score:** 2-3
+
+**Strategy:**
+1. Identify conventions documented in CLAUDE.md.
+2. Add matching lint rules (ESLint, Ruff, Rubocop, etc.) that enforce documented conventions.
+3. Add custom lint rules for project-specific conventions where standard rules don't cover them.
+
+---
+
+## patterns.duplication-scanning — Duplication scanning configured
+
+**Target score:** 2-3
+
+**Strategy:**
+1. Add `.jscpd.json` config for JavaScript/TypeScript projects.
+2. For Python, add duplication detection to CI (e.g., pylint's `duplicate-code` checker).
+3. Add jscpd or CPD step to CI workflow.
+
+---
+
+## patterns.import-depth — Shallow import depth
+
+**Target score:** 2-3
+
+**Strategy:**
+1. Flatten module structure — reduce nesting depth.
+2. Use barrel/index files to provide short import paths.
+3. Move frequently-imported utilities closer to callers.
+4. In Python, prefer absolute imports over deep relative imports.
+
+---
+
+## supply-chain.no-vulnerabilities — Vulnerability scanning configured
+
+**Target score:** 2-3
+
+**Strategy:**
+1. Add audit config: `.nsprc` (npm), `.pip-audit.toml` (Python), `cargo-audit.toml` (Rust).
+2. Add audit step to CI: `npm audit`, `pip-audit`, `cargo audit`, `bundler-audit`.
+3. Configure `.snyk` or `sonatype-lift.yml` for comprehensive scanning.
+
+---
+
+## supply-chain.lockfile-verified-in-ci — Lockfile verified in CI
+
+**Target score:** 2-3
+
+**Strategy:**
+1. Replace `npm install` with `npm ci` in CI workflows.
+2. Add `--frozen-lockfile` flag to yarn/pnpm CI steps.
+3. Add `--locked` flag to Cargo CI steps.
+4. Add `--require-hashes` to pip CI steps where applicable.
+
+---
+
+## supply-chain.upgrades-merged — Automated dependency upgrades
+
+**Target score:** 2-3
+
+**Strategy:**
+1. Add Renovate config (`renovate.json`) or Dependabot (`.github/dependabot.yml`).
+2. Configure auto-merge for patch updates: `"automerge": true, "automergeType": "pr"` in Renovate.
+3. Ensure CI runs tests on dependency update PRs.
+
+---
+
+## supply-chain.freshness — Dependencies are fresh
+
+**Target score:** 2-3
+
+**Strategy:**
+1. Run `npm update` / `uv lock --upgrade` / `bundle update` to refresh lockfiles.
+2. Review and merge pending dependency update PRs.
+3. Set up automated lockfile refresh on a schedule (Renovate `schedule`).

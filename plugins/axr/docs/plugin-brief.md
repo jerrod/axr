@@ -8,9 +8,9 @@ Building `axr`, a Claude Code plugin that scores a repository's **Agent eXecutio
 
 The plugin must work today for a single repo, run from inside a Claude Code session, and produce both a human-readable report and a machine-readable JSON artifact. Do not build the GitHub App, a shared `axr-core` library, or a dashboard in this phase. Inline the logic; premature abstraction is the enemy.
 
-## The Rubric (v3.0)
+## The Rubric (v4.0)
 
-100 points across 9 dimensions. Each criterion scored 0–4. Dimension score = `(sum of criteria / max possible) × weight`.
+100 points across 12 dimensions. Each criterion scored 0–4. Dimension score = `(sum of criteria / max possible) × weight`.
 
 ### Scoring scale (applies universally)
 
@@ -22,7 +22,7 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 
 ### Dimensions
 
-#### 1. Tests & CI Signal — 18 pts
+#### 1. Tests & CI Signal — 14 pts
 
 1. Test suite runs deterministically in under 10 min (local + CI)
 2. Coverage meaningful at module boundaries, not vanity %
@@ -30,7 +30,7 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 4. CI failures map to precise, actionable messages
 5. Fast-fail pre-commit/pre-push checks (lint, format, type)
 
-#### 2. Docs & Agent Context — 18 pts
+#### 2. Docs & Agent Context — 14 pts
 
 1. Root CLAUDE.md / AGENTS.md with architecture, conventions, sharp edges
 2. README covers setup/run/test/deploy in ≤5 commands
@@ -38,7 +38,7 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 4. ADRs or decision log for important tradeoffs
 5. Domain glossary for business language
 
-#### 3. Change Surface Clarity — 14 pts
+#### 3. Change Surface Clarity — 10 pts
 
 1. Business logic locatable by responsibility
 2. Module boundaries and public interfaces explicit
@@ -46,7 +46,7 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 4. Examples/fixtures/reference implementations for key workflows
 5. Context packing: repo supports bounded context maps (repo tree, module summaries, repomix/llm-tree output) that fit agent windows
 
-#### 4. Safety Rails — 14 pts
+#### 4. Safety Rails — 10 pts
 
 1. HITL checkpoints on destructive ops (migrations, prod writes, external APIs)
 2. Reversible-by-default: migrations, deploys, data changes
@@ -54,7 +54,7 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 4. Branch protection + required review on main
 5. Agent permissions/boundaries documented
 
-#### 5. Style & Validation — 10 pts
+#### 5. Style & Validation — 8 pts
 
 1. Type checker clean or baselined
 2. Linter/formatter in local + CI
@@ -62,7 +62,7 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 4. Static analysis beyond linting
 5. Editor/IDE config shared
 
-#### 6. Structure & Modularity — 8 pts
+#### 6. Structure & Modularity — 6 pts
 
 1. Clear module boundaries, sane dependency direction
 2. Circular dependencies prevented
@@ -78,7 +78,7 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 4. Dev container or codespace support
 5. Build cache or incremental feedback
 
-#### 8. Execution Visibility — 6 pts
+#### 8. Execution Visibility — 5 pts
 
 1. Structured logging with consistent fields
 2. Agent-touchable paths expose logs/traces/metrics
@@ -86,13 +86,37 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 4. Local dev preserves diagnostic output
 5. Test failures preserve logs, stack traces, artifacts
 
-#### 9. Workflow Realism — 6 pts
+#### 9. Workflow Realism — 5 pts
 
 1. Representative fixtures/sample data for core workflows
 2. Sandbox flows mirror production behavior
 3. External integrations stubable/simulatable
 4. Golden-path scenarios for critical flows
 5. Regression artifacts / before-after comparisons
+
+#### 10. Legibility — 8 pts
+
+1. Typical change fits one context window
+2. Tiered context beyond root README
+3. Agent instructions don't contradict
+4. Conventions enforced not just documented
+5. Decision coverage: CLAUDE.md covers most dev questions
+
+#### 11. Patterns — 8 pts
+
+1. Duplication scanning configured
+2. Single approach per concern
+3. No competing patterns for same task
+4. Shallow import depth
+5. Consistent error handling pattern
+
+#### 12. Supply Chain — 6 pts
+
+1. Vulnerability scanning configured
+2. Lockfile verified in CI
+3. Automated dependency upgrades
+4. Dependencies are fresh
+5. Minimal dependency surface
 
 ### Score bands
 
@@ -235,9 +259,9 @@ Compute weighted scores, determine band, identify top 3 blockers (criteria scori
 
 ## Orchestrator performance requirements
 
-The 20-minute tool-use budget is not achievable with serial dispatch of 9 check scripts + up to 18 judgment subagent calls. The orchestrator (`commands/axr.md` in Phase 2) MUST:
+The 20-minute tool-use budget is not achievable with serial dispatch of 12 check scripts + up to 18 judgment subagent calls. The orchestrator (`commands/axr.md` in Phase 2) MUST:
 
-1. **Run mechanical check scripts concurrently.** All 9 `scripts/check-*.sh` scripts are read-only, independent, and safe to fan out in parallel. Target: all 9 scripts run simultaneously, elapsed time = slowest script, not sum.
+1. **Run mechanical check scripts concurrently.** All 12 `scripts/check-*.sh` scripts are read-only, independent, and safe to fan out in parallel. Target: all 12 scripts run simultaneously, elapsed time = slowest script, not sum.
 2. **Batch judgment subagents per dimension.** Dispatch ONE judgment subagent per dimension that has ≥1 deferred criterion, passing all of that dimension's deferred criteria in a single call. Never dispatch one subagent per criterion.
 3. **Expose a mechanical-only fast path.** Support a mode that skips judgment entirely and returns in under 2 minutes against any repo. Useful for CI gates and for quick feedback during iteration.
 4. **Honor the timebox as a hard stop.** If 20 minutes elapse before all dimensions complete, emit `.axr/latest.json` with the partial results and flag incomplete dimensions explicitly.
@@ -300,7 +324,7 @@ These dimensions are scored independently for each package because they reflect 
 - `style` — linter/formatter config may vary per package
 - `tooling` — build and bootstrap tooling is often per-package
 
-### Repo-level dimensions (5)
+### Repo-level dimensions (8)
 
 These dimensions are scored once at the repo root because they reflect repo-wide concerns:
 
@@ -309,6 +333,9 @@ These dimensions are scored once at the repo root because they reflect repo-wide
 - `change` — integration points and context packing at the repo level
 - `visibility` — logging and observability infrastructure
 - `workflow` — sandbox flows and regression artifacts
+- `legibility` — context window fit, agent instructions, convention enforcement
+- `patterns` — duplication, single approach, import depth, error consistency
+- `supply-chain` — vulnerability scanning, lockfile, upgrades, freshness
 
 ### Aggregation
 
@@ -332,7 +359,7 @@ scripts/axr-ci.sh --config .axr/config.json  # custom config
 | `ci_minimum_band` | `"Agent-Hostile"` | Minimum acceptable band. Exit 1 if score falls below. |
 | `ci_fail_on_blockers` | `false` | Exit 1 if any blockers are present. |
 
-Band thresholds are read from `rubric/rubric.v2.json` (not hardcoded) so they stay in sync with rubric updates.
+Band thresholds are read from `rubric/rubric.v4.json` (not hardcoded) so they stay in sync with rubric updates.
 
 ### Exit codes
 
@@ -381,7 +408,7 @@ Band thresholds are read from `rubric/rubric.v2.json` (not hardcoded) so they st
 2. `commands/axr-diff.md` — `/axr-diff` command compares most recent history entry to current latest.json (or two specified files)
 3. `scripts/patch-dimension.sh` — replaces one dimension's criteria in latest.json and recomputes totals/band/blockers. Archives prior latest.json to history/
 4. `aggregate.sh --patch-dimension` — delegates to patch-dimension.sh for incremental single-dimension updates
-5. `commands/axr-check.md` — `/axr-check <dim>` now patches latest.json after running the single checker, enabling incremental scoring without re-running all 9 checkers + 5 agents
+5. `commands/axr-check.md` — `/axr-check <dim>` now patches latest.json after running the single checker, enabling incremental scoring without re-running all 12 checkers + 5 agents
 
 ### Phase 5 — Auto-remediation
 
@@ -392,14 +419,22 @@ Band thresholds are read from `rubric/rubric.v2.json` (not hardcoded) so they st
 ### Phase 6 — Monorepo Awareness + CI Fast-Path
 
 1. `scripts/lib/monorepo-helpers.sh` — workspace detection (`axr_detect_monorepo`), package listing (`axr_list_packages`), and per-package scope helpers (`axr_package_scope`)
-2. All 9 checkers accept `--package <path>` to scope checks to a single package directory
+2. All 12 checkers accept `--package <path>` to scope checks to a single package directory
 3. `scripts/axr-ci.sh` — non-interactive CI entry point with config-driven thresholds and exit codes
 4. Monorepo fan-out: CI script runs checkers per-package for the 4 per-package dimensions, once at repo root for the 5 repo-level dimensions, and averages per-package scores
 
-### Phases 7-8 (deferred)
+### Phase 7 — Rubric v4
 
-- Phase 7: Calibration pilot on two reference repos
-- Phase 8: Distribution via the jerrod/axr marketplace
+v4 (current): 12 dimensions, 60 criteria. Added Legibility, Patterns, Supply Chain. Rebalanced weights toward operational readiness.
+
+1. `rubric/rubric.v4.json` — expanded rubric with 12 dimensions
+2. `scripts/check-legibility.sh`, `scripts/check-patterns.sh`, `scripts/check-supply-chain.sh` — mechanical checkers for new dimensions
+3. Updated orchestrator, aggregation, and CI to handle 12 dimensions
+
+### Phases 8-9 (deferred)
+
+- Phase 8: Calibration pilot on two reference repos
+- Phase 9: Distribution via the jerrod/axr marketplace
 
 ## Success criteria for v1
 
