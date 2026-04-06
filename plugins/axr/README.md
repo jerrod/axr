@@ -27,6 +27,12 @@ Each dimension has 5 criteria scored 0–4. Mechanical criteria are resolved by 
 - `/axr-diff` — compare current run to previous
 - `/axr-fix <target>` — auto-remediation for low-scoring criteria (`blockers`, criterion id, or dimension id)
 
+## Supported Stacks
+
+Python, Node/TypeScript, Kotlin, Java, Ruby, Rust, Go, C#/.NET, PHP, Swift, Markdown (fallback).
+
+Stack detection is automatic — axr reads manifest files (package.json, pyproject.toml, pom.xml, *.csproj, composer.json, Package.swift, etc.) to determine the active stack and select appropriate linter, formatter, type-checker, and test runner evidence.
+
 ## Output
 
 Every run writes:
