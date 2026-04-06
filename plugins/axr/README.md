@@ -25,6 +25,7 @@ Each dimension has 5 criteria scored 0–4. Mechanical criteria are resolved by 
 - `/axr` — full assessment on the current repo
 - `/axr-check <dimension>` — single-dimension assessment
 - `/axr-diff` — compare current run to previous
+- `/axr-fix <target>` — auto-remediation for low-scoring criteria (`blockers`, criterion id, or dimension id)
 
 ## Output
 
