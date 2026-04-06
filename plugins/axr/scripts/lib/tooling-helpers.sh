@@ -19,6 +19,9 @@ _AXR_LOCKFILES=(
     Cargo.lock
     go.sum
     composer.lock
+    gradle.lockfile
+    packages.lock.json
+    Package.resolved
 )
 
 # ---------------------------------------------------------------------------
@@ -45,7 +48,80 @@ count_lockfiles() {
 list_env_pins() {
     local f
     for f in .tool-versions .nvmrc .python-version .ruby-version \
-             rust-toolchain rust-toolchain.toml; do
+             rust-toolchain rust-toolchain.toml \
+             .java-version .sdkmanrc global.json; do
+        [ -f "$f" ] && printf '%s\n' "$f"
+    done
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# list_lint_configs — print linter config files present at $PWD.
+# ---------------------------------------------------------------------------
+list_lint_configs() {
+    local f
+    # Node
+    for f in .eslintrc .eslintrc.js .eslintrc.json .eslintrc.yml \
+             .eslintrc.yaml .eslintrc.cjs eslint.config.js \
+             eslint.config.mjs eslint.config.cjs biome.json; do
+        [ -f "$f" ] && printf '%s\n' "$f"
+    done
+    # Python
+    for f in .ruff.toml ruff.toml; do
+        [ -f "$f" ] && printf '%s\n' "$f"
+    done
+    if [ -f pyproject.toml ] && grep -qE '^\[tool\.(ruff|pylint)\]' pyproject.toml 2>/dev/null; then
+        printf '%s\n' "pyproject.toml"
+    fi
+    # Ruby / Go / Rust
+    for f in .rubocop.yml .golangci.yml .golangci.yaml .clippy.toml; do
+        [ -f "$f" ] && printf '%s\n' "$f"
+    done
+    # Java
+    for f in checkstyle.xml pmd.xml spotbugs.xml; do
+        [ -f "$f" ] && printf '%s\n' "$f"
+    done
+    # PHP
+    for f in .php-cs-fixer.php .php-cs-fixer.dist.php phpcs.xml phpcs.xml.dist; do
+        [ -f "$f" ] && printf '%s\n' "$f"
+    done
+    # Swift
+    [ -f .swiftlint.yml ] && printf '%s\n' ".swiftlint.yml"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# list_format_configs — print formatter config files present at $PWD.
+# ---------------------------------------------------------------------------
+list_format_configs() {
+    local f
+    for f in .prettierrc .prettierrc.js .prettierrc.json .prettierrc.yml \
+             .prettierrc.yaml .prettierrc.cjs .editorconfig .swiftformat; do
+        [ -f "$f" ] && printf '%s\n' "$f"
+    done
+    if [ -f pyproject.toml ] && grep -qE '^\[tool\.(black|isort)\]' pyproject.toml 2>/dev/null; then
+        printf '%s\n' "pyproject.toml"
+    fi
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# list_type_check_configs — print type-checker config files present at $PWD.
+# ---------------------------------------------------------------------------
+list_type_check_configs() {
+    local f
+    # TypeScript
+    [ -f tsconfig.json ] && printf '%s\n' "tsconfig.json"
+    # Python
+    for f in mypy.ini .mypy.ini pyrightconfig.json; do
+        [ -f "$f" ] && printf '%s\n' "$f"
+    done
+    if [ -f pyproject.toml ] && grep -qE '^\[tool\.(mypy|pyright)\]' pyproject.toml 2>/dev/null; then
+        printf '%s\n' "pyproject.toml"
+    fi
+    # PHP
+    for f in phpstan.neon phpstan.neon.dist phpstan.dist.neon \
+             psalm.xml psalm.xml.dist; do
         [ -f "$f" ] && printf '%s\n' "$f"
     done
     return 0
