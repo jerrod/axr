@@ -6,7 +6,8 @@ This is the `axr` Claude Code plugin. It scores repositories against the Agent e
 
 - `.claude-plugin/plugin.json` — plugin manifest
 - `commands/*.md` — slash command definitions (`/axr`, `/axr-check`, `/axr-diff`)
-- `rubric/rubric.v1.json` — versioned rubric, source of truth for scoring
+- `rubric/rubric.v2.json` — versioned rubric, source of truth for scoring (v2.0: 9 dimensions, 45 criteria)
+- `rubric/rubric.v1.json` — preserved for history comparison
 - `scripts/check-*.sh` — per-dimension deterministic checkers
 - `scripts/lib/` — shared bash helpers (common.sh, markdown-helpers.sh)
 - `bin/validate` — plugin-local validator invoked by marketplace `bin/validate` (rubric schema checks)
@@ -19,6 +20,8 @@ Scripts-first: per-dimension bash scripts own `checker_type: "mechanical"` crite
 ## Rubric stability
 
 The rubric is the source of truth. Never edit weights, criteria, or anchor text in place — bump `rubric_version` instead. Trend data depends on version stability.
+
+Current: v2.0 (9 dimensions, 45 criteria). Style & Validation split from Tooling in Phase 2A.
 
 ## Testing
 

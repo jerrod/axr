@@ -1,5 +1,5 @@
 ---
-description: Score the current repository against the AXR rubric (all 8 dimensions, including judgment subagents).
+description: Score the current repository against the AXR rubric (all 9 dimensions, including judgment subagents).
 allowed-tools: Bash, Read, Task
 ---
 
@@ -7,7 +7,7 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
 
 ## Steps
 
-1. **Verify prerequisites.** Confirm `${CLAUDE_PLUGIN_ROOT}` is set and `${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v1.json` exists. If missing, abort with a clear error.
+1. **Verify prerequisites.** Confirm `${CLAUDE_PLUGIN_ROOT}` is set and `${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v2.json` exists. If missing, abort with a clear error.
 
 2. **Detect stack.** Run:
    ```bash
@@ -17,7 +17,7 @@ You are the `/axr` orchestrator. Score the current working directory (target rep
 
 3. **Prepare output dirs.** `mkdir -p .axr/tmp .axr/history`.
 
-4. **Run all 8 dimension checkers in parallel.** Each writes its JSON output to `.axr/tmp/<dimension_id>.json` (stdout only) and stderr to a separate file so checker warnings do not corrupt the JSON:
+4. **Run all dimension checkers in parallel.** Each writes its JSON output to `.axr/tmp/<dimension_id>.json` (stdout only) and stderr to a separate file so checker warnings do not corrupt the JSON:
 
    ```bash
    for checker in "${CLAUDE_PLUGIN_ROOT}"/scripts/check-*.sh; do

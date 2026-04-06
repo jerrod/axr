@@ -4,7 +4,7 @@ Two helper files with distinct audiences. If you add a new helper, pick the file
 
 | File | Audience | What it exports |
 |---|---|---|
-| `common.sh` | `scripts/check-*.sh` dimension checker scripts | `axr_*` prefixed API: JSON output assembly (`axr_init_output`, `axr_emit_criterion`, `axr_defer_criterion`, `axr_finalize_output`), stack detection, rubric name lookup, repo-root resolution. Defines the criterion output schema. Reads `rubric/rubric.v1.json`. |
+| `common.sh` | `scripts/check-*.sh` dimension checker scripts | `axr_*` prefixed API: JSON output assembly (`axr_init_output`, `axr_emit_criterion`, `axr_defer_criterion`, `axr_finalize_output`), stack detection, rubric name lookup, repo-root resolution. Defines the criterion output schema. Reads `rubric/rubric.v2.json`. |
 | `markdown-helpers.sh` | `scripts/check-*.sh` scripts that parse markdown | Fence-aware markdown parsers: `sanitize_evidence`, `count_h2_outside_fences`, `titles_h2_outside_fences`, `count_setup_commands`, `first_three_titles_joined`. Pure functions — take a filename, emit text or integers. |
 
 ## Which file do I add to?

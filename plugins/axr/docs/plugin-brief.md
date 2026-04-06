@@ -8,9 +8,9 @@ Building `axr`, a Claude Code plugin that scores a repository's **Agent eXecutio
 
 The plugin must work today for a single repo, run from inside a Claude Code session, and produce both a human-readable report and a machine-readable JSON artifact. Do not build the GitHub App, a shared `axr-core` library, or a dashboard in this phase. Inline the logic; premature abstraction is the enemy.
 
-## The Rubric (v1.0, finalized)
+## The Rubric (v2.0)
 
-100 points across 8 dimensions. Each criterion scored 0–4. Dimension score = `(sum of criteria / max possible) × weight`.
+100 points across 9 dimensions. Each criterion scored 0–4. Dimension score = `(sum of criteria / max possible) × weight`.
 
 ### Scoring scale (applies universally)
 
@@ -22,7 +22,7 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 
 ### Dimensions
 
-#### 1. Tests & CI Signal — 20 pts
+#### 1. Tests & CI Signal — 18 pts
 
 1. Test suite runs deterministically in under 10 min (local + CI)
 2. Coverage meaningful at module boundaries, not vanity %
@@ -30,7 +30,7 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 4. CI failures map to precise, actionable messages
 5. Fast-fail pre-commit/pre-push checks (lint, format, type)
 
-#### 2. Docs & Agent Context — 20 pts
+#### 2. Docs & Agent Context — 18 pts
 
 1. Root CLAUDE.md / AGENTS.md with architecture, conventions, sharp edges
 2. README covers setup/run/test/deploy in ≤5 commands
@@ -38,7 +38,7 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 4. ADRs or decision log for important tradeoffs
 5. Domain glossary for business language
 
-#### 3. Change Surface Clarity — 15 pts
+#### 3. Change Surface Clarity — 14 pts
 
 1. Business logic locatable by responsibility
 2. Module boundaries and public interfaces explicit
@@ -46,7 +46,7 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 4. Examples/fixtures/reference implementations for key workflows
 5. Context packing: repo supports bounded context maps (repo tree, module summaries, repomix/llm-tree output) that fit agent windows
 
-#### 4. Safety Rails — 15 pts
+#### 4. Safety Rails — 14 pts
 
 1. HITL checkpoints on destructive ops (migrations, prod writes, external APIs)
 2. Reversible-by-default: migrations, deploys, data changes
@@ -54,7 +54,15 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 4. Branch protection + required review on main
 5. Agent permissions/boundaries documented
 
-#### 5. Structure & Modularity — 8 pts
+#### 5. Style & Validation — 10 pts
+
+1. Type checker clean or baselined
+2. Linter/formatter in local + CI
+3. Formatting actively enforced
+4. Static analysis beyond linting
+5. Editor/IDE config shared
+
+#### 6. Structure & Modularity — 8 pts
 
 1. Clear module boundaries, sane dependency direction
 2. Circular dependencies prevented
@@ -62,15 +70,15 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 4. Consistent, searchable naming conventions
 5. Dead code removed
 
-#### 6. Tooling & Reproducibility — 8 pts
+#### 7. Tooling & Reproducibility — 6 pts
 
-1. Type checker clean or baselined
-2. Linter/formatter in local + CI
-3. Reproducible, hermetic build
-4. One-command bootstrap (`make dev`, `bin/setup`)
-5. Dependencies pinned; upgrade path documented
+1. Reproducible, hermetic build
+2. One-command bootstrap (`make dev`, `bin/setup`)
+3. Dependencies pinned; upgrade path documented
+4. Dev container or codespace support
+5. Build cache or incremental feedback
 
-#### 7. Execution Visibility — 7 pts
+#### 8. Execution Visibility — 6 pts
 
 1. Structured logging with consistent fields
 2. Agent-touchable paths expose logs/traces/metrics
@@ -78,7 +86,7 @@ The plugin must work today for a single repo, run from inside a Claude Code sess
 4. Local dev preserves diagnostic output
 5. Test failures preserve logs, stack traces, artifacts
 
-#### 8. Workflow Realism — 7 pts
+#### 9. Workflow Realism — 6 pts
 
 1. Representative fixtures/sample data for core workflows
 2. Sandbox flows mirror production behavior
@@ -201,9 +209,9 @@ Compute weighted scores, determine band, identify top 3 blockers (criteria scori
 
 ## Orchestrator performance requirements
 
-The 20-minute tool-use budget is not achievable with serial dispatch of 8 check scripts + up to 18 judgment subagent calls. The orchestrator (`commands/axr.md` in Phase 2) MUST:
+The 20-minute tool-use budget is not achievable with serial dispatch of 9 check scripts + up to 18 judgment subagent calls. The orchestrator (`commands/axr.md` in Phase 2) MUST:
 
-1. **Run mechanical check scripts concurrently.** All 8 `scripts/check-*.sh` scripts are read-only, independent, and safe to fan out in parallel. Target: all 8 scripts run simultaneously, elapsed time = slowest script, not sum.
+1. **Run mechanical check scripts concurrently.** All 9 `scripts/check-*.sh` scripts are read-only, independent, and safe to fan out in parallel. Target: all 9 scripts run simultaneously, elapsed time = slowest script, not sum.
 2. **Batch judgment subagents per dimension.** Dispatch ONE judgment subagent per dimension that has ≥1 deferred criterion, passing all of that dimension's deferred criteria in a single call. Never dispatch one subagent per criterion.
 3. **Expose a mechanical-only fast path.** Support a mode that skips judgment entirely and returns in under 2 minutes against any repo. Useful for CI gates and for quick feedback during iteration.
 4. **Honor the timebox as a hard stop.** If 20 minutes elapse before all dimensions complete, emit `.axr/latest.json` with the partial results and flag incomplete dimensions explicitly.
@@ -247,7 +255,7 @@ Fall back to language-agnostic checks on unsupported stacks and note the limitat
 
 1. Create plugin directory structure
 2. Write `plugin.json` manifest
-3. Write `rubric/rubric.v1.json` — the full rubric (source of truth)
+3. Write `rubric/rubric.v2.json` — the full rubric (source of truth)
 4. Write `commands/axr.md` with a minimal command that reads the rubric and prints it
 
 ### Phase 2 — Mechanical checkers
@@ -276,7 +284,7 @@ Fall back to language-agnostic checks on unsupported stacks and note the limitat
 2. `commands/axr-diff.md` — `/axr-diff` command compares most recent history entry to current latest.json (or two specified files)
 3. `scripts/patch-dimension.sh` — replaces one dimension's criteria in latest.json and recomputes totals/band/blockers. Archives prior latest.json to history/
 4. `aggregate.sh --patch-dimension` — delegates to patch-dimension.sh for incremental single-dimension updates
-5. `commands/axr-check.md` — `/axr-check <dim>` now patches latest.json after running the single checker, enabling incremental scoring without re-running all 8 checkers + 5 agents
+5. `commands/axr-check.md` — `/axr-check <dim>` now patches latest.json after running the single checker, enabling incremental scoring without re-running all 9 checkers + 5 agents
 
 ### Phases 5-6 (deferred)
 

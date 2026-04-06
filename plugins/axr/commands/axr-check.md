@@ -7,11 +7,14 @@ You are the `/axr-check` orchestrator for a single dimension.
 
 ## Steps
 
-1. **Parse argument.** `$ARGUMENTS` must be a valid dimension_id from the rubric (`tests_ci`, `docs_context`, `change_surface`, `safety_rails`, `structure`, `tooling`, `execution_visibility`, `workflow_realism`).
+1. **Parse argument.** `$ARGUMENTS` must be a valid dimension_id from the rubric. Valid ids are read dynamically:
+   ```bash
+   jq -r '.dimensions[].id' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v2.json"
+   ```
 
    Verify:
    ```bash
-   jq -e --arg id "$ARGUMENTS" '.dimensions[] | select(.id == $id)' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v1.json" >/dev/null
+   jq -e --arg id "$ARGUMENTS" '.dimensions[] | select(.id == $id)' "${CLAUDE_PLUGIN_ROOT}/rubric/rubric.v2.json" >/dev/null
    ```
 
    If invalid, abort with a list of valid ids.
@@ -26,7 +29,7 @@ You are the `/axr-check` orchestrator for a single dimension.
    jq empty ".axr/tmp-$dim.json" || { echo "FAIL: invalid JSON output"; exit 1; }
    ```
 
-3. **Patch latest.json (if it exists).** Use `--patch-dimension` to update `.axr/latest.json` incrementally without re-running all 8 checkers.
+3. **Patch latest.json (if it exists).** Use `--patch-dimension` to update `.axr/latest.json` incrementally without re-running all checkers.
 
    ```bash
    if [ -f .axr/latest.json ]; then
@@ -39,7 +42,7 @@ You are the `/axr-check` orchestrator for a single dimension.
 4. **Print summary.** Read `.axr/latest.json` (if it was patched) and print:
    ```
    Dimension: <dim>
-   Raw score: <sum>/20
+   Raw score: <sum>/<max_raw>
    Criteria:
    - <id>: <score>/4 -- <notes> (evidence: <count>)
    ...
