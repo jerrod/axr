@@ -21,8 +21,8 @@ score_style_validation_1() {
     axr_has_stack_tag node && has_node=1
     axr_has_stack_tag python && has_python=1
     if [ "$has_node" = "0" ] && [ "$has_python" = "0" ]; then
-        axr_emit_criterion "style_validation.1" "$name" script 3 "criterion not applicable — no type-checkable language detected" \
-            "stack: $STACK_JSON"
+        axr_emit_criterion "style_validation.1" "$name" script 0 "no type-checkable language — no type-checker signal for agents" \
+            "stack: $STACK_JSON (no node/python detected)"
         return
     fi
     local node_score=-1 py_score=-1
