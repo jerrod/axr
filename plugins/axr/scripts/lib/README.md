@@ -7,7 +7,7 @@ Five helper files with distinct audiences. If you add a new helper, pick the fil
 | `common.sh` | `scripts/check-*.sh` dimension checker scripts | `axr_*` prefixed API: JSON output assembly (`axr_init_output`, `axr_emit_criterion`, `axr_defer_criterion`, `axr_finalize_output`), stack detection, rubric name lookup, repo-root resolution. Defines the criterion output schema. Reads `rubric/rubric.v2.json`. |
 | `markdown-helpers.sh` | `scripts/check-*.sh` scripts that parse markdown | Fence-aware markdown parsers: `sanitize_evidence`, `count_h2_outside_fences`, `titles_h2_outside_fences`, `count_setup_commands`, `first_three_titles_joined`. Pure functions — take a filename, emit text or integers. |
 | `workflow-helpers.sh` | `scripts/check-*.sh` scripts that inspect `.github/workflows/` | GitHub Actions workflow parsers: `extract_workflow_run_lines` (awk block-scalar parser), `workflow_files`. Used by check-style-validation, check-tests-ci, check-tooling, check-execution-visibility. |
-| `tooling-helpers.sh` | `scripts/check-*.sh` scripts that inspect build tooling | Lockfile/env-pin/container detection: `list_lockfiles`, `count_lockfiles`, `list_env_pins`, `list_containerization`. Used by check-tooling. |
+| `tooling-helpers.sh` | `scripts/check-*.sh` scripts that inspect build tooling | Lockfile/env-pin/container/config detection: `list_lockfiles`, `count_lockfiles`, `list_env_pins`, `list_containerization`, `list_lint_configs`, `list_format_configs`, `list_type_check_configs`. Used by check-tooling, check-style-validation. |
 | `monorepo-helpers.sh` | scripts that need monorepo awareness | `axr_detect_monorepo`, `axr_list_packages`, `axr_package_scope`. Sourced by common.sh — available to all checkers. |
 
 ## Which file do I add to?

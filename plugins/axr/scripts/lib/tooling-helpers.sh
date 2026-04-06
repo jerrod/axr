@@ -96,10 +96,11 @@ list_lint_configs() {
 list_format_configs() {
     local f
     for f in .prettierrc .prettierrc.js .prettierrc.json .prettierrc.yml \
-             .prettierrc.yaml .prettierrc.cjs .editorconfig .swiftformat; do
+             .prettierrc.yaml .prettierrc.cjs .editorconfig .swiftformat \
+             ruff.toml .ruff.toml; do
         [ -f "$f" ] && printf '%s\n' "$f"
     done
-    if [ -f pyproject.toml ] && grep -qE '^\[tool\.(black|isort)\]' pyproject.toml 2>/dev/null; then
+    if [ -f pyproject.toml ] && grep -qE '^\[tool\.(black|isort|ruff(\.format)?)\]' pyproject.toml 2>/dev/null; then
         printf '%s\n' "pyproject.toml"
     fi
     return 0
