@@ -89,11 +89,8 @@ fi
 
 # Aggregate per-dimension data. Build dimensions object + accumulate totals.
 DIMENSIONS_JSON='{}'
-
 TOTAL_WEIGHTED=0
-
 BLOCKERS_JSON='[]'
-
 for dim_id in "${DIM_IDS[@]}"; do
     input_file="$EFFECTIVE_INPUT_DIR/$dim_id.json"
     [ -f "$input_file" ] || die "missing dimension JSON: $input_file"
@@ -205,8 +202,6 @@ FINAL_JSON="$(jq -n \
         trend: $trend
     }')"
 printf '%s\n' "$FINAL_JSON" | jq --indent 2 . > "$OUTPUT_DIR/latest.json"
-
-# Render markdown report.
 
 # Render markdown report (sourced script reads all shell variables from this scope).
 # shellcheck source-path=SCRIPTDIR

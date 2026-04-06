@@ -199,7 +199,7 @@ else
             fi
         fi
 
-        # 3e. agents/ directory (optional) — if present, every *.md must have
+        # 3d. agents/ directory (optional) — if present, every *.md must have
         # closed YAML frontmatter with description: (same rules as commands).
         # SCHEMA.md and other non-agent docs are exempt (no frontmatter expected).
         if [ -d "$plugin_dir/agents" ]; then
@@ -227,7 +227,7 @@ else
             done
         fi
 
-        # 3d. plugin-local validate hook — refuse symlinks entirely, then
+        # 3e. plugin-local validate hook — refuse symlinks entirely, then
         # containment-check the resolved parent dir. Rejecting symlinked
         # validate files eliminates the symlink-escape bypass and also
         # narrows the TOCTOU window by doing -L + exec back-to-back.
@@ -238,10 +238,10 @@ else
             pv_parent_real="$(cd "$(dirname "$plugin_validate")" 2>/dev/null && pwd -P)" || pv_parent_real=""
             case "$pv_parent_real" in
                 "$REPO_ROOT_REAL"/*)
-                    if "$plugin_validate"; then
+                    if timeout 60 "$plugin_validate"; then
                         pass "$plugin_name: plugin-local validate passed"
                     else
-                        fail "$plugin_name: plugin-local validate failed (see output above)"
+                        fail "$plugin_name: plugin-local validate failed or timed out (60s limit)"
                     fi
                     ;;
                 *)
