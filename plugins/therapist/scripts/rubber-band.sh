@@ -79,7 +79,11 @@ if [[ -f "$PROJ_PHRASES_FILE" && -n "$_repo_root" ]]; then
   # Resolve the FILE itself (follows symlinks), not just its parent dir,
   # so a symlink inside .claude/ pointing outside the repo is caught.
   _phrases_real=$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$PROJ_PHRASES_FILE" 2>/dev/null || true)
-  _repo_real=$(cd "$_repo_root" 2>/dev/null && pwd -P || true)
+  _repo_real=""
+  if cd "$_repo_root" 2>/dev/null; then
+    _repo_real=$(pwd -P)
+    cd - >/dev/null 2>&1 || true
+  fi
   case "$(dirname "$_phrases_real")" in
     "$_repo_real"|"$_repo_real"/*)
       while IFS=$'\t' read -r phrase correction category consequence; do
