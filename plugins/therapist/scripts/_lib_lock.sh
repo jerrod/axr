@@ -7,6 +7,19 @@
 # to be defined before _journal_append_and_rotate is invoked.
 #
 
+# Hard guard: _journal_append_and_rotate calls rotate_journal_if_needed,
+# which must be defined by the caller (typically _lib.sh) before this
+# file is sourced. Otherwise the first journal write silently fails to
+# rotate and the error only surfaces long after the misconfiguration.
+_lib_lock_guard() {
+  if ! declare -f rotate_journal_if_needed >/dev/null 2>&1; then
+    printf '_lib_lock.sh: rotate_journal_if_needed must be defined before sourcing this file\n' >&2
+    return 1
+  fi
+}
+_lib_lock_guard || return 1 2>/dev/null || exit 1
+unset -f _lib_lock_guard
+
 # _journal_append_and_rotate — callback executed while holding the journal
 # lock. Takes the pre-built JSONL entry as arg 1 and performs the append
 # and rotation atomically so concurrent hook executions cannot overlap
@@ -39,11 +52,14 @@ _journal_with_lock() {
   while ! mkdir "$lock_dir" 2>/dev/null; do
     sleep 0.05
     waited=$((waited + 1))
-    # After ~5s, assume the holder crashed and steal the lock.
+    # After ~5s, assume the holder crashed and steal the lock by clearing
+    # the directory. Reset the counter and retry the normal mkdir path —
+    # do NOT break out of the loop without actually holding the lock,
+    # because a third concurrent caller can win the race between our
+    # rm -rf and our next mkdir.
     if [[ "$waited" -gt 100 ]]; then
       rm -rf "$lock_dir" 2>/dev/null || true
-      mkdir "$lock_dir" 2>/dev/null || break
-      break
+      waited=0
     fi
   done
   # Ensure the lock is released even on callback failure.

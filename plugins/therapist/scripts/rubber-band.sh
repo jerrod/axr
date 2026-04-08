@@ -73,11 +73,14 @@ ensure_therapist_dir
 # hook's decision JSON. Drop any TSV row whose phrase or correction
 # contains an embedded newline (jq @tsv only escapes tabs, not newlines).
 PROJ_PHRASES_FILE="${PWD}/.claude/therapist-phrases.json"
+# Re-resolve from PWD (the target project), not the plugin's own REPO_ROOT.
 _repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
 if [[ -f "$PROJ_PHRASES_FILE" && -n "$_repo_root" ]]; then
-  _phrases_real=$(cd "$(dirname "$PROJ_PHRASES_FILE")" 2>/dev/null && pwd -P || true)
+  # Resolve the FILE itself (follows symlinks), not just its parent dir,
+  # so a symlink inside .claude/ pointing outside the repo is caught.
+  _phrases_real=$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$PROJ_PHRASES_FILE" 2>/dev/null || true)
   _repo_real=$(cd "$_repo_root" 2>/dev/null && pwd -P || true)
-  case "$_phrases_real" in
+  case "$(dirname "$_phrases_real")" in
     "$_repo_real"|"$_repo_real"/*)
       while IFS=$'\t' read -r phrase correction category consequence; do
         [[ -z "$phrase" ]] && continue
@@ -88,6 +91,10 @@ if [[ -f "$PROJ_PHRASES_FILE" && -n "$_repo_root" ]]; then
         PHRASE_CATEGORIES["$phrase"]="$category"
         PHRASE_CONSEQUENCES["$phrase"]="$consequence"
       done < <(jq -r '.phrases[]? | [.phrase, .correction, .category, .consequence] | @tsv' "$PROJ_PHRASES_FILE" 2>/dev/null || true)
+      ;;
+    *)
+      printf '[therapist] WARNING: %s resolves outside git repo root (%s) — custom phrases not loaded\n' \
+        "$PROJ_PHRASES_FILE" "$_repo_real" >&2
       ;;
   esac
 fi
