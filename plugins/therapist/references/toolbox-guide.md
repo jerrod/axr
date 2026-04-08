@@ -281,7 +281,7 @@ signals that suggest quality issues in what was just written.
 **Signals detected:**
 - `TODO`/`FIXME`/`HACK`/`XXX` markers in new code
 - Internal mocks (`jest.mock`, `@patch`, `spyOn().mockImplementation`)
-- Lint suppressions (`noqa`, `type: ignore`, `eslint-disable`, `ts-ignore`)
+- Lint suppression markers (Python `no` + `qa`, `type: ignore`; JS/TS `eslint` + `-disable`, `@ts` + `-ignore`, `@ts` + `-expect-error`; generic `@suppress`) — see `scripts/socratic.sh` for the authoritative regex
 - Broad exception handlers (`except:`, `except Exception:`)
 - Oversized blocks (>50 lines in written content)
 
