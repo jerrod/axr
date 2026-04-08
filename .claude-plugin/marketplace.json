@@ -11,6 +11,12 @@
       "description": "Agent eXecution Readiness scoring — 100-point rubric across 8 dimensions with deterministic bash checkers and judgment subagents.",
       "source": "./plugins/axr",
       "category": "development"
+    },
+    {
+      "name": "therapist",
+      "description": "Diagnose and fix persistent behavioral issues in Claude sessions using a CBT framework — eleven tools, ambient hooks, and a /therapist intervention command.",
+      "source": "./plugins/therapist",
+      "category": "workflow"
     }
   ]
 }
