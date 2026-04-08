@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # _lib.sh — Shared utilities for therapist skill scripts
 #
 # Source this file from other scripts:
@@ -229,51 +230,12 @@ journal_log() {
   _journal_with_lock _journal_append_and_rotate "$entry"
 }
 
-# _journal_append_and_rotate — callback executed while holding the journal
-# lock. Takes the pre-built JSONL entry as arg 1 and performs the append
-# and rotation atomically so concurrent hook executions cannot overlap
-# with a rotate-in-progress and lose data.
-_journal_append_and_rotate() {
-  local entry="$1"
-  printf '%s\n' "$entry" >>"${THERAPIST_DIR}/journal.jsonl"
-  rotate_journal_if_needed
-}
-
-# _journal_with_lock — acquire an exclusive journal lock, run the given
-# command with its arguments, and release the lock. Prefers flock(1) when
-# present (Linux, Homebrew util-linux on macOS). Falls back to a portable
-# mkdir-based advisory lock so the plugin works out of the box on macOS
-# where flock is not installed by default.
-_journal_with_lock() {
-  local cb="$1"
-  shift
-  local lock_file="${THERAPIST_DIR}/journal.lock"
-  if command -v flock >/dev/null 2>&1; then
-    (
-      flock -x 200
-      "$cb" "$@"
-    ) 200>"$lock_file"
-    return
-  fi
-  # mkdir is atomic on local filesystems — use a lock directory.
-  local lock_dir="${lock_file}.d"
-  local waited=0
-  while ! mkdir "$lock_dir" 2>/dev/null; do
-    sleep 0.05
-    waited=$((waited + 1))
-    # After ~5s, assume the holder crashed and steal the lock.
-    if [[ "$waited" -gt 100 ]]; then
-      rm -rf "$lock_dir" 2>/dev/null || true
-      mkdir "$lock_dir" 2>/dev/null || break
-      break
-    fi
-  done
-  # Ensure the lock is released even on callback failure.
-  trap 'rm -rf "${lock_dir}" 2>/dev/null || true' RETURN
-  "$cb" "$@"
-  rm -rf "$lock_dir" 2>/dev/null || true
-  trap - RETURN
-}
+# Locking helpers live in _lib_lock.sh so _lib.sh stays under the
+# file-size limit. They depend on rotate_journal_if_needed (defined
+# above) and ensure_therapist_dir (which the caller must have already
+# invoked).
+# shellcheck source=_lib_lock.sh
+source "${BASH_SOURCE[0]%/*}/_lib_lock.sh"
 
 journal_stats() {
   local journal_file="${THERAPIST_DIR}/journal.jsonl"
