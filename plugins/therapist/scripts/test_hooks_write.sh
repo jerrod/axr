@@ -51,7 +51,7 @@ setup
 populate_journal 12 "ownership-avoidance"
 output=$(hook_write_json "This is ${pre_ex} code" "/tmp/test.py" | bash "${SCRIPT_DIR}/rubber-band.sh" 2>/dev/null)
 assert_contains "remind tier allows with context" "$output" "additionalContext"
-assert_not_contains "remind tier does not block" "$output" '"decision":"block"'
+assert_not_contains "remind tier does not block" "$output" '"decision": "block"'
 teardown
 
 echo ""
@@ -156,7 +156,7 @@ setup
 rm -f "${TEST_DIR}/.therapist/socratic-last"
 output=$(hook_write_json "# TODO: implement" "/tmp/test.py" | bash "${SCRIPT_DIR}/socratic.sh" 2>/dev/null)
 assert_contains "outputs additionalContext not block" "$output" "additionalContext"
-assert_not_contains "does not output decision:block" "$output" '"decision":"block"'
+assert_not_contains "does not output decision:block" "$output" '"decision": "block"'
 teardown
 
 echo ""

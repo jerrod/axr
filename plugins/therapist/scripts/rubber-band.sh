@@ -42,37 +42,10 @@ declare -A PHRASE_CONSEQUENCES=(
   ["not fixable"]="abandon investigation prematurely"
 )
 
-ensure_therapist_dir
-
-# Load project-local phrases from .claude/therapist-phrases.json if it exists
-PROJ_PHRASES_FILE="${PWD}/.claude/therapist-phrases.json"
-if [[ -f "$PROJ_PHRASES_FILE" ]]; then
-  while IFS=$'\t' read -r phrase correction category consequence; do
-    [[ -z "$phrase" ]] && continue
-    PHRASE_KEYS+=("$phrase")
-    PHRASES["$phrase"]="$correction"
-    PHRASE_CATEGORIES["$phrase"]="$category"
-    PHRASE_CONSEQUENCES["$phrase"]="$consequence"
-  done < <(jq -r '.phrases[]? | [.phrase, .correction, .category, .consequence] | @tsv' "$PROJ_PHRASES_FILE" 2>/dev/null || true)
-fi
-
-INPUT=$(cat)
-
-# Extract content from Write or Edit tool input
-CONTENT=$(printf '%s' "$INPUT" | jq -r '.tool_input.content // .tool_input.new_string // ""')
-
-if [[ -z "$CONTENT" ]]; then
-  exit 0
-fi
-
-# Load category counts from journal for graduation
-declare -A CATEGORY_COUNTS=()
-while IFS=: read -r cat count; do
-  [[ -z "$cat" ]] && continue
-  CATEGORY_COUNTS["$cat"]="$count"
-done < <(journal_category_counts 2>/dev/null || true)
-
-# Phrase map: pattern -> correction (sorted for deterministic iteration)
+# Phrase map: pattern -> correction (sorted for deterministic iteration).
+# Declared before the project-local phrase loader so that loader can append
+# to an already-initialised array rather than having its entries wiped out
+# by a later re-initialisation.
 declare -a PHRASE_KEYS=(
   "already broken"
   "can be addressed later"
@@ -91,6 +64,50 @@ declare -A PHRASES=(
   ["pre-existing"]="I own every file I touch"
   ["should be fine"]="Run verification. Read the output."
 )
+
+ensure_therapist_dir
+
+# Load project-local phrases from .claude/therapist-phrases.json if it exists.
+# Containment-check the file against the git repo root so a parent-dir or
+# symlinked location cannot inject arbitrary correction text into the
+# hook's decision JSON. Drop any TSV row whose phrase or correction
+# contains an embedded newline (jq @tsv only escapes tabs, not newlines).
+PROJ_PHRASES_FILE="${PWD}/.claude/therapist-phrases.json"
+_repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [[ -f "$PROJ_PHRASES_FILE" && -n "$_repo_root" ]]; then
+  _phrases_real=$(cd "$(dirname "$PROJ_PHRASES_FILE")" 2>/dev/null && pwd -P || true)
+  _repo_real=$(cd "$_repo_root" 2>/dev/null && pwd -P || true)
+  case "$_phrases_real" in
+    "$_repo_real"|"$_repo_real"/*)
+      while IFS=$'\t' read -r phrase correction category consequence; do
+        [[ -z "$phrase" ]] && continue
+        [[ "$phrase" == *$'\n'* ]] && continue
+        [[ "$correction" == *$'\n'* ]] && continue
+        PHRASE_KEYS+=("$phrase")
+        PHRASES["$phrase"]="$correction"
+        PHRASE_CATEGORIES["$phrase"]="$category"
+        PHRASE_CONSEQUENCES["$phrase"]="$consequence"
+      done < <(jq -r '.phrases[]? | [.phrase, .correction, .category, .consequence] | @tsv' "$PROJ_PHRASES_FILE" 2>/dev/null || true)
+      ;;
+  esac
+fi
+unset _repo_root _phrases_real _repo_real
+
+INPUT=$(cat)
+
+# Extract content from Write or Edit tool input
+CONTENT=$(printf '%s' "$INPUT" | jq -r '.tool_input.content // .tool_input.new_string // ""')
+
+if [[ -z "$CONTENT" ]]; then
+  exit 0
+fi
+
+# Load category counts from journal for graduation
+declare -A CATEGORY_COUNTS=()
+while IFS=: read -r cat count; do
+  [[ -z "$cat" ]] && continue
+  CATEGORY_COUNTS["$cat"]="$count"
+done < <(journal_category_counts 2>/dev/null || true)
 
 # Infer activating event from tool context
 FILE_PATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // "unknown file"')

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # grounding.sh — Standalone reality-check script
 #
 # Runs actual measurements on the current project and presents facts.
@@ -9,7 +10,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source-path=SCRIPTDIR
 source "${SCRIPT_DIR}/_lib.sh"
 
 echo "=== GROUNDING EXERCISE ==="

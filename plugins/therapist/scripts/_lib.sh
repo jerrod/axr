@@ -91,12 +91,16 @@ rotate_journal_if_needed() {
     return 0
   fi
   local line_count
-  line_count=$(wc -l <"$journal_file" 2>/dev/null || echo "0")
+  line_count=$(wc -l <"$journal_file" 2>/dev/null | tr -d ' ' || echo "0")
+  [[ -z "$line_count" ]] && line_count=0
   if [[ "$line_count" -gt "$MAX_JOURNAL_LINES" ]]; then
     local keep=$((MAX_JOURNAL_LINES / 2))
+    local archive_lines=$((line_count - keep))
     local archive
     archive="${THERAPIST_DIR}/journal.$(date +%Y%m%d%H%M%S).jsonl"
-    head -n "-${keep}" "$journal_file" >"$archive"
+    # Portable "all but the last N" — head -n -N is GNU-only and breaks on
+    # BSD head (macOS). Compute the count and use a positive head value.
+    head -n "$archive_lines" "$journal_file" >"$archive"
     tail -n "$keep" "$journal_file" >"${journal_file}.tmp"
     mv "${journal_file}.tmp" "$journal_file"
   fi
@@ -222,11 +226,53 @@ journal_log() {
   fi
 
   entry+="}"
-  (
-    flock -x 200
-    printf '%s\n' "$entry" >>"${THERAPIST_DIR}/journal.jsonl"
-  ) 200>"${THERAPIST_DIR}/journal.lock"
+  _journal_with_lock _journal_append_and_rotate "$entry"
+}
+
+# _journal_append_and_rotate — callback executed while holding the journal
+# lock. Takes the pre-built JSONL entry as arg 1 and performs the append
+# and rotation atomically so concurrent hook executions cannot overlap
+# with a rotate-in-progress and lose data.
+_journal_append_and_rotate() {
+  local entry="$1"
+  printf '%s\n' "$entry" >>"${THERAPIST_DIR}/journal.jsonl"
   rotate_journal_if_needed
+}
+
+# _journal_with_lock — acquire an exclusive journal lock, run the given
+# command with its arguments, and release the lock. Prefers flock(1) when
+# present (Linux, Homebrew util-linux on macOS). Falls back to a portable
+# mkdir-based advisory lock so the plugin works out of the box on macOS
+# where flock is not installed by default.
+_journal_with_lock() {
+  local cb="$1"
+  shift
+  local lock_file="${THERAPIST_DIR}/journal.lock"
+  if command -v flock >/dev/null 2>&1; then
+    (
+      flock -x 200
+      "$cb" "$@"
+    ) 200>"$lock_file"
+    return
+  fi
+  # mkdir is atomic on local filesystems — use a lock directory.
+  local lock_dir="${lock_file}.d"
+  local waited=0
+  while ! mkdir "$lock_dir" 2>/dev/null; do
+    sleep 0.05
+    waited=$((waited + 1))
+    # After ~5s, assume the holder crashed and steal the lock.
+    if [[ "$waited" -gt 100 ]]; then
+      rm -rf "$lock_dir" 2>/dev/null || true
+      mkdir "$lock_dir" 2>/dev/null || break
+      break
+    fi
+  done
+  # Ensure the lock is released even on callback failure.
+  trap 'rm -rf "${lock_dir}" 2>/dev/null || true' RETURN
+  "$cb" "$@"
+  rm -rf "$lock_dir" 2>/dev/null || true
+  trap - RETURN
 }
 
 journal_stats() {

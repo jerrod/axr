@@ -32,7 +32,7 @@ echo "journal_log (basic):"
 setup
 source "${SCRIPT_DIR}/_lib.sh"
 journal_log "rationalization" "test trigger" "test correction"
-assert_eq "journal file created" "1" "$(wc -l <"${TEST_DIR}/.therapist/journal.jsonl")"
+assert_eq "journal file created" "1" "$(wc -l <"${TEST_DIR}/.therapist/journal.jsonl" | tr -d ' ')"
 line=$(cat "${TEST_DIR}/.therapist/journal.jsonl")
 assert_contains "entry has type" "$line" '"type":"rationalization"'
 assert_contains "entry has trigger" "$line" '"trigger":"test trigger"'

@@ -28,7 +28,7 @@ All hooks resolve scripts via `${CLAUDE_PLUGIN_ROOT}/scripts/*.sh` so the plugin
 
 ## Tests
 
-`scripts/test_therapist.sh`, `scripts/test_hooks.sh`, `scripts/test_lib.sh`, `scripts/test_journal.sh` cover the library helpers, hook dispatch, and journal persistence.
+`scripts/test_therapist.sh` (which sources `test_hooks_write.sh` and `test_hooks_bash.sh`), `scripts/test_lib.sh`, and `scripts/test_journal.sh` cover the library helpers, hook dispatch, and journal persistence.
 
 ## Source
 

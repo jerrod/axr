@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # pause.sh — PreToolUse hook for Bash(git commit*)|Bash(git push*)
 #
 # Checks evidence that verification was done before allowing commit/push.
@@ -10,7 +11,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source-path=SCRIPTDIR
 source "${SCRIPT_DIR}/_lib.sh"
 
 ensure_therapist_dir
