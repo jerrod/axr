@@ -144,8 +144,10 @@ echo ""
 source "${SCRIPT_DIR}/test_lib.sh"
 # shellcheck source=test_journal.sh
 source "${SCRIPT_DIR}/test_journal.sh"
-# shellcheck source=test_hooks.sh
-source "${SCRIPT_DIR}/test_hooks.sh"
+# shellcheck source=test_hooks_write.sh
+source "${SCRIPT_DIR}/test_hooks_write.sh"
+# shellcheck source=test_hooks_bash.sh
+source "${SCRIPT_DIR}/test_hooks_bash.sh"
 
 # ═══════════════════════════════════════════════════════════════
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
