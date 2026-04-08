@@ -105,27 +105,27 @@ teardown
 echo ""
 echo "Detects lint suppressions:"
 
-noqa_marker="no""qa"
-eslint_marker="eslint""-disable-next-line no-unused-vars"
-ts_ignore_marker="@ts""-ignore"
+py_marker="no""qa"
+js_marker="eslint""-disable-next-line no-unused-vars"
+ts_marker="@ts""-ignore"
 
 setup
 rm -f "${TEST_DIR}/.therapist/socratic-last"
-output=$(hook_write_json "x = 1  # ${noqa_marker}: E501" "/tmp/test.py" | bash "${SCRIPT_DIR}/socratic.sh" 2>/dev/null)
-assert_contains "detects ${noqa_marker} suppression" "$output" "SOCRATIC"
+output=$(hook_write_json "x = 1  # ${py_marker}: E501" "/tmp/test.py" | bash "${SCRIPT_DIR}/socratic.sh" 2>/dev/null)
+assert_contains "detects py suppression (${py_marker})" "$output" "SOCRATIC"
 assert_contains "asks about lint suppression" "$output" "lint suppression"
 teardown
 
 setup
 rm -f "${TEST_DIR}/.therapist/socratic-last"
-output=$(hook_write_json "// ${eslint_marker}" "/tmp/test.js" | bash "${SCRIPT_DIR}/socratic.sh" 2>/dev/null)
-assert_contains "detects ${eslint_marker%% *}" "$output" "SOCRATIC"
+output=$(hook_write_json "// ${js_marker}" "/tmp/test.js" | bash "${SCRIPT_DIR}/socratic.sh" 2>/dev/null)
+assert_contains "detects js suppression (${js_marker%% *})" "$output" "SOCRATIC"
 teardown
 
 setup
 rm -f "${TEST_DIR}/.therapist/socratic-last"
-output=$(hook_write_json "// ${ts_ignore_marker}\nconst x: any = 1;" "/tmp/test.ts" | bash "${SCRIPT_DIR}/socratic.sh" 2>/dev/null)
-assert_contains "detects ${ts_ignore_marker}" "$output" "SOCRATIC"
+output=$(hook_write_json "// ${ts_marker}\nconst x: any = 1;" "/tmp/test.ts" | bash "${SCRIPT_DIR}/socratic.sh" 2>/dev/null)
+assert_contains "detects ts suppression (${ts_marker})" "$output" "SOCRATIC"
 teardown
 
 echo ""

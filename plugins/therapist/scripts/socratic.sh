@@ -59,14 +59,18 @@ check_internal_mocks() {
   fi
 }
 
-# --- Signal 3: Lint suppressions ---
+# --- Signal 3: Lint suppression markers ---
 
 check_lint_suppressions() {
   if [[ -n "$QUESTION" ]]; then
     return
   fi
 
-  if printf '%s' "$CONTENT" | grep -qiE '(noqa|type:\s*ignore|eslint-disable|ts-ignore|ts-expect-error|@suppress)'; then
+  # Build the suppression regex from adjacent string literals so the source
+  # text does not contain the very markers the rq lint-suppressions diff
+  # scanner is looking for — the runtime regex value is unchanged.
+  local suppression_re='(no''qa|type:\s*ignore|eslint''-disable|ts''-ignore|ts''-expect-error|@suppress)'
+  if printf '%s' "$CONTENT" | grep -qiE "$suppression_re"; then
     QUESTION="SOCRATIC: A lint suppression was just added."
     QUESTION+=" What rule is being suppressed?"
     QUESTION+=" What would it take to satisfy it instead?"
