@@ -72,37 +72,28 @@ class TestXmlSafety:
             ptf.MAX_XML_BYTES = original
 
     def test_defusedxml_fallback_import_path(self):
-        """When defusedxml is unavailable, the module falls back to stdlib ET.
-
-        Asserts on parser behavior (successfully parses a minimal valid JUnit
-        XML document with the fallback ET) rather than module.__name__, so
-        the test survives rename or aliasing of the underlying ET module.
-        """
+        """Fallback to stdlib ET when defusedxml is unavailable — asserts on
+        parser behavior (minimal valid JUnit parses) rather than module.__name__
+        so the test survives rename/aliasing of the underlying ET module."""
         saved_ET = ptf.ET
-        saved_modules = {
-            k: v for k, v in sys.modules.items() if k.startswith("defusedxml")
-        }
+        saved_modules = {k: v for k, v in sys.modules.items()
+                         if k.startswith("defusedxml")}
         for k in list(saved_modules):
             del sys.modules[k]
         sys.modules["defusedxml"] = None  # forces ImportError on submodule import
         try:
             reloaded = importlib.reload(ptf)
-            minimal = (
-                '<?xml version="1.0"?>'
-                '<testsuites><testsuite name="t" tests="1" failures="0">'
-                '<testcase classname="c" name="n"/></testsuite></testsuites>'
-            )
-            with tempfile.NamedTemporaryFile(
-                suffix=".xml", mode="w", delete=False
-            ) as f:
+            minimal = ('<?xml version="1.0"?>'
+                       '<testsuites><testsuite name="t" tests="1" failures="0">'
+                       '<testcase classname="c" name="n"/></testsuite></testsuites>')
+            with tempfile.NamedTemporaryFile(suffix=".xml", mode="w", delete=False) as f:
                 f.write(minimal)
                 f.flush()
                 result = reloaded.parse_junit_xml(f.name)
             os.unlink(f.name)
             assert isinstance(result, list)
         finally:
-            # Restore state directly so the test never depends on a second
-            # reload of ptf succeeding under the partially-restored modules.
+            # Direct restore so the test never depends on a second reload.
             del sys.modules["defusedxml"]
             sys.modules.update(saved_modules)
             ptf.ET = saved_ET

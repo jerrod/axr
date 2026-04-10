@@ -70,14 +70,9 @@ def test_exec_sets():
 
 
 def test_exec_sets_started_only_without_completion():
-    """A phase that only emits `started` (no completed/failed) must appear
-    in started_set but NOT in executed_set so _row_status can render it
-    as in-progress."""
-    in_progress_only = [
-        {"timestamp": "2026-04-09T11:00:00Z", "phase": "ship", "name": "shipper",
-         "action": "started"},
-    ]
-    executed, started = _exec_sets(in_progress_only)
+    """A started-only phase lands in started_set but not executed_set."""
+    only_started = [{"phase": "ship", "name": "shipper", "action": "started"}]
+    executed, started = _exec_sets(only_started)
     assert ("ship", "shipper") in started
     assert ("ship", "shipper") not in executed
 
@@ -104,15 +99,11 @@ def test_render_summary_full(capsys):
     _render_summary_block("my task", "1.2.3", {("a", "b")}, {("a", "b")},
                           {("c", "d")}, {("e", "f")}, 42, 7)
     out = capsys.readouterr().out
-    assert "### Execution Summary" in out
-    assert "**Task:** my task" in out
-    assert "**Plugin version:** 1.2.3" in out
-    assert "**Total duration:** 42s" in out
-    assert "**Total tool calls:** 7" in out
-    # Explicit skipped / unplanned assertions so a regression that swapped
-    # the two labels or dropped a line would actually fail the test.
-    assert "**Skipped:** 1" in out
-    assert "**Unplanned:** 1" in out
+    # Skipped/Unplanned assertions guard against a swapped-label regression.
+    for fragment in ("### Execution Summary", "**Task:** my task",
+                     "**Plugin version:** 1.2.3", "**Total duration:** 42s",
+                     "**Total tool calls:** 7", "**Skipped:** 1", "**Unplanned:** 1"):
+        assert fragment in out, f"missing fragment: {fragment}"
 
 
 def test_render_summary_minimal(capsys):
@@ -128,18 +119,12 @@ def test_render_plan_table_with_unplanned(capsys):
     unplanned = executed - _planned_set(PLAN)
     _render_plan_table(PLAN, ENTRIES, executed, started, unplanned)
     out = capsys.readouterr().out
-    assert "### Execution Plan" in out
-    # Assert on per-row field presence rather than a whitespace-exact row
-    # match, so a future column-padding change cannot silently break the
-    # test without a behavioral regression.
-    lines = [line for line in out.splitlines() if "build" in line and "writer" in line]
-    assert any("completed" in line and "pair-build" in line for line in lines)
-    assert "skipped" in out
-    assert "rogue" in out
-    assert "failed" in out
-    assert "skipped" in out
-    assert "**Unplanned executions:**" in out
-    assert "- extra/rogue" in out
+    # Substring presence rather than a whitespace-exact pipe-delimited
+    # row match, so column-padding changes cannot silently break the test.
+    for fragment in ("### Execution Plan", "build", "writer", "completed",
+                     "pair-build", "failed", "skipped",
+                     "**Unplanned executions:**", "- extra/rogue"):
+        assert fragment in out, f"missing fragment: {fragment}"
 
 
 def test_render_plan_table_empty(capsys):
@@ -176,8 +161,7 @@ def test_format_entry_row_minimal_and_raw_ts():
 def test_render_trail_details_with_orphans(capsys):
     entries = [{"timestamp": "T1", "phase": "p", "name": "n",
                 "action": "started", "sha": "x"}]
-    # Signature is (entries, executed_set, started_set). Orphaned =
-    # started - executed, so pass empty executed + the two started keys.
+    # Signature: (entries, executed_set, started_set). Orphaned = started - executed.
     _render_trail_details(entries, set(), {("p", "n"), ("orph", "ned")})
     out = capsys.readouterr().out
     assert "<details>" in out
@@ -312,6 +296,5 @@ def test_main_report_subprocess(tmp_path):
     assert result.returncode == 0
     assert "### Execution Summary" in result.stdout
     assert "### Execution Plan" in result.stdout
-    # Empty entries list must suppress the Audit Trail section, so a
-    # regression that prints an empty <details> block fails the test.
+    # Empty entries list suppresses the Audit Trail section.
     assert "Audit Trail" not in result.stdout

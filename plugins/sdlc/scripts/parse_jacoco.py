@@ -10,9 +10,9 @@ import json
 import sys
 
 try:
-    import defusedxml.ElementTree as ET
+    from defusedxml import ElementTree as ET
 except ImportError:
-    import xml.etree.ElementTree as ET
+    from xml.etree import ElementTree as ET
 
 
 def _safe_parse(path):

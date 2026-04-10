@@ -118,9 +118,7 @@ if [[ ${#recordings[@]} -gt 0 ]]; then
     echo "## Demo"
     echo ""
     for gif in "${recordings[@]}"; do
-      # Sanitize alt-text so a filename containing `]` or `(` cannot
-      # break out of the ![...](...) markdown image syntax and inject
-      # arbitrary markdown into the rendered PR description.
+      # Sanitize alt-text so filenames cannot break out of ![...](...) markdown.
       name=$(basename "$gif" .gif | tr -dc 'a-zA-Z0-9_-')
       echo "![${name}](${gif})"
       echo ""
@@ -171,8 +169,7 @@ for name, info in cats.items():
         echo "<details><summary>Screenshots</summary>"
         echo ""
         for png in "${screenshots[@]}"; do
-          # Same markdown-injection guard as Demo — sanitize the alt
-          # text so filenames cannot inject arbitrary markdown.
+          # Same markdown-injection guard as Demo above.
           name=$(basename "$png" .png | tr -dc 'a-zA-Z0-9_-')
           echo "![${name}](${png})"
           echo ""
