@@ -1,0 +1,5 @@
+{
+  "name": "skills-only-fixture",
+  "version": "0.1.0",
+  "description": "Test fixture: skills-only plugin (no commands, no scripts)"
+}

@@ -35,6 +35,51 @@ has_closed_frontmatter() {
     awk 'FNR>1 && /^---$/ {found=1; exit} END{exit !found}' "$file"
 }
 
+# validate_frontmatter_dir — iterate *.md under $root matching $find_args,
+# require closed YAML frontmatter with a description: field on each.
+# Args:
+#   $1 = plugin_name (for error messages)
+#   $2 = label       (e.g. "command", "skill", "agent" — used in pass/fail text)
+#   $3 = root        (directory to search)
+#   $4..$N = extra find args (e.g. -maxdepth 1, -mindepth 2 -maxdepth 2 -name SKILL.md)
+#
+# SCHEMA.md and README.md are exempted by basename in ALL directories —
+# harmless for commands/ and skills/ (no legitimate command or skill has
+# those names) and necessary for agents/ (revue ports may add agent READMEs).
+validate_frontmatter_dir() {
+    local plugin_name="$1"
+    local label="$2"
+    local root="$3"
+    shift 3
+    local files=()
+    local f base fm
+    while IFS= read -r -d '' f; do
+        base=$(basename "$f")
+        case "$base" in
+            SCHEMA.md|README.md) continue ;;
+        esac
+        files+=("$f")
+    done < <(find -P "$root" -type f -not -type l "$@" -print0 2>/dev/null)
+
+    if [ ${#files[@]} -eq 0 ]; then
+        fail "$plugin_name: $root exists but has no $label files"
+        return 0
+    fi
+
+    for f in "${files[@]}"; do
+        if ! has_closed_frontmatter "$f"; then
+            fail "$plugin_name: $f missing or unclosed YAML frontmatter"
+            continue
+        fi
+        fm=$(awk 'NR==1 && /^---$/ {inside=1; next} inside && /^---$/ {exit} inside {print}' "$f")
+        if printf '%s\n' "$fm" | grep -Eq '^[[:space:]]*description:[[:space:]]*.+'; then
+            pass "$plugin_name: $f frontmatter has description"
+        else
+            fail "$plugin_name: $f frontmatter missing description:"
+        fi
+    done
+}
+
 # sanitize — strip shell-unsafe chars from strings flowing into error output.
 sanitize() { printf '%s' "$1" | tr -d "\$()\`"; }
 
@@ -150,44 +195,49 @@ else
             done
         fi
 
-        # 3b. commands/ directory with at least one valid *.md
-        if [ ! -d "$plugin_dir/commands" ]; then
-            fail "$plugin_name: commands/ directory missing"
-        else
-            CMD_FILES=()
-            while IFS= read -r -d '' f; do
-                CMD_FILES+=("$f")
-            done < <(find -P "$plugin_dir/commands" -maxdepth 1 -type f -not -type l -name '*.md' -print0 2>/dev/null)
-
-            if [ ${#CMD_FILES[@]} -eq 0 ]; then
-                fail "$plugin_name: commands/ has no *.md files"
-            else
-                for f in "${CMD_FILES[@]}"; do
-                    if ! has_closed_frontmatter "$f"; then
-                        fail "$plugin_name: $f missing or unclosed YAML frontmatter"
-                        continue
-                    fi
-                    FM=$(awk 'NR==1 && /^---$/ {inside=1; next} inside && /^---$/ {exit} inside {print}' "$f")
-                    if printf '%s\n' "$FM" | grep -Eq '^[[:space:]]*description:[[:space:]]*.+'; then
-                        pass "$plugin_name: $f frontmatter has description"
-                    else
-                        fail "$plugin_name: $f frontmatter missing description:"
-                    fi
-                done
-            fi
+        # 3b. Entry-point requirement — plugin MUST have at least one of
+        # commands/, skills/, or agents/. Pure scripts-only plugins are not
+        # a supported Claude Code plugin shape.
+        has_commands=false; has_skills=false; has_agents=false
+        [ -d "$plugin_dir/commands" ] && has_commands=true
+        [ -d "$plugin_dir/skills" ]   && has_skills=true
+        [ -d "$plugin_dir/agents" ]   && has_agents=true
+        if ! $has_commands && ! $has_skills && ! $has_agents; then
+            fail "$plugin_name: no entry point — need at least one of commands/, skills/, agents/"
         fi
 
-        # 3c. scripts/ directory with executable *.sh files
-        if [ ! -d "$plugin_dir/scripts" ]; then
-            fail "$plugin_name: scripts/ directory missing"
-        else
+        # 3c. commands/ (optional) — flat *.md with description: frontmatter.
+        if $has_commands; then
+            validate_frontmatter_dir "$plugin_name" "command" \
+                "$plugin_dir/commands" -maxdepth 1 -name '*.md'
+        fi
+
+        # 3d. skills/ (optional) — skills/<name>/SKILL.md with description:
+        # frontmatter. Assumes the standard skills/<name>/SKILL.md layout;
+        # nested sub-skills (skills/<name>/<sub>/SKILL.md) are not validated.
+        if $has_skills; then
+            validate_frontmatter_dir "$plugin_name" "skill" \
+                "$plugin_dir/skills" -mindepth 2 -maxdepth 2 -name 'SKILL.md'
+        fi
+
+        # 3e. agents/ (optional) — recurses to support both flat (agents/foo.md)
+        # and nested (agents/foo/foo.md) layouts. SCHEMA.md / README.md exempt
+        # via validate_frontmatter_dir's basename filter.
+        if $has_agents; then
+            validate_frontmatter_dir "$plugin_name" "agent" \
+                "$plugin_dir/agents" -name '*.md'
+        fi
+
+        # 3f. scripts/ (optional) — if present, every *.sh must be executable.
+        # Agent-team plugins with no bash scripts are allowed.
+        if [ -d "$plugin_dir/scripts" ]; then
             SH_FILES=()
             while IFS= read -r -d '' f; do
                 SH_FILES+=("$f")
             done < <(find -P "$plugin_dir/scripts" -type f -not -type l -name '*.sh' -print0 2>/dev/null)
 
             if [ ${#SH_FILES[@]} -eq 0 ]; then
-                fail "$plugin_name: scripts/ has no *.sh files"
+                fail "$plugin_name: scripts/ exists but has no *.sh files"
             else
                 for f in "${SH_FILES[@]}"; do
                     if [ -x "$f" ]; then
@@ -199,35 +249,7 @@ else
             fi
         fi
 
-        # 3d. agents/ directory (optional) — if present, every *.md must have
-        # closed YAML frontmatter with description: (same rules as commands).
-        # SCHEMA.md and other non-agent docs are exempt (no frontmatter expected).
-        if [ -d "$plugin_dir/agents" ]; then
-            AGENT_FILES=()
-            while IFS= read -r -d '' f; do
-                AGENT_FILES+=("$f")
-            done < <(find -P "$plugin_dir/agents" -maxdepth 1 -type f -not -type l -name '*.md' -print0 2>/dev/null)
-
-            for f in "${AGENT_FILES[@]}"; do
-                base=$(basename "$f")
-                # Skip docs files that aren't agent definitions.
-                case "$base" in
-                    SCHEMA.md|README.md) continue ;;
-                esac
-                if ! has_closed_frontmatter "$f"; then
-                    fail "$plugin_name: $f missing or unclosed YAML frontmatter"
-                    continue
-                fi
-                FM=$(awk 'NR==1 && /^---$/ {inside=1; next} inside && /^---$/ {exit} inside {print}' "$f")
-                if printf '%s\n' "$FM" | grep -Eq '^[[:space:]]*description:[[:space:]]*.+'; then
-                    pass "$plugin_name: $f frontmatter has description"
-                else
-                    fail "$plugin_name: $f frontmatter missing description:"
-                fi
-            done
-        fi
-
-        # 3e. plugin-local validate hook — refuse symlinks entirely, then
+        # 3g. plugin-local validate hook — refuse symlinks entirely, then
         # containment-check the resolved parent dir. Rejecting symlinked
         # validate files eliminates the symlink-escape bypass and also
         # narrows the TOCTOU window by doing -L + exec back-to-back.

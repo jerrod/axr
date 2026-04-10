@@ -1,0 +1,5 @@
+{
+  "name": "no-entry-point-fixture",
+  "version": "0.1.0",
+  "description": "Test fixture: plugin with no commands/, skills/, or agents/ — must be rejected"
+}
