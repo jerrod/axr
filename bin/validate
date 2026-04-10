@@ -242,8 +242,9 @@ else
                         # Using git log instead of filesystem mtime because CI clones
                         # set all mtimes to checkout time, making -newer unreliable.
                         stale=false
-                        build_ts=$(cat "$build_stamp")
-                        latest_source_ts=$(git log -1 --format=%aI -- \
+                        build_ts=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$(cat "$build_stamp")" "+%s" 2>/dev/null \
+                            || date -d "$(cat "$build_stamp")" "+%s" 2>/dev/null || echo "0")
+                        latest_source_ts=$(git log -1 --format=%at -- \
                             "$plugin_dir/agents" \
                             "$plugin_dir/skills" \
                             "$plugin_dir/commands" \
@@ -251,8 +252,8 @@ else
                             "$plugin_dir/.claude-plugin/plugin.json" \
                             "$plugin_dir/codex-hook-overrides.json" \
                             "$plugin_dir/AGENTS.md" \
-                            2>/dev/null || echo "")
-                        if [ -n "$latest_source_ts" ] && [[ "$latest_source_ts" > "$build_ts" ]]; then
+                            2>/dev/null || echo "0")
+                        if [ -n "$latest_source_ts" ] && [ "$latest_source_ts" -gt "$build_ts" ] 2>/dev/null; then
                             stale=true
                         fi
                         if $stale; then
