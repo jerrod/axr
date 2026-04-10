@@ -76,6 +76,8 @@ normalize_tools_line() {
 }
 
 # transform_skills — copy SKILL.md files preserving directory structure.
+# Refuses symlinks so a malicious skill can't point cp at a file outside
+# the plugin tree.
 transform_skills() {
   local plugin_dir="$1" dist_dir="$2"
   [[ -d "$plugin_dir/skills" ]] || return 0
@@ -85,7 +87,7 @@ transform_skills() {
     target_dir="$dist_dir/skills/$(dirname "$rel_path")"
     mkdir -p "$target_dir"
     cp "$skill_file" "$target_dir/"
-  done < <(find -P "$plugin_dir/skills" -name 'SKILL.md' -print0)
+  done < <(find -P "$plugin_dir/skills" -type f -not -type l -name 'SKILL.md' -print0)
 }
 
 # transform_agent — convert a single agent .md to TOML in dist.
@@ -114,13 +116,13 @@ transform_agent() {
   } > "$out"
 }
 
-# transform_agents — find and convert all agent .md files.
+# transform_agents — find and convert all agent .md files. Refuses symlinks.
 transform_agents() {
   local plugin_dir="$1" dist_dir="$2"
   [[ -d "$plugin_dir/agents" ]] || return 0
   while IFS= read -r -d '' agent_file; do
     transform_agent "$agent_file" "$dist_dir"
-  done < <(find -P "$plugin_dir/agents" -name '*.md' \
+  done < <(find -P "$plugin_dir/agents" -type f -not -type l -name '*.md' \
     -not -name 'README.md' -not -name 'SCHEMA.md' -print0)
 }
 
