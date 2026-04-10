@@ -24,9 +24,9 @@ BANNED_PATTERNS=(
 # Build combined regex
 regex=$(IFS='|'; echo "${BANNED_PATTERNS[*]}")
 
-# Check staged files only
-violations=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null \
-    | xargs grep -nE "$regex" 2>/dev/null || true)
+# Check staged files only (null-delimited for filename safety)
+violations=$(git diff --cached --name-only -z --diff-filter=ACM 2>/dev/null \
+    | xargs -0 grep -nE "$regex" -- 2>/dev/null || true)
 
 if [ -n "$violations" ]; then
     printf 'BLOCKED: Mock/lint-suppression patterns found in staged files:\n%s\n' "$violations"
