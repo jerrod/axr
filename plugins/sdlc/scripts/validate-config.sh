@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # JSON Schema validator for sdlc.config.json.
-# Sourced by load-config.sh. Provides validate_rq_config function.
+# Sourced by load-config.sh. Provides validate_sdlc_config function.
 
-# validate_rq_config
+# validate_sdlc_config
 # Validates sdlc.config.json against schemas/sdlc-config.json.
 # Caches the result by content hash of sdlc.config.json to avoid re-validating.
 # Exits the script with stderr on validation failure.
-validate_rq_config() {
+validate_sdlc_config() {
   # No config file = nothing to validate
   [ -n "$SDLC_CONFIG_FILE" ] || return 0
   [ -f "$SDLC_CONFIG_FILE" ] || return 0
@@ -122,7 +122,7 @@ if errors:
   fi
   return 0
 }
-export -f validate_rq_config
-# Caller (load-config.sh) is responsible for invoking validate_rq_config and
+export -f validate_sdlc_config
+# Caller (load-config.sh) is responsible for invoking validate_sdlc_config and
 # deciding how to handle failure — a sourced file cannot reliably exit or
 # return on behalf of its parent.

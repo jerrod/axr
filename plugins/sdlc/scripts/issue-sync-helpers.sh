@@ -5,29 +5,29 @@
 
 # ─── Temp file registry ─────────────────────────────────────────
 
-_RQ_TMPFILES=()
-_rq_cleanup() {
+_SDLC_TMPFILES=()
+_sdlc_cleanup() {
   local f
-  for f in "${_RQ_TMPFILES[@]}"; do
+  for f in "${_SDLC_TMPFILES[@]}"; do
     rm -f "$f"
   done
 }
 
 # Compose with any existing EXIT trap — preserve caller's cleanup
-_RQ_PRIOR_EXIT_TRAP=$(trap -p EXIT 2>/dev/null | sed -E "s/^trap -- '(.*)' EXIT$/\\1/")
-_rq_cleanup_chained() {
-  _rq_cleanup
-  if [ -n "$_RQ_PRIOR_EXIT_TRAP" ]; then
-    eval "$_RQ_PRIOR_EXIT_TRAP"
+_SDLC_PRIOR_EXIT_TRAP=$(trap -p EXIT 2>/dev/null | sed -E "s/^trap -- '(.*)' EXIT$/\\1/")
+_sdlc_cleanup_chained() {
+  _sdlc_cleanup
+  if [ -n "$_SDLC_PRIOR_EXIT_TRAP" ]; then
+    eval "$_SDLC_PRIOR_EXIT_TRAP"
   fi
   return 0
 }
-trap _rq_cleanup_chained EXIT
+trap _sdlc_cleanup_chained EXIT
 
-_rq_mktemp() {
+_sdlc_mktemp() {
   local f
   f=$(mktemp)
-  _RQ_TMPFILES+=("$f")
+  _SDLC_TMPFILES+=("$f")
   echo "$f"
 }
 
@@ -135,7 +135,7 @@ build_issue_body() {
 inject_header_field() {
   local plan_file="$1" field="$2" value="$3"
   local tmpf
-  tmpf=$(_rq_mktemp)
+  tmpf=$(_sdlc_mktemp)
   local injected=0
   while IFS= read -r line; do
     echo "$line" >>"$tmpf"

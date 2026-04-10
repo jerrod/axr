@@ -4,7 +4,7 @@
 Invoked from bash is_allowed() in threshold-helpers.sh.
 
 Args:
-  sys.argv[1]: JSON allow config (from $_RQ_ALLOW_CONFIG)
+  sys.argv[1]: JSON allow config (from $_SDLC_ALLOW_CONFIG)
   sys.argv[2]: gate name
   sys.argv[3:]: field=value pairs (e.g. file=src/foo.py name=bar type=unused_import)
 

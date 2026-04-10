@@ -2,6 +2,14 @@
 # Tests for audit-trail.sh
 set -euo pipefail
 
+# AUDIT_SYNC_WRITES=1 forces audit-trail.sh's no-flock fallback path to
+# merge per-entry files into trail.json on every log call. Without it the
+# "Log command" tests below hang on macOS (no flock available) because
+# trail.json stays empty and the test's json_field extraction crashes.
+# Production code MUST NOT set this — it re-introduces the concurrent-write
+# race that the per-entry fallback is designed to prevent.
+export AUDIT_SYNC_WRITES=1
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUDIT_SCRIPT="$SCRIPT_DIR/audit-trail.sh"
 PASS=0
@@ -316,8 +324,9 @@ echo '{"id":"test-entry-2","timestamp":"2026-01-01T00:01:00Z","phase":"review","
 report=$(bash "$AUDIT_SCRIPT" report 2>&1)
 assert_contains "report merges per-entry files" "$report" "sdlc:builder"
 assert_contains "report merges both entries" "$report" "sdlc:reviewer"
-# Entry files should be cleaned up after merge
-count=$(find "$AUDIT_DIR/entries" -name '*.json' 2>/dev/null | wc -l)
+# Entry files should be cleaned up after merge.
+# `wc -l` pads with leading spaces on BSD/macOS — strip with tr before compare.
+count=$(find "$AUDIT_DIR/entries" -name '*.json' 2>/dev/null | wc -l | tr -d '[:space:]')
 assert_eq "entry files removed after merge" "0" "$count"
 teardown
 

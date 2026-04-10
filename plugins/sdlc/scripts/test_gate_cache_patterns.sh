@@ -34,14 +34,15 @@ assert_contains() {
 # Source just the helper functions from run-gates.sh without running main.
 # We extract lines from the "Cache helpers" section up to the cache-check loop.
 source_cache_helpers() {
-  # Extract only the pattern functions from run-gates.sh via process
-  # substitution — avoids shared /tmp state and parallel-run races.
-  # Start AFTER the "CURRENT_SHA=" assignment so sourcing doesn't clobber
-  # test state. Stop before _gate_cached() to avoid capturing a half-function.
+  # Extract only the pattern functions (_gate_patterns, _files_changed_for_gate)
+  # from run-gates.sh via process substitution — avoids shared /tmp state and
+  # parallel-run races. Anchored to the exact `_gate_patterns()` function
+  # declaration and stops just before `_gate_cached()` to avoid capturing a
+  # half-function.
   # shellcheck source=/dev/null
   source <(awk '
-    /^# File patterns each gate cares about/ { in_block=1 }
-    /^# Returns 0 if proof file shows pass/ { in_block=0 }
+    /^_gate_patterns\(\) \{/ { in_block=1 }
+    /^_gate_cached\(\) \{/   { in_block=0 }
     in_block { print }
   ' "$RUN_GATES")
 }

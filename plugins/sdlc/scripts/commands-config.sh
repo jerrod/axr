@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Command configuration helpers for sdlc quality gates.
 # Sourced by gate scripts that need explicit command config.
-# Requires load-config.sh to be sourced first (sets _RQ_COMMANDS_CONFIG).
+# Requires load-config.sh to be sourced first (sets _SDLC_COMMANDS_CONFIG).
 set -uo pipefail
 
 # get_command <gate>
@@ -21,7 +21,7 @@ elif isinstance(cmd, str):
     print(cmd)
 else:
     print(json.dumps(cmd))
-" "$_RQ_COMMANDS_CONFIG" "$gate" 2>/dev/null || true
+" "$_SDLC_COMMANDS_CONFIG" "$gate" 2>/dev/null || true
 }
 
 # parse_command_config <json_string>

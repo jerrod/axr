@@ -224,6 +224,13 @@ json.dump(trail, open(os.environ['AT_TRAIL_FILE'], 'w'), indent=2)
     local entries_dir="$AUDIT_DIR/entries"
     mkdir -p "$entries_dir"
     echo "$entry_json" >"$entries_dir/${entry_id}.json"
+    # AUDIT_SYNC_WRITES=1 forces an immediate merge into trail.json. Used by
+    # tests that want deterministic post-log reads on macOS (no flock). Do
+    # NOT set this in production — it re-introduces the concurrent-write
+    # race that the per-entry fallback is designed to prevent.
+    if [ -n "${AUDIT_SYNC_WRITES:-}" ]; then
+      merge_pending_entries
+    fi
   fi
 
   echo "Logged: $phase/$name/$action"

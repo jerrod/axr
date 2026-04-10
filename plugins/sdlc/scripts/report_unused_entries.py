@@ -4,7 +4,7 @@
 Invoked from bash report_unused_allow_entries() in threshold-helpers.sh.
 
 Args:
-  sys.argv[1]: JSON allow config (from $_RQ_ALLOW_CONFIG)
+  sys.argv[1]: JSON allow config (from $_SDLC_ALLOW_CONFIG)
   sys.argv[2]: gate name
   sys.argv[3]: path to allow-tracking-<gate>.jsonl
 

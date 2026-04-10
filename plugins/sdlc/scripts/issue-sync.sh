@@ -33,7 +33,7 @@ do_create() {
   # Strip double-quotes from title to neutralize flag-injection attempts (F3).
   safe_title=$(printf '%s' "$title" | tr -d '"')
 
-  body_file=$(_rq_mktemp)
+  body_file=$(_sdlc_mktemp)
   build_issue_body "$plan_file" >"$body_file"
 
   local issue_url
@@ -103,7 +103,7 @@ do_update() {
 
   local body body_json
   body=$(build_issue_body "$plan_file")
-  body_json=$(_rq_mktemp)
+  body_json=$(_sdlc_mktemp)
   echo "$body" | jq -Rs '{body: .}' >"$body_json"
 
   gh api "repos/$owner_repo/issues/$issue_number" \
@@ -217,7 +217,7 @@ do_link_parent() {
   fi
 
   local sub_json
-  sub_json=$(_rq_mktemp)
+  sub_json=$(_sdlc_mktemp)
   jq -n --argjson id "$child_id" '{sub_issue_id: $id}' >"$sub_json"
 
   if ! gh api "repos/$parent_owner_repo/issues/$parent_number/sub_issues" \

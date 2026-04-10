@@ -5,9 +5,9 @@
 #
 # Consumers of these functions should source load-config.sh, NOT this file directly.
 
-# _RQ_SCRIPT_DIR locates sibling Python modules (path_match.py, is_allowed_check.py).
-_RQ_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export _RQ_SCRIPT_DIR
+# _SDLC_SCRIPT_DIR locates sibling Python modules (path_match.py, is_allowed_check.py).
+_SDLC_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export _SDLC_SCRIPT_DIR
 
 # get_threshold <filename> <threshold_key>
 # Resolves per-path, then per-extension override. Prints value or "null" (meaning skip).
@@ -17,7 +17,7 @@ get_threshold() {
   local key="$2"
   python3 -c "
 import json, os, sys
-sys.path.insert(0, os.environ['_RQ_SCRIPT_DIR'])
+sys.path.insert(0, os.environ['_SDLC_SCRIPT_DIR'])
 from path_match import path_match
 path_config = json.loads(sys.argv[1])
 ext_config = json.loads(sys.argv[2])
@@ -35,7 +35,7 @@ if ext in ext_config and key in ext_config[ext]:
     print('null' if val is None else val)
 else:
     print(global_config.get(key, 'null'))
-" "$_RQ_PATH_CONFIG" "$_RQ_EXT_CONFIG" "$_RQ_GLOBAL_CONFIG" "$file" "$key" 2>/dev/null
+" "$_SDLC_PATH_CONFIG" "$_SDLC_EXT_CONFIG" "$_SDLC_GLOBAL_CONFIG" "$file" "$key" 2>/dev/null
 }
 
 # resolve_all_thresholds <file_list_file> <threshold_key>
@@ -45,7 +45,7 @@ resolve_all_thresholds() {
   local key="$2"
   python3 -c "
 import json, os, sys
-sys.path.insert(0, os.environ['_RQ_SCRIPT_DIR'])
+sys.path.insert(0, os.environ['_SDLC_SCRIPT_DIR'])
 from path_match import path_match
 path_config = json.loads(sys.argv[1])
 ext_config = json.loads(sys.argv[2])
@@ -73,7 +73,7 @@ with open(sys.argv[4]) as f:
         else:
             default = global_config.get(key, 'null')
             print(f'{path}\t{default}')
-" "$_RQ_PATH_CONFIG" "$_RQ_EXT_CONFIG" "$_RQ_GLOBAL_CONFIG" "$file_list" "$key" 2>/dev/null
+" "$_SDLC_PATH_CONFIG" "$_SDLC_EXT_CONFIG" "$_SDLC_GLOBAL_CONFIG" "$file_list" "$key" 2>/dev/null
 }
 
 # is_allowed <gate> <field1=value1> [field2=value2 ...]
@@ -83,8 +83,8 @@ with open(sys.argv[4]) as f:
 is_allowed() {
   local gate="$1"
   shift
-  [ -n "${_RQ_ALLOW_CONFIG:-}" ] || return 1
-  python3 "$_RQ_SCRIPT_DIR/is_allowed_check.py" "$_RQ_ALLOW_CONFIG" "$gate" "$@" 2>/dev/null
+  [ -n "${_SDLC_ALLOW_CONFIG:-}" ] || return 1
+  python3 "$_SDLC_SCRIPT_DIR/is_allowed_check.py" "$_SDLC_ALLOW_CONFIG" "$gate" "$@" 2>/dev/null
 }
 
 # report_unused_allow_entries <gate>
@@ -96,7 +96,7 @@ report_unused_allow_entries() {
   local proof_dir="${PROOF_DIR:-.quality/proof}"
   local tracking_file="$proof_dir/allow-tracking-$gate.jsonl"
 
-  python3 "$_RQ_SCRIPT_DIR/report_unused_entries.py" "$_RQ_ALLOW_CONFIG" "$gate" "$tracking_file" || true
+  python3 "$_SDLC_SCRIPT_DIR/report_unused_entries.py" "$_SDLC_ALLOW_CONFIG" "$gate" "$tracking_file" || true
 }
 export -f report_unused_allow_entries
 

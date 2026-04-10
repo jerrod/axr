@@ -16,7 +16,7 @@ def run_validator(config_dict):
         # Pass paths via env rather than interpolating into the shell command.
         env = {**os.environ, "SDLC_CONFIG_FILE": config_path, "LOAD_CONFIG": f"{SCRIPT_DIR}/load-config.sh"}
         result = subprocess.run(
-            ["bash", "-c", 'source "$LOAD_CONFIG" && validate_rq_config'],
+            ["bash", "-c", 'source "$LOAD_CONFIG" && validate_sdlc_config'],
             capture_output=True, text=True, env=env,
         )
         return result.returncode, result.stderr
@@ -151,7 +151,7 @@ def _find_repo_root(start):
 
 
 class TestCurrentConfigPasses:
-    def test_repo_rq_config_json_validates(self):
+    def test_repo_sdlc_config_json_validates(self):
         """The actual sdlc.config.json in this repo must pass validation."""
         repo_root = _find_repo_root(SCRIPT_DIR)
         with open(os.path.join(repo_root, "sdlc.config.json")) as f:

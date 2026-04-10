@@ -173,7 +173,7 @@ VIOLATIONS_JSON=$(python3 "$SCRIPT_DIR/analyze_complexity.py" \
   --files "${FILE_ARGS[@]}" \
   --max-function-lines "$SDLC_MAX_FUNCTION_LINES" \
   --max-complexity "$SDLC_MAX_COMPLEXITY" \
-  --allow-json "$_RQ_ALLOW_CONFIG" 2>"$ANALYSIS_STDERR") || ANALYSIS_EXIT=$?
+  --allow-json "$_SDLC_ALLOW_CONFIG" 2>"$ANALYSIS_STDERR") || ANALYSIS_EXIT=$?
 
 if [ $ANALYSIS_EXIT -ne 0 ] || [ -z "$VIOLATIONS_JSON" ]; then
   echo "analyze_complexity.py failed (exit $ANALYSIS_EXIT):" >&2
