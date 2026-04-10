@@ -1,0 +1,40 @@
+{
+  "name": "sdlc",
+  "version": "0.1.0",
+  "description": "Full development lifecycle with executable quality gates. Brainstorm, plan, pair-build, review, and ship — every gate is a script, every claim is proven.",
+  "author": {
+    "name": "arqu-co"
+  },
+  "homepage": "https://github.com/jerrod/agent-plugins",
+  "repository": "https://github.com/jerrod/agent-plugins",
+  "license": "MIT",
+  "keywords": [
+    "quality",
+    "testing",
+    "coverage",
+    "review",
+    "ci",
+    "gates"
+  ],
+  "interface": {
+    "displayName": "Sdlc",
+    "shortDescription": "Full development lifecycle with executable quality gates.",
+    "longDescription": "Full development lifecycle with executable quality gates. Brainstorm, plan, pair-build, review, and ship — every gate is a script, every claim is proven.",
+    "developerName": "arqu-co",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/jerrod/agent-plugins",
+    "privacyPolicyURL": "https://github.com/jerrod/agent-plugins",
+    "termsOfServiceURL": "https://github.com/jerrod/agent-plugins",
+    "defaultPrompt": [
+      "Full development lifecycle with executable quality gates."
+    ],
+    "brandColor": "#3B82F6",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
+}

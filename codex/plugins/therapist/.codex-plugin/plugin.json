@@ -1,0 +1,44 @@
+{
+  "name": "therapist",
+  "version": "2.0.0",
+  "description": "Diagnose and fix persistent behavioral issues in Claude sessions using a CBT framework. Eleven tools with adaptive graduation, behavioral experiments, positive reinforcement, and relapse prevention.",
+  "author": {
+    "name": "arqu-co"
+  },
+  "homepage": "https://github.com/jerrod/agent-plugins",
+  "repository": "https://github.com/jerrod/agent-plugins",
+  "license": "MIT",
+  "keywords": [
+    "cbt",
+    "behavior",
+    "distortion",
+    "diagnosis",
+    "hooks",
+    "intervention",
+    "graduation",
+    "behavioral-experiments",
+    "positive-reinforcement",
+    "relapse-prevention"
+  ],
+  "interface": {
+    "displayName": "Therapist",
+    "shortDescription": "Diagnose and fix persistent behavioral issues in Claude sessions using a CBT framework.",
+    "longDescription": "Diagnose and fix persistent behavioral issues in Claude sessions using a CBT framework. Eleven tools with adaptive graduation, behavioral experiments, positive reinforcement, and relapse prevention.",
+    "developerName": "arqu-co",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/jerrod/agent-plugins",
+    "privacyPolicyURL": "https://github.com/jerrod/agent-plugins",
+    "termsOfServiceURL": "https://github.com/jerrod/agent-plugins",
+    "defaultPrompt": [
+      "Diagnose and fix persistent behavioral issues in Claude sessions using a CBT framework."
+    ],
+    "brandColor": "#3B82F6",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
+}

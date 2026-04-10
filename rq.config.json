@@ -9,7 +9,7 @@
     "md": { "max_file_lines": 600 }
   },
   "path_overrides": {
-    "plugins/*/dist/**": {
+    "codex/**": {
       "max_file_lines": null,
       "max_function_lines": null,
       "max_complexity": null
@@ -18,34 +18,34 @@
   "allow": {
     "test-quality": [
       {
-        "file": "plugins/sdlc/dist/codex/scripts/test_gh_client.py",
+        "file": "codex/plugins/sdlc/scripts/test_gh_client.py",
         "pattern": "@patch without wraps",
         "reason": "Generated copy of sdlc test file — mock patterns exist in source, not introduced by codex port"
       },
       {
-        "file": "plugins/sdlc/dist/codex/scripts/test_inspect_pr_checks.py",
+        "file": "codex/plugins/sdlc/scripts/test_inspect_pr_checks.py",
         "pattern": "@patch without wraps",
         "reason": "Generated copy of sdlc test file — mock patterns exist in source, not introduced by codex port"
       },
       {
-        "file": "plugins/sdlc/dist/codex/scripts/test_scan_disguised_mocks.py",
+        "file": "codex/plugins/sdlc/scripts/test_scan_disguised_mocks.py",
         "pattern": "@patch without wraps",
         "reason": "Generated copy of test-quality gate test — contains mock patterns as detection targets"
       },
       {
-        "file": "plugins/sdlc/dist/codex/scripts/test_scan_disguised_mocks.py",
+        "file": "codex/plugins/sdlc/scripts/test_scan_disguised_mocks.py",
         "pattern": "patch.object with return_value (no wraps)",
         "reason": "Generated copy of test-quality gate test — contains patterns as detection targets"
       },
       {
-        "file": "plugins/sdlc/dist/codex/scripts/test_scan_disguised_mocks.py",
+        "file": "codex/plugins/sdlc/scripts/test_scan_disguised_mocks.py",
         "pattern": "Mock/MagicMock assignment",
         "reason": "Generated copy of test-quality gate test — contains patterns as detection targets"
       }
     ],
     "complexity": [
       {
-        "file": "plugins/*/dist/codex/scripts/*",
+        "file": "codex/plugins/*/scripts/*",
         "reason": "Generated copies of source scripts — complexity already passes on originals"
       }
     ],
@@ -55,15 +55,15 @@
         "reason": "Script text contains lint-suppression patterns as detection targets, not actual suppressions"
       },
       {
-        "file": "plugins/sdlc/dist/codex/scripts/mock-pattern-guard.sh",
+        "file": "codex/plugins/sdlc/scripts/mock-pattern-guard.sh",
         "reason": "Generated copy of mock-pattern-guard.sh — contains patterns as detection targets"
       },
       {
-        "file": "plugins/sdlc/dist/codex/scripts/gate-lint.sh",
+        "file": "codex/plugins/sdlc/scripts/gate-lint.sh",
         "reason": "Generated copy of gate-lint.sh — contains suppression regex as detection logic"
       },
       {
-        "file": "plugins/sdlc/dist/codex/agents/critic.toml",
+        "file": "codex/plugins/sdlc/agents/critic.toml",
         "reason": "Generated agent TOML — critic instructions list banned patterns for review guidance"
       }
     ]

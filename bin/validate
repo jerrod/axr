@@ -18,11 +18,7 @@ cd_repo_root() {
         cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
     fi
 }
-has_closed_frontmatter() {
-    local file="$1"
-    [ "$(head -n1 "$file")" = "---" ] || return 1
-    awk 'FNR>1 && /^---$/ {found=1; exit} END{exit !found}' "$file"
-}
+# has_closed_frontmatter is sourced from bin/lib/common.sh below, after cd_repo_root.
 # validate_frontmatter_dir <plugin_name> <label> <root> <name_glob> [mindepth] [maxdepth]
 # Asserts closed YAML frontmatter with description: on each *.md (exempts SCHEMA/README).
 validate_frontmatter_dir() {
@@ -64,6 +60,11 @@ validate_frontmatter_dir() {
 cd_repo_root
 REPO_ROOT_REAL="$(pwd -P)" || { printf 'bin/validate: fatal: pwd -P failed\n' >&2; exit 1; }
 [ -n "$REPO_ROOT_REAL" ] || { printf 'bin/validate: fatal: REPO_ROOT_REAL is empty\n' >&2; exit 1; }
+
+# shellcheck source=bin/lib/common.sh
+source "bin/lib/common.sh"
+# shellcheck source=bin/lib/validate-codex.sh
+source "bin/lib/validate-codex.sh"
 
 # --- Check 1: All *.json files parse ---
 section "Check 1: JSON files parse"
@@ -224,57 +225,14 @@ else
             esac
         fi
 
-        # 3h. Codex platform checks — if plugin claims codex support,
-        # verify dist/codex/ exists, is not stale, and has valid artifacts.
-        if [ -f "$plugin_json" ]; then
-            codex_status=$(jq -r '.platforms.codex.status // "none"' "$plugin_json" 2>/dev/null)
-            case "$codex_status" in
-                skill-compatible|hook-dependent)
-                    codex_dist="$plugin_dir/dist/codex"
-                    build_stamp="$codex_dist/.build-stamp"
-                    if [ ! -d "$codex_dist" ]; then
-                        fail "$plugin_name: claims codex $codex_status but dist/codex/ missing — run bin/build-codex"
-                    elif [ ! -f "$build_stamp" ]; then
-                        fail "$plugin_name: dist/codex/ missing .build-stamp — run bin/build-codex"
-                    else
-                        # Staleness: check if any source file was modified after
-                        # the dist/ build-stamp was last committed.
-                        # Uses git log commit order — works identically on macOS and Linux CI.
-                        stale=false
-                        stamp_commit=$(git log -1 --format=%H -- "$build_stamp" 2>/dev/null || echo "")
-                        if [ -n "$stamp_commit" ]; then
-                            source_changes=$(git log --oneline "$stamp_commit"..HEAD -- \
-                                "$plugin_dir/agents" \
-                                "$plugin_dir/skills" \
-                                "$plugin_dir/commands" \
-                                "$plugin_dir/hooks/hooks.json" \
-                                "$plugin_dir/.claude-plugin/plugin.json" \
-                                "$plugin_dir/codex-hook-overrides.json" \
-                                "$plugin_dir/AGENTS.md" \
-                                2>/dev/null | head -1)
-                            [ -n "$source_changes" ] && stale=true
-                        fi
-                        if $stale; then
-                            fail "$plugin_name: dist/codex/ is stale — source files changed since last build"
-                        else
-                            pass "$plugin_name: dist/codex/ exists and is current"
-                        fi
-                    fi
-                    if [ "$codex_status" = "hook-dependent" ]; then
-                        readme="$plugin_dir/README.md"
-                        if [ -f "$readme" ] && grep -qiE 'codex (limitations|differences)' "$readme"; then
-                            pass "$plugin_name: README documents Codex limitations"
-                        else
-                            fail "$plugin_name: hook-dependent tier requires 'Codex limitations' section in README"
-                        fi
-                    fi
-                    ;;
-                unsupported|none) : ;;
-                *) fail "$plugin_name: unknown codex status '$codex_status' — must be skill-compatible|hook-dependent|unsupported" ;;
-            esac
-        fi
+        # 3h. Codex platform checks — delegated to bin/lib/validate-codex.sh.
+        validate_codex_plugin "$plugin_name" "$plugin_dir"
     done
 fi
+
+# --- Check 4: Codex marketplace manifest ---
+section "Check 4: Codex marketplace manifest"
+validate_codex_marketplace
 
 # --- Summary ---
 printf '\n'

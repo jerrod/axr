@@ -1,0 +1,38 @@
+{
+  "name": "axr",
+  "version": "0.1.0",
+  "description": "Agent eXecution Readiness scoring. Grades a repository against a 100-point rubric across 9 dimensions with deterministic bash checkers and judgment subagents.",
+  "author": {
+    "name": "jerrod"
+  },
+  "homepage": "https://github.com/jerrod/agent-plugins",
+  "repository": "https://github.com/jerrod/agent-plugins",
+  "license": "MIT",
+  "keywords": [
+    "axr",
+    "agent-readiness",
+    "code-quality",
+    "rubric",
+    "claude-code"
+  ],
+  "interface": {
+    "displayName": "Axr",
+    "shortDescription": "Agent eXecution Readiness scoring.",
+    "longDescription": "Agent eXecution Readiness scoring. Grades a repository against a 100-point rubric across 9 dimensions with deterministic bash checkers and judgment subagents.",
+    "developerName": "jerrod",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/jerrod/agent-plugins",
+    "privacyPolicyURL": "https://github.com/jerrod/agent-plugins",
+    "termsOfServiceURL": "https://github.com/jerrod/agent-plugins",
+    "defaultPrompt": [
+      "Agent eXecution Readiness scoring."
+    ],
+    "brandColor": "#3B82F6",
+    "screenshots": []
+  },
+  "skills": "./skills/"
+}
