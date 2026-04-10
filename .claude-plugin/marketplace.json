@@ -1,15 +1,21 @@
 {
-  "name": "axr",
-  "version": "1.0",
-  "description": "Tools for agent-operated software engineering — readiness scoring, workflow automation, and quality gates.",
+  "name": "agent-plugins",
+  "version": "2.0",
+  "description": "Tools for agent-operated software engineering — readiness scoring, code review, and behavioral correction.",
   "owner": {
     "name": "jerrod"
   },
   "plugins": [
     {
       "name": "axr",
-      "description": "Agent eXecution Readiness scoring — 100-point rubric across 8 dimensions with deterministic bash checkers and judgment subagents.",
+      "description": "Agent eXecution Readiness scoring — 100-point rubric across 12 dimensions with deterministic bash checkers and judgment subagents.",
       "source": "./plugins/axr",
+      "category": "development"
+    },
+    {
+      "name": "revue",
+      "description": "Enterprise code review by a four-agent team (architect, security, correctness, style) running in parallel. Requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1.",
+      "source": "./plugins/revue",
       "category": "development"
     },
     {
