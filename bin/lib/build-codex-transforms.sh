@@ -213,6 +213,8 @@ transform_hooks() {
 }
 
 # transform_commands — convert command .md files to skill SKILL.md files.
+# Refuses symlinks so a malicious command file can't exfiltrate external
+# file contents into the generated SKILL.md.
 transform_commands() {
   local plugin_dir="$1" dist_dir="$2"
   [[ -d "$plugin_dir/commands" ]] || return 0
@@ -231,14 +233,16 @@ transform_commands() {
       printf -- '---\n\n'
       printf '%s\n' "$body"
     } > "$target_dir/SKILL.md"
-  done < <(find -P "$plugin_dir/commands" -name '*.md' -print0)
+  done < <(find -P "$plugin_dir/commands" -type f -not -type l -name '*.md' -print0)
 }
 
-# transform_scripts — copy scripts directory as-is.
+# transform_scripts — copy scripts directory as-is. Preserves symlinks as
+# symlinks (-RP) rather than dereferencing them so an external symlink in
+# scripts/ can't exfiltrate the target's contents into the dist tree.
 transform_scripts() {
   local plugin_dir="$1" dist_dir="$2"
   [[ -d "$plugin_dir/scripts" ]] || return 0
-  cp -R "$plugin_dir/scripts" "$dist_dir/scripts"
+  cp -RP "$plugin_dir/scripts" "$dist_dir/scripts"
 }
 
 # copy_agents_md — carry the plugin-level AGENTS.md into the Codex plugin root.
