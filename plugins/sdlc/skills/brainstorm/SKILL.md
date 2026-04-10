@@ -36,24 +36,21 @@ Every project goes through this process. A todo list, a single-function utility,
 You MUST create a task for each of these items and complete them in order:
 
 1. **Explore project context** — check files, docs, recent commits
-2. **Offer visual companion** (if topic will involve visual questions) — this is its own message, not combined with a clarifying question. See the Visual Companion section below.
-3. **Offer frontend-design mode** (if topic involves frontend/UI) — "Is this a frontend/UI task? I can apply design quality guidance for distinctive, non-generic output." If accepted, read `skills/brainstorm/frontend-design-principles.md` and enrich the Design teammate's spawn prompt with those principles. The Design teammate should push for specific aesthetic decisions: font character, palette direction, motion intent, compositional approach. The resulting spec should include a Visual Direction section. Additionally, check if `.claude/design-context.md` exists — if not, recommend running `sdlc:design init` after the brainstorm to establish design tokens before implementation begins.
-4. **Spawn boardroom team** — create an Agent Team with Product, Engineering, and Design teammates
-5. **Facilitate debate** — steer teammates, relay user input, let them challenge each other
-6. **Synthesis** — summarize consensus from teammate findings, surface tensions, user breaks ties
-7. **Present design** — in sections scaled to their complexity, get user approval after each section
-8. **Write design doc** — save to `docs/specs/YYYY-MM-DD-<topic>-design.md` and commit
-9. **Spec review loop** — dispatch spec-document-reviewer subagent with precisely crafted review context (never your session history); fix issues and re-dispatch until approved (max 5 iterations, then surface to human)
-10. **User reviews written spec** — ask user to review the spec file before proceeding
-11. **Transition to implementation** — invoke sdlc:writing-plans skill to create implementation plan
+2. **Offer frontend-design mode** (if topic involves frontend/UI) — "Is this a frontend/UI task? I can apply design quality guidance for distinctive, non-generic output." If accepted, read `skills/brainstorm/frontend-design-principles.md` and enrich the Design teammate's spawn prompt with those principles. The Design teammate should push for specific aesthetic decisions: font character, palette direction, motion intent, compositional approach. The resulting spec should include a Visual Direction section. Additionally, check if `.claude/design-context.md` exists — if not, recommend running `sdlc:design init` after the brainstorm to establish design tokens before implementation begins.
+3. **Spawn boardroom team** — create an Agent Team with Product, Engineering, and Design teammates
+4. **Facilitate debate** — steer teammates, relay user input, let them challenge each other
+5. **Synthesis** — summarize consensus from teammate findings, surface tensions, user breaks ties
+6. **Present design** — in sections scaled to their complexity, get user approval after each section
+7. **Write design doc** — save to `docs/specs/YYYY-MM-DD-<topic>-design.md` and commit
+8. **Spec review loop** — dispatch spec-document-reviewer subagent with precisely crafted review context (never your session history); fix issues and re-dispatch until approved (max 5 iterations, then surface to human)
+9. **User reviews written spec** — ask user to review the spec file before proceeding
+10. **Transition to implementation** — invoke sdlc:writing-plans skill to create implementation plan
 
 ## Process Flow
 
 ```dot
 digraph brainstorming {
     "Explore project context" [shape=box];
-    "Visual questions ahead?" [shape=diamond];
-    "Offer Visual Companion\n(own message, no other content)" [shape=box];
     "Spawn Agent Team\n(Product + Engineering + Design)" [shape=box];
     "Teammates debate\n(real inter-agent messaging)" [shape=box];
     "Consensus reached?" [shape=diamond];
@@ -67,13 +64,10 @@ digraph brainstorming {
     "User reviews spec?" [shape=diamond];
     "Invoke sdlc:writing-plans" [shape=doublecircle];
 
-    "Explore project context" -> "Visual questions ahead?";
-    "Visual questions ahead?" -> "Offer Visual Companion\n(own message, no other content)" [label="yes"];
     "Frontend/UI work?" [shape=diamond];
     "Offer Frontend Design Mode\n(read principles if accepted)" [shape=box];
 
-    "Visual questions ahead?" -> "Frontend/UI work?" [label="no"];
-    "Offer Visual Companion\n(own message, no other content)" -> "Frontend/UI work?";
+    "Explore project context" -> "Frontend/UI work?";
     "Frontend/UI work?" -> "Offer Frontend Design Mode\n(read principles if accepted)" [label="yes"];
     "Frontend/UI work?" -> "Spawn Agent Team\n(Product + Engineering + Design)" [label="no"];
     "Offer Frontend Design Mode\n(read principles if accepted)" -> "Spawn Agent Team\n(Product + Engineering + Design)";
@@ -276,22 +270,3 @@ Wait for the user's response. If they request changes, make them and re-run the 
 - **Incremental validation** - Present design, get approval before moving on
 - **Be flexible** - Go back and clarify when something doesn't make sense
 - **Real debate over theater** - Agent Teams produce genuine independent analysis; prefer them over simulated personas
-
-## Visual Companion
-
-A browser-based companion for showing mockups, diagrams, and visual options during brainstorming. Available as a tool — not a mode. Accepting the companion means it's available for questions that benefit from visual treatment; it does NOT mean every question goes through the browser.
-
-**Offering the companion:** When you anticipate that upcoming questions will involve visual content (mockups, layouts, diagrams), offer it once for consent:
-> "Some of what we're working on might be easier to explain if I can show it to you in a web browser. I can put together mockups, diagrams, comparisons, and other visuals as we go. This feature is still new and can be token-intensive. Want to try it? (Requires opening a local URL)"
-
-**This offer MUST be its own message.** Do not combine it with clarifying questions, context summaries, or any other content. The message should contain ONLY the offer above and nothing else. Wait for the user's response before continuing. If they decline, proceed with text-only brainstorming.
-
-**Per-question decision:** Even after the user accepts, decide FOR EACH QUESTION whether to use the browser or the terminal. The test: **would the user understand this better by seeing it than reading it?**
-
-- **Use the browser** for content that IS visual — mockups, wireframes, layout comparisons, architecture diagrams, side-by-side visual designs
-- **Use the terminal** for content that is text — requirements questions, conceptual choices, tradeoff lists, A/B/C/D text options, scope decisions
-
-A question about a UI topic is not automatically a visual question. "What does personality mean in this context?" is a conceptual question — use the terminal. "Which wizard layout works better?" is a visual question — use the browser.
-
-If they agree to the companion, read the detailed guide before proceeding:
-`skills/brainstorm/visual-companion.md`
