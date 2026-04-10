@@ -11,6 +11,42 @@ import os
 import sys
 
 
+def _extract_lines(file_data):
+    """Return the raw line-hit array from a SimpleCov file entry.
+
+    SimpleCov uses either a dict with a "lines" key or a flat array of
+    per-line hit counts.
+    """
+    if isinstance(file_data, dict):
+        return file_data.get("lines", [])
+    return file_data
+
+
+def _compute_percentage(lines):
+    """Compute covered-line percentage from a SimpleCov line-hit array."""
+    relevant = [l for l in lines if l is not None]
+    total = len(relevant)
+    if total == 0:
+        return 100.0
+    covered = len([l for l in relevant if l > 0])
+    return covered / total * 100
+
+
+def _normalize_path(abs_path, cwd):
+    """Convert an absolute SimpleCov path to a repo-relative path when possible."""
+    prefix = cwd + "/"
+    if abs_path.startswith(prefix):
+        return abs_path[len(prefix):]
+    return abs_path
+
+
+def _file_entry(file_data):
+    """Compute the coverage entry for a single SimpleCov file record."""
+    lines = _extract_lines(file_data)
+    pct = _compute_percentage(lines)
+    return {"lines": {"pct": round(pct, 2)}}
+
+
 def parse(resultset_path):
     with open(resultset_path) as f:
         data = json.load(f)
@@ -21,24 +57,8 @@ def parse(resultset_path):
     for _suite_name, suite_data in data.items():
         file_coverage = suite_data.get("coverage", {})
         for abs_path, file_data in file_coverage.items():
-            # Extract line data — SimpleCov uses either a dict with "lines" key
-            # or a flat array of line counts
-            if isinstance(file_data, dict):
-                lines = file_data.get("lines", [])
-            else:
-                lines = file_data
-
-            relevant = [l for l in lines if l is not None]
-            total = len(relevant)
-            covered = len([l for l in relevant if l > 0])
-            pct = (covered / total * 100) if total > 0 else 100.0
-
-            # Convert absolute path to relative
-            rel_path = abs_path
-            if abs_path.startswith(cwd + "/"):
-                rel_path = abs_path[len(cwd) + 1:]
-
-            coverage[rel_path] = {"lines": {"pct": round(pct, 2)}}
+            rel_path = _normalize_path(abs_path, cwd)
+            coverage[rel_path] = _file_entry(file_data)
 
     return coverage
 
