@@ -1,6 +1,6 @@
-# CLAUDE.md — axr marketplace
+# CLAUDE.md — agent-plugins marketplace
 
-This repo is a Claude Code plugin marketplace. It currently hosts `axr` with room for more plugins.
+This repo is a Claude Code plugin marketplace named `agent-plugins`. It currently hosts `axr`, `revue`, and `therapist`, with room for more plugins.
 
 ## Layout
 
