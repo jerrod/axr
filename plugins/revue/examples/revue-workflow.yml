@@ -1,5 +1,22 @@
 # Example GitHub Actions workflow for Revue code reviews.
 # Copy this to .github/workflows/revue.yml in your repository.
+#
+# SECURITY HARDENING (recommended before adopting in production):
+#   1. Pin every `uses:` action to a full commit SHA, not a version tag.
+#      Example: uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+#      Tags can be force-moved by the action author; SHAs cannot. See:
+#      https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions
+#   2. Pin the auto-claude container image to a digest, not :latest.
+#      Example: ghcr.io/arqu-co/auto-claude@sha256:<digest>
+#      Look up the current digest from https://github.com/arqu-co/auto-claude/pkgs/container/auto-claude
+#   3. If you run on self-hosted runners, replace the world-writable /tmp/revue-logs
+#      mount below with a per-job temp dir (already done in this template via mktemp).
+#   4. Be aware that the `pull_request` trigger (line 7) processes diffs from any
+#      contributor — including first-time external contributors on public repos.
+#      The four reviewer agents read the diff as untrusted input. The `review-pr`
+#      skill instructs them to treat diff content as data, not commands, but a
+#      determined attacker may still attempt prompt injection. Review revue's
+#      findings before merging — do not auto-merge based on revue's verdict alone.
 
 name: Revue Code Review
 
@@ -29,7 +46,7 @@ jobs:
     steps:
       - name: Acknowledge review request
         if: github.event_name == 'issue_comment'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v7  # SECURITY: pin to SHA in production
         with:
           script: |
             await github.rest.reactions.createForIssueComment({
@@ -39,17 +56,19 @@ jobs:
               content: 'eyes',
             });
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4  # SECURITY: pin to SHA in production
         with:
           fetch-depth: 0
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v3  # SECURITY: pin to SHA in production
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull auto-claude image
+        # SECURITY: replace :latest with @sha256:<digest> in production. The
+        # :latest tag is mutable and silently rolls forward on every release.
         run: docker pull ghcr.io/arqu-co/auto-claude:latest
 
       - name: Determine mode
@@ -65,12 +84,16 @@ jobs:
 
       - name: Run Revue
         run: |
-          mkdir -p /tmp/revue-logs && chmod 777 /tmp/revue-logs
+          # Per-job log dir avoids the cross-job leak risk of a shared /tmp
+          # path on self-hosted runners. mktemp -d returns a 0700-mode dir.
+          REVUE_LOG_DIR="$(mktemp -d)"
+          echo "REVUE_LOG_DIR=$REVUE_LOG_DIR" >> "$GITHUB_ENV"
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
-            -v "/tmp/revue-logs:/tmp/revue-logs" \
+            -v "${REVUE_LOG_DIR}:/tmp/revue-logs" \
             -w /workspace \
             -e CLAUDE_CODE_OAUTH_TOKEN \
+            -e CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \
             -e REVUE_APP_ID \
             -e REVUE_APP_PRIVATE_KEY \
             -e REVUE_INSTALLATION_ID \
@@ -91,15 +114,15 @@ jobs:
           REVUE_COMMENT_ID: ${{ steps.mode.outputs.comment_id }}
 
       - name: Upload review logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4  # SECURITY: pin to SHA in production
         if: always()
         with:
           name: revue-logs-${{ github.event.pull_request.number || github.event.issue.number }}
           path: |
-            /tmp/revue-logs/review.json
-            /tmp/revue-logs/response.json
-            /tmp/revue-logs/stats.json
-            /tmp/revue-logs/result.txt
-            /tmp/revue-logs/agent-*.json
-            /tmp/revue-logs/artifacts/
+            ${{ env.REVUE_LOG_DIR }}/review.json
+            ${{ env.REVUE_LOG_DIR }}/response.json
+            ${{ env.REVUE_LOG_DIR }}/stats.json
+            ${{ env.REVUE_LOG_DIR }}/result.txt
+            ${{ env.REVUE_LOG_DIR }}/agent-*.json
+            ${{ env.REVUE_LOG_DIR }}/artifacts/
           retention-days: 14

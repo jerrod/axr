@@ -34,4 +34,13 @@ revue has no `scripts/` and no `commands/` directories on purpose — it is pure
 
 ## Source
 
-Ported from `arqu-co/claude-skills` (`plugins/revue`) into the `jerrod/agent-plugins` marketplace. Keep behavioral parity with the upstream plugin; do not drift the agent prompts, finding schema, or verdict logic without re-syncing.
+Ported from `arqu-co/claude-skills` (`plugins/revue`) into the `jerrod/agent-plugins` marketplace.
+
+**Drift status:** This copy currently includes hardening fixes that have not yet landed upstream. Specifically:
+
+- `examples/revue-workflow.yml` — adds `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` to the docker run env (without it the four reviewer agents never spawn), uses a per-job mktemp log dir instead of `/tmp/revue-logs` with chmod 777, and inlines security-hardening comments about SHA-pinning actions and the docker image
+- `skills/respond/SKILL.md` — removes `Bash` and `WebFetch` from `allowed-tools` (the skill never uses them and they widen the prompt-injection blast radius), adds an explicit anti-injection instruction
+- `skills/review-pr/SKILL.md` — removes `Bash` and `WebFetch` from `allowed-tools` on the orchestrator, wraps the PR diff in `<pr_diff>` CDATA delimiters when building sub-agent prompts, replaces the heuristic JSON-array extraction with strict parsing, requires the `confidence` field on every dispatched agent
+- `agents/style/style.md` — fixes severity enum to include `medium` (the prose below already documented it)
+
+These changes should be upstreamed to `arqu-co/claude-skills` and then this copy re-synced to a single source of truth. Until then, do NOT blindly re-port from upstream — you will lose the hardening fixes.

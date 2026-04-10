@@ -58,7 +58,7 @@ Output ONLY a valid JSON array. Each element must be an object with these fields
 {
   "file": "path/to/file.ext",
   "line": 42,
-  "severity": "low|info",
+  "severity": "medium|low|info",
   "category": "style",
   "title": "Short descriptive title",
   "body": "**Evidence:** What you observed and how it differs from the codebase pattern (cite the existing convention).\n\n**Impact:** Why this matters for maintainability.\n\n**Fix:** Concrete suggestion with before/after example.",
