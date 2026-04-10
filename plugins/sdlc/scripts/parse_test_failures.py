@@ -179,6 +179,28 @@ def parse_rspec_json(raw_output):
     return failures
 
 
+def _junit_failure_element(tc):
+    """Return the <failure> or <error> child of a testcase, or None."""
+    failure = tc.find("failure")
+    if failure is not None:
+        return failure
+    return tc.find("error")
+
+
+def _build_junit_failure(tc, element):
+    """Build a failure entry from a JUnit <testcase> and its failure/error element."""
+    classname = tc.get("classname", "")
+    name = tc.get("name", "unknown")
+    file_attr = tc.get("file", classname.replace(".", "/"))
+    line_attr = tc.get("line")
+    return {
+        "test": f"{classname}::{name}" if classname else name,
+        "file": file_attr,
+        "line": int(line_attr) if line_attr else None,
+        "message": truncate(element.get("message", element.text or "")),
+    }
+
+
 def parse_junit_xml(report_path):
     """Parse JUnit XML report (pytest --junitxml, gradle, maven)."""
     failures = []
@@ -186,30 +208,12 @@ def parse_junit_xml(report_path):
         tree = ET.parse(report_path)
     except (ET.ParseError, FileNotFoundError):
         return None
-
-    root = tree.getroot()
     # Handle both <testsuites><testsuite>... and bare <testsuite>...
-    testcases = root.iter("testcase")
-    for tc in testcases:
-        failure = tc.find("failure")
-        error = tc.find("error")
-        element = failure if failure is not None else error
+    for tc in tree.getroot().iter("testcase"):
+        element = _junit_failure_element(tc)
         if element is None:
             continue
-
-        classname = tc.get("classname", "")
-        name = tc.get("name", "unknown")
-        file_attr = tc.get("file", classname.replace(".", "/"))
-        line_attr = tc.get("line")
-
-        failures.append(
-            {
-                "test": f"{classname}::{name}" if classname else name,
-                "file": file_attr,
-                "line": int(line_attr) if line_attr else None,
-                "message": truncate(element.get("message", element.text or "")),
-            }
-        )
+        failures.append(_build_junit_failure(tc, element))
         if len(failures) >= MAX_FAILURES:
             break
     return failures
