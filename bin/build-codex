@@ -241,6 +241,9 @@ transform_commands() {
     description=$(parse_frontmatter_field "$cmd_file" "description")
     body=$(extract_body "$cmd_file")
     local target_dir="$dist_dir/skills/$cmd_name"
+    # Skip if a real skill already exists at this path (commands are thin
+    # wrappers; the skill has the actual content).
+    [[ -f "$target_dir/SKILL.md" ]] && continue
     mkdir -p "$target_dir"
     {
       printf -- '---\n'
