@@ -75,7 +75,11 @@ A generic, plugin-agnostic script that performs 5 transforms:
 4. **Commands to Skills** — wrap command `.md` body as `SKILL.md` with frontmatter
 5. **Scripts** — copy as-is, replace `${CLAUDE_PLUGIN_ROOT}` with Codex equivalent
 
-The build script is generic — any new plugin dropped into `plugins/<name>/` gets a `dist/codex/` directory automatically with no plugin-specific code.
+The build script is generic for the common transforms (skills, agents, scripts, commands). Hooks require a per-plugin override mechanism for two cases:
+
+1. **Prompt-type hooks** — sdlc uses `"type": "prompt"` hooks (inline model prompts) for mock-detection. Codex hook support for `"type": "prompt"` is unverified. If unsupported, the build script converts the prompt hook to a `"type": "command"` equivalent that runs a script performing the same check. Each plugin may include a `codex-hook-overrides.json` file that the build script merges into the generated `hooks.json`.
+
+2. **Semantic retiming** — sdlc's mock-detection retimes from `Write|Edit` to `Bash(git commit*)` rather than the generic `UserPromptSubmit` mapping because commit-time is the correct enforcement boundary for that check. The override file handles this.
 
 ### Tool Name Mapping
 
@@ -95,7 +99,7 @@ A shared lookup table (`tool-mapping.json`) applied to all agent body text durin
 
 ### Hook Remapping Rules
 
-Generic rules applied to all plugins — no per-plugin special cases:
+Generic default rules (plugins may override via `codex-hook-overrides.json`):
 
 | Claude hook matcher | Claude event | Codex remapping |
 |---|---|---|
@@ -115,7 +119,7 @@ Generic rules applied to all plugins — no per-plugin special cases:
 |--------|------|-------------|-------------|-----------|
 | therapist | `affirmation.sh` | SessionStart | SessionStart | Identical |
 | therapist | `rubber-band.sh` | PreToolUse(Write\|Edit) | UserPromptSubmit | Catches distortions at turn boundary |
-| therapist | `pause.sh` | PreToolUse(Bash(git*)) | PreToolUse(Bash(git*)) | Identical |
+| therapist | `pause.sh` | PreToolUse(Bash(git commit*)\|Bash(git push*)) | PreToolUse(Bash(git commit*)\|Bash(git push*)) | Identical (compound matcher) |
 | therapist | `mirror.sh` | PostToolUse(Bash) | PostToolUse(Bash) | Identical |
 | therapist | `reframe.sh` | PostToolUse(Bash) async | PostToolUse(Bash) | Identical |
 | therapist | `activate.sh` | PostToolUse(Bash) async | PostToolUse(Bash) | Identical |
@@ -154,7 +158,7 @@ Each plugin's `.claude-plugin/plugin.json` gets a `platforms` field:
 `bin/validate` enforces tier rules mechanically:
 - Checks `platforms.codex.status` field exists and is a valid tier
 - For `hook-dependent`: requires "Codex limitations" or "Codex differences" section in README
-- Confirms `dist/codex/` exists and is not stale (source files newer than dist = failure)
+- Confirms `dist/codex/` exists and is not stale. Staleness is determined by comparing mtimes of source files against `dist/codex/.build-stamp` (a timestamp file written by `bin/build-codex` on each run). Watched source files: `agents/*.md`, `skills/*/SKILL.md`, `commands/*.md`, `hooks/hooks.json`, `scripts/**/*.sh`, `.claude-plugin/plugin.json`, `codex-hook-overrides.json` (if present), `AGENTS.md`
 - Validates generated TOML parses, generated hooks.json is valid JSON, generated skills have required frontmatter
 
 ## Per-Plugin Adaptations
@@ -165,13 +169,14 @@ Each plugin's `.claude-plugin/plugin.json` gets a `platforms` field:
 - Copy 2 skills (`review-pr`, `respond`) as-is
 - Generate 4 agent TOMLs (architect, security, correctness, style)
 - Codex version of `review-pr` skill dispatches reviewers sequentially instead of parallel
+- Preserve security isolation: Claude's `review-pr` skill excludes `Bash` and `Agent` from `allowed-tools` as anti-injection defense. Codex equivalent must maintain the same tool restrictions on reviewer agents to prevent untrusted diff content from triggering shell execution
 - Add `AGENTS.md` with Codex-specific install/invoke instructions (`$review-pr`)
 - No hooks, no scripts, no commands
 
 ### axr
 
 - **Tier:** `skill-compatible`
-- Generate 5 wrapper skills from 5 commands (`axr`, `axr-check`, `axr-diff`, `axr-fix`, `axr-badge`)
+- Generate 5 wrapper skills from 5 commands (`axr`, `axr-check`, `axr-diff`, `axr-fix`, `axr-badge`). Command-to-skill conversion: copy the command body verbatim as the skill body; map `description` to skill frontmatter `description`; map `argument-hint` to skill frontmatter `argument-hint`; replace `/command` invocation references in the body with `$skill-name` invocation syntax
 - Generate 8 agent TOMLs (dimension reviewers)
 - Copy all `scripts/check-*.sh` and library scripts
 - Codex scoring orchestration runs reviewers sequentially
@@ -214,6 +219,7 @@ Each plugin's `.claude-plugin/plugin.json` gets a `platforms` field:
 | `tool-mapping.json` | Shared Claude-to-Codex tool name lookup table |
 | `plugins/*/AGENTS.md` | Codex-specific instructions (one per plugin) |
 | `plugins/*/dist/codex/` | Generated output directories |
+| `plugins/*/codex-hook-overrides.json` | Per-plugin hook remapping overrides (only for plugins that need non-default remapping) |
 
 ### Modified files (minimal)
 
@@ -240,12 +246,30 @@ Generated `dist/codex/` directories are committed to the repo. Codex users can i
 - Manual smoke test on a real Codex install before first release
 - Tool name mapping verified against live Codex before first ship
 
+## AGENTS.md Specification
+
+Each plugin gets an `AGENTS.md` file (Codex's equivalent of `CLAUDE.md`). Required sections:
+
+1. **Plugin name and description** — what this plugin does
+2. **Installation** — how to install in Codex (platform-specific path, not Claude's `/plugin` TUI)
+3. **Available skills** — list of `$skill-name` invocations with one-line descriptions
+4. **Platform differences** — what works differently on Codex vs Claude Code (sequential agents, retimed hooks, etc.)
+5. **Codex limitations** (hook-dependent tier only) — explicit list of hooks that behave differently
+
+The `AGENTS.md` must NOT reference: `CLAUDE.md`, Claude-specific env vars (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`), `/slash` command syntax, or Claude Code TUI navigation.
+
+## Prerequisites (must resolve before implementation)
+
+1. **Codex plugin installation path** — how does a Codex user actually install from this repo? The plugin directory GUI browser may require a specific packaging format. This determines whether `dist/codex/` layout is correct. **Blocker for implementation.**
+2. **Exact Codex tool names** — Glob, Grep, WebFetch, WebSearch need verification against a live install. The `tool-mapping.json` table is updatable without code changes. **Blocker for agent generation (revue, axr).**
+
 ## Open Questions
 
 1. **`${CLAUDE_PLUGIN_ROOT}` Codex equivalent** — does Codex provide a plugin root path variable? If not, the build script needs to generate a wrapper that sets it.
-2. **Exact Codex tool names** — Glob, Grep, WebFetch, WebSearch need verification against a live install. The `tool-mapping.json` table is updatable without code changes.
-3. **Codex plugin installation path** — how does a Codex user actually install from this repo? The plugin directory GUI browser may require a specific packaging format.
-4. **Subagent dispatch evolution** — if Codex adds `Agent(subagent_type=...)` support, the sequential fallback skills should be updated to use parallel dispatch. Track Codex changelog for this.
+2. **Codex `"type": "prompt"` hook support** — does Codex support inline model prompt hooks? If not, sdlc's mock-detection hook must be converted to a script-based equivalent.
+3. **SessionStart matcher string compatibility** — Claude's therapist hooks use matcher `"startup|resume|clear|compact"`. Codex SessionStart supports `source: "startup"` or `source: "resume"`. Verify matcher format compatibility or generate Codex-specific matcher strings.
+4. **Codex concurrent hook ordering** — multiple hooks on the same event run concurrently in Codex (no ordering guarantees). For therapist's three `PostToolUse(Bash)` hooks (mirror, reframe, activate), confirm that concurrent execution is acceptable (all three are independent, so this should be fine).
+5. **Subagent dispatch evolution** — if Codex adds `Agent(subagent_type=...)` support, the sequential fallback skills should be updated to use parallel dispatch. Track Codex changelog for this.
 
 ## Non-Goals
 
