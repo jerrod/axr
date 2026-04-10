@@ -2,12 +2,9 @@
 # Tests for audit-trail.sh
 set -euo pipefail
 
-# AUDIT_SYNC_WRITES=1 forces audit-trail.sh's no-flock fallback path to
-# merge per-entry files into trail.json on every log call. Without it the
-# "Log command" tests below hang on macOS (no flock available) because
-# trail.json stays empty and the test's json_field extraction crashes.
-# Production code MUST NOT set this — it re-introduces the concurrent-write
-# race that the per-entry fallback is designed to prevent.
+# AUDIT_SYNC_WRITES=1 forces the no-flock fallback to merge per-entry files
+# into trail.json on every log call so macOS tests can read trail.json
+# directly. Production MUST NOT set it — it reintroduces a write race.
 export AUDIT_SYNC_WRITES=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,53 +12,26 @@ AUDIT_SCRIPT="$SCRIPT_DIR/audit-trail.sh"
 PASS=0
 FAIL=0
 
-# ─── Helpers ────────────────────────────────────────────────────
+_pass() { PASS=$((PASS + 1)); echo "  PASS: $1"; }
+_fail() { FAIL=$((FAIL + 1)); echo "  FAIL: $1"; }
 
 assert_eq() {
-  local test_name="$1" expected="$2" actual="$3"
-  if [ "$expected" = "$actual" ]; then
-    PASS=$((PASS + 1))
-    echo "  PASS: $test_name"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  FAIL: $test_name (expected '$expected', got '$actual')"
-  fi
+  if [ "$2" = "$3" ]; then _pass "$1"; else _fail "$1 (expected '$2', got '$3')"; fi
 }
-
+assert_ne() {
+  if [ "$2" != "$3" ]; then _pass "$1"; else _fail "$1 (both '$2')"; fi
+}
 assert_contains() {
-  local test_name="$1" haystack="$2" needle="$3"
-  if echo "$haystack" | grep -q "$needle"; then
-    PASS=$((PASS + 1))
-    echo "  PASS: $test_name"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  FAIL: $test_name (expected to contain '$needle')"
-  fi
+  if echo "$2" | grep -q "$3"; then _pass "$1"; else _fail "$1 (expected to contain '$3')"; fi
 }
-
 assert_file_exists() {
-  local test_name="$1" filepath="$2"
-  if [ -f "$filepath" ]; then
-    PASS=$((PASS + 1))
-    echo "  PASS: $test_name"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  FAIL: $test_name (file not found: $filepath)"
-  fi
+  if [ -f "$2" ]; then _pass "$1"; else _fail "$1 (file not found: $2)"; fi
 }
-
 assert_exit_zero() {
-  local test_name="$1"
-  shift
-  local exit_code=0
-  "$@" >/dev/null 2>&1 || exit_code=$?
-  if [ "$exit_code" -eq 0 ]; then
-    PASS=$((PASS + 1))
-    echo "  PASS: $test_name"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  FAIL: $test_name (exit code $exit_code, expected 0)"
-  fi
+  local name="$1"; shift
+  local rc=0
+  "$@" >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ]; then _pass "$name"; else _fail "$name (exit code $rc, expected 0)"; fi
 }
 
 # Safe JSON field reader — avoids shell injection in python -c
@@ -75,20 +45,15 @@ print(eval(os.environ['JF_EXPR'], {'d': d, 'len': len}))
 }
 
 setup() {
-  TMPDIR=$(mktemp -d)
-  cd "$TMPDIR"
+  TMPDIR=$(mktemp -d); cd "$TMPDIR"
   git init -q
   git config commit.gpgsign false
-  git config user.email "test@test.com"
-  git config user.name "Test"
+  git config user.email "test@test.com"; git config user.name "Test"
   git commit --allow-empty -q -m "init"
   export AUDIT_DIR="$TMPDIR/.quality/audit"
 }
 
-teardown() {
-  cd "$SCRIPT_DIR"
-  rm -rf "$TMPDIR"
-}
+teardown() { cd "$SCRIPT_DIR"; rm -rf "$TMPDIR"; }
 
 # ─── Tests ──────────────────────────────────────────────────────
 
@@ -106,16 +71,15 @@ teardown
 setup
 bash "$AUDIT_SCRIPT" init "test task" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" init "test task 2" >/dev/null 2>&1
-local_version=$(json_field "$AUDIT_DIR/trail.json" "d['version']")
-assert_eq "init is idempotent (trail not overwritten)" "1" "$local_version"
-local_entries=$(json_field "$AUDIT_DIR/trail.json" "len(d['entries'])")
-assert_eq "init idempotent (entries still empty)" "0" "$local_entries"
+assert_eq "init is idempotent (trail not overwritten)" "1" \
+  "$(json_field "$AUDIT_DIR/trail.json" "d['version']")"
+assert_eq "init idempotent (entries still empty)" "0" \
+  "$(json_field "$AUDIT_DIR/trail.json" "len(d['entries'])")"
 teardown
 
 setup
 bash "$AUDIT_SCRIPT" init "my cool task" >/dev/null 2>&1
-task_content=$(cat "$AUDIT_DIR/task.txt")
-assert_eq "init records task" "my cool task" "$task_content"
+assert_eq "init records task" "my cool task" "$(cat "$AUDIT_DIR/task.txt")"
 teardown
 
 echo ""
@@ -123,20 +87,17 @@ echo ""
 # --- plan ---
 echo "Plan command:"
 
+PLAN_BUILD='{"task":"test","planned_phases":[{"order":1,"phase":"build","agent":"sdlc:builder","skills":["sdlc:build"],"reason":"code needed"}]}'
+PLAN_FIRST='{"task":"first","planned_phases":[{"order":1,"phase":"build","agent":"a"}]}'
+PLAN_SECOND='{"task":"second","planned_phases":[{"order":1,"phase":"review","agent":"b"}]}'
+
 setup
 bash "$AUDIT_SCRIPT" init "plan test" >/dev/null 2>&1
-cat >"$TMPDIR/plan.json" <<'PLAN'
-{
-  "task": "test",
-  "planned_phases": [
-    {"order": 1, "phase": "build", "agent": "sdlc:builder", "skills": ["sdlc:build"], "reason": "code needed"}
-  ]
-}
-PLAN
+printf '%s' "$PLAN_BUILD" >"$TMPDIR/plan.json"
 bash "$AUDIT_SCRIPT" plan "$TMPDIR/plan.json" >/dev/null 2>&1
 assert_file_exists "plan registers execution-plan.json" "$AUDIT_DIR/execution-plan.json"
-plan_phase=$(json_field "$AUDIT_DIR/execution-plan.json" "d['planned_phases'][0]['phase']")
-assert_eq "plan has correct content" "build" "$plan_phase"
+assert_eq "plan has correct content" "build" \
+  "$(json_field "$AUDIT_DIR/execution-plan.json" "d['planned_phases'][0]['phase']")"
 teardown
 
 setup
@@ -148,17 +109,13 @@ teardown
 
 setup
 bash "$AUDIT_SCRIPT" init "plan test" >/dev/null 2>&1
-cat >"$TMPDIR/plan1.json" <<'PLAN'
-{"task": "first", "planned_phases": [{"order": 1, "phase": "build", "agent": "a"}]}
-PLAN
-cat >"$TMPDIR/plan2.json" <<'PLAN'
-{"task": "second", "planned_phases": [{"order": 1, "phase": "review", "agent": "b"}]}
-PLAN
+printf '%s' "$PLAN_FIRST" >"$TMPDIR/plan1.json"
+printf '%s' "$PLAN_SECOND" >"$TMPDIR/plan2.json"
 bash "$AUDIT_SCRIPT" plan "$TMPDIR/plan1.json" >/dev/null 2>&1
 output=$(bash "$AUDIT_SCRIPT" plan "$TMPDIR/plan2.json" 2>&1)
 assert_contains "plan noop when exists" "$output" "already registered"
-plan_task=$(json_field "$AUDIT_DIR/execution-plan.json" "d['task']")
-assert_eq "plan keeps first registration" "first" "$plan_task"
+assert_eq "plan keeps first registration" "first" \
+  "$(json_field "$AUDIT_DIR/execution-plan.json" "d['task']")"
 teardown
 
 echo ""
@@ -169,26 +126,26 @@ echo "Log command:"
 setup
 bash "$AUDIT_SCRIPT" init "log test" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder started >/dev/null 2>&1
-entry_action=$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['action']")
-assert_eq "log started" "started" "$entry_action"
+assert_eq "log started" "started" \
+  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['action']")"
 teardown
 
 setup
 bash "$AUDIT_SCRIPT" init "log test" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder completed --duration=120 --tools=30 --context="built feature" >/dev/null 2>&1
-dur=$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['duration_seconds']")
-tools=$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['tool_calls']")
-ctx=$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['context']")
-assert_eq "log completed with duration" "120" "$dur"
-assert_eq "log completed with tools" "30" "$tools"
-assert_eq "log completed with context" "built feature" "$ctx"
+assert_eq "log completed with duration" "120" \
+  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['duration_seconds']")"
+assert_eq "log completed with tools" "30" \
+  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['tool_calls']")"
+assert_eq "log completed with context" "built feature" \
+  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['context']")"
 teardown
 
 setup
 bash "$AUDIT_SCRIPT" init "log test" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder failed --context="stuck on gate" >/dev/null 2>&1
-entry_action=$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['action']")
-assert_eq "log failed" "failed" "$entry_action"
+assert_eq "log failed" "failed" \
+  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['action']")"
 teardown
 
 setup
@@ -197,13 +154,7 @@ bash "$AUDIT_SCRIPT" log build sdlc:builder started >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder completed >/dev/null 2>&1
 id1=$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['id']")
 id2=$(json_field "$AUDIT_DIR/trail.json" "d['entries'][1]['id']")
-if [ "$id1" != "$id2" ]; then
-  PASS=$((PASS + 1))
-  echo "  PASS: log generates unique IDs"
-else
-  FAIL=$((FAIL + 1))
-  echo "  FAIL: log generates unique IDs (both '$id1')"
-fi
+assert_ne "log generates unique IDs" "$id1" "$id2"
 teardown
 
 echo ""
@@ -214,23 +165,22 @@ echo "Special characters:"
 setup
 bash "$AUDIT_SCRIPT" init "special chars test" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder completed --context="it's a 'quoted' value" >/dev/null 2>&1
-ctx=$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['context']")
-assert_eq "context with single quotes" "it's a 'quoted' value" "$ctx"
+assert_eq "context with single quotes" "it's a 'quoted' value" \
+  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['context']")"
 teardown
 
 setup
 bash "$AUDIT_SCRIPT" init "special chars test" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder completed --context='has "double quotes" inside' >/dev/null 2>&1
-ctx=$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['context']")
-assert_eq "context with double quotes" 'has "double quotes" inside' "$ctx"
+assert_eq "context with double quotes" 'has "double quotes" inside' \
+  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['context']")"
 teardown
 
 setup
 bash "$AUDIT_SCRIPT" init "special chars test" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder completed --context='has $dollar and `backtick`' >/dev/null 2>&1
-ctx=$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['context']")
-expected="has \$dollar and \`backtick\`"
-assert_eq "context with dollar and backtick" "$expected" "$ctx"
+assert_eq "context with dollar and backtick" "has \$dollar and \`backtick\`" \
+  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['context']")"
 teardown
 
 setup
@@ -244,17 +194,12 @@ echo ""
 # --- report ---
 echo "Report command:"
 
+PLAN_REPORT='{"task":"build feature","planned_phases":[{"order":1,"phase":"build","agent":"sdlc:builder","skills":["sdlc:build"],"reason":"code needed"},{"order":2,"phase":"review","agent":"sdlc:reviewer","skills":["sdlc:review"],"reason":"needs review"}]}'
+PLAN_FAILED='{"task":"test failed","planned_phases":[{"order":1,"phase":"build","agent":"sdlc:builder","skills":["sdlc:build"],"reason":"code needed"}]}'
+
 setup
 bash "$AUDIT_SCRIPT" init "report test" >/dev/null 2>&1
-cat >"$TMPDIR/plan.json" <<'PLAN'
-{
-  "task": "build feature",
-  "planned_phases": [
-    {"order": 1, "phase": "build", "agent": "sdlc:builder", "skills": ["sdlc:build"], "reason": "code needed"},
-    {"order": 2, "phase": "review", "agent": "sdlc:reviewer", "skills": ["sdlc:review"], "reason": "needs review"}
-  ]
-}
-PLAN
+printf '%s' "$PLAN_REPORT" >"$TMPDIR/plan.json"
 bash "$AUDIT_SCRIPT" plan "$TMPDIR/plan.json" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder started --context="starting build" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder completed --duration=60 --tools=20 --context="build done" >/dev/null 2>&1
@@ -282,14 +227,7 @@ teardown
 
 setup
 bash "$AUDIT_SCRIPT" init "failed phase test" >/dev/null 2>&1
-cat >"$TMPDIR/plan.json" <<'PLAN'
-{
-  "task": "test failed",
-  "planned_phases": [
-    {"order": 1, "phase": "build", "agent": "sdlc:builder", "skills": ["sdlc:build"], "reason": "code needed"}
-  ]
-}
-PLAN
+printf '%s' "$PLAN_FAILED" >"$TMPDIR/plan.json"
 bash "$AUDIT_SCRIPT" plan "$TMPDIR/plan.json" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder started --context="starting" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder failed --context="gate failure" >/dev/null 2>&1
@@ -317,15 +255,13 @@ echo "Per-entry fallback (no flock):"
 
 setup
 bash "$AUDIT_SCRIPT" init "flock fallback test" >/dev/null 2>&1
-# Simulate no-flock by writing entry files directly
 mkdir -p "$AUDIT_DIR/entries"
 echo '{"id":"test-entry-1","timestamp":"2026-01-01T00:00:00Z","phase":"build","name":"sdlc:builder","action":"completed","sha":"abc123"}' >"$AUDIT_DIR/entries/test-entry-1.json"
 echo '{"id":"test-entry-2","timestamp":"2026-01-01T00:01:00Z","phase":"review","name":"sdlc:reviewer","action":"started","sha":"abc123"}' >"$AUDIT_DIR/entries/test-entry-2.json"
 report=$(bash "$AUDIT_SCRIPT" report 2>&1)
 assert_contains "report merges per-entry files" "$report" "sdlc:builder"
 assert_contains "report merges both entries" "$report" "sdlc:reviewer"
-# Entry files should be cleaned up after merge.
-# `wc -l` pads with leading spaces on BSD/macOS — strip with tr before compare.
+# BSD wc -l pads with leading spaces — strip with tr before compare.
 count=$(find "$AUDIT_DIR/entries" -name '*.json' 2>/dev/null | wc -l | tr -d '[:space:]')
 assert_eq "entry files removed after merge" "0" "$count"
 teardown
