@@ -9,7 +9,7 @@
     "md": { "max_file_lines": 600 }
   },
   "path_overrides": {
-    "plugins/*/dist/**": {
+    "codex/**": {
       "max_file_lines": null,
       "max_function_lines": null,
       "max_complexity": null
@@ -22,15 +22,15 @@
         "reason": "Script text contains lint-suppression patterns as detection targets, not actual suppressions"
       },
       {
-        "file": "plugins/sdlc/dist/codex/scripts/mock-pattern-guard.sh",
+        "file": "codex/plugins/sdlc/scripts/mock-pattern-guard.sh",
         "reason": "Generated copy of mock-pattern-guard.sh — contains patterns as detection targets"
       },
       {
-        "file": "plugins/sdlc/dist/codex/scripts/gate-lint.sh",
+        "file": "codex/plugins/sdlc/scripts/gate-lint.sh",
         "reason": "Generated copy of gate-lint.sh — contains suppression regex as detection logic"
       },
       {
-        "file": "plugins/sdlc/dist/codex/agents/critic.toml",
+        "file": "codex/plugins/sdlc/agents/critic.toml",
         "reason": "Generated agent TOML — critic instructions list banned patterns for review guidance"
       }
     ]
