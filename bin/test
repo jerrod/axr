@@ -71,4 +71,38 @@ for checker in plugins/*/scripts/check-*.sh; do
     fi
 done
 
+# 3. Codex dist validation — generated TOML parses, hooks.json valid, skills have frontmatter.
+for codex_dist in plugins/*/dist/codex; do
+    [ -d "$codex_dist" ] || continue
+    # TOML files parse (basic: no empty name/description)
+    for toml_file in "$codex_dist"/agents/*.toml; do
+        [ -f "$toml_file" ] || continue
+        if ! grep -q '^name[[:space:]]*=' "$toml_file"; then
+            printf '%s:1: TOML missing name field\n' "$toml_file"
+            FAIL=1
+        fi
+        if ! grep -q '^description[[:space:]]*=' "$toml_file"; then
+            printf '%s:1: TOML missing description field\n' "$toml_file"
+            FAIL=1
+        fi
+    done
+
+    # hooks.json parses
+    codex_hooks="$codex_dist/hooks/hooks.json"
+    if [ -f "$codex_hooks" ]; then
+        if ! jq empty "$codex_hooks" >/dev/null 2>&1; then
+            printf '%s:1: invalid JSON\n' "$codex_hooks"
+            FAIL=1
+        fi
+    fi
+
+    # Generated skills have frontmatter
+    while IFS= read -r -d '' skill_file; do
+        if ! head -n1 "$skill_file" | grep -q '^---$'; then
+            printf '%s:1: missing YAML frontmatter\n' "$skill_file"
+            FAIL=1
+        fi
+    done < <(find -P "$codex_dist/skills" -name 'SKILL.md' -print0 2>/dev/null)
+done
+
 exit $FAIL
