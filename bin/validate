@@ -237,24 +237,22 @@ else
                     elif [ ! -f "$build_stamp" ]; then
                         fail "$plugin_name: dist/codex/ missing .build-stamp — run bin/build-codex"
                     else
-                        # Staleness check: compare build-stamp content (ISO timestamp)
-                        # against the latest commit timestamp of watched source files.
-                        # Using git log instead of filesystem mtime because CI clones
-                        # set all mtimes to checkout time, making -newer unreliable.
+                        # Staleness: check if any source file was modified after
+                        # the dist/ build-stamp was last committed.
+                        # Uses git log commit order — works identically on macOS and Linux CI.
                         stale=false
-                        build_ts=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$(cat "$build_stamp")" "+%s" 2>/dev/null \
-                            || date -d "$(cat "$build_stamp")" "+%s" 2>/dev/null || echo "0")
-                        latest_source_ts=$(git log -1 --format=%at -- \
-                            "$plugin_dir/agents" \
-                            "$plugin_dir/skills" \
-                            "$plugin_dir/commands" \
-                            "$plugin_dir/hooks/hooks.json" \
-                            "$plugin_dir/.claude-plugin/plugin.json" \
-                            "$plugin_dir/codex-hook-overrides.json" \
-                            "$plugin_dir/AGENTS.md" \
-                            2>/dev/null || echo "0")
-                        if [ -n "$latest_source_ts" ] && [ "$latest_source_ts" -gt "$build_ts" ] 2>/dev/null; then
-                            stale=true
+                        stamp_commit=$(git log -1 --format=%H -- "$build_stamp" 2>/dev/null || echo "")
+                        if [ -n "$stamp_commit" ]; then
+                            source_changes=$(git log --oneline "$stamp_commit"..HEAD -- \
+                                "$plugin_dir/agents" \
+                                "$plugin_dir/skills" \
+                                "$plugin_dir/commands" \
+                                "$plugin_dir/hooks/hooks.json" \
+                                "$plugin_dir/.claude-plugin/plugin.json" \
+                                "$plugin_dir/codex-hook-overrides.json" \
+                                "$plugin_dir/AGENTS.md" \
+                                2>/dev/null | head -1)
+                            [ -n "$source_changes" ] && stale=true
                         fi
                         if $stale; then
                             fail "$plugin_name: dist/codex/ is stale — source files changed since last build"
