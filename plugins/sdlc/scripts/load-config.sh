@@ -131,7 +131,10 @@ if [ -n "$_sdlc_config_vars" ]; then
   # two forms the Python subprocess above emits (via shlex.quote). Anchoring
   # the full line closes the defence-in-depth gap where a tampered Python
   # stdout could inject `VAR=val; cmd` past a prefix-only check.
-  if echo "$_sdlc_config_vars" | grep -qvE "^[A-Za-z_][A-Za-z_0-9]*=([0-9]+|'.*')$"; then
+  # `[^']*` inside the single-quoted arm rejects values that contain an
+  # embedded single-quote — a stricter check than `'.*'`, which would
+  # accept `VAR='foo''injected'` under greedy matching.
+  if echo "$_sdlc_config_vars" | grep -qvE "^[A-Za-z_][A-Za-z_0-9]*=([0-9]+|'[^']*')$"; then
     echo "WARNING: sdlc config loader produced unexpected output — using defaults" >&2
     _sdlc_config_vars=""
   fi

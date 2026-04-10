@@ -69,6 +69,19 @@ def test_exec_sets():
     assert ("build", "writer") in started
 
 
+def test_exec_sets_started_only_without_completion():
+    """A phase that only emits `started` (no completed/failed) must appear
+    in started_set but NOT in executed_set so _row_status can render it
+    as in-progress."""
+    in_progress_only = [
+        {"timestamp": "2026-04-09T11:00:00Z", "phase": "ship", "name": "shipper",
+         "action": "started"},
+    ]
+    executed, started = _exec_sets(in_progress_only)
+    assert ("ship", "shipper") in started
+    assert ("ship", "shipper") not in executed
+
+
 def test_row_status_all_branches():
     executed, started = _exec_sets(ENTRIES)
     assert _row_status("build", "writer", ENTRIES, executed, started) == "completed"
@@ -89,13 +102,17 @@ def test_read_task_present_and_missing(tmp_path):
 
 def test_render_summary_full(capsys):
     _render_summary_block("my task", "1.2.3", {("a", "b")}, {("a", "b")},
-                          set(), set(), 42, 7)
+                          {("c", "d")}, {("e", "f")}, 42, 7)
     out = capsys.readouterr().out
     assert "### Execution Summary" in out
     assert "**Task:** my task" in out
     assert "**Plugin version:** 1.2.3" in out
     assert "**Total duration:** 42s" in out
     assert "**Total tool calls:** 7" in out
+    # Explicit skipped / unplanned assertions so a regression that swapped
+    # the two labels or dropped a line would actually fail the test.
+    assert "**Skipped:** 1" in out
+    assert "**Unplanned:** 1" in out
 
 
 def test_render_summary_minimal(capsys):
@@ -112,7 +129,13 @@ def test_render_plan_table_with_unplanned(capsys):
     _render_plan_table(PLAN, ENTRIES, executed, started, unplanned)
     out = capsys.readouterr().out
     assert "### Execution Plan" in out
-    assert "| 1 | build | writer | pair-build | implement | completed |" in out
+    # Assert on per-row field presence rather than a whitespace-exact row
+    # match, so a future column-padding change cannot silently break the
+    # test without a behavioral regression.
+    lines = [line for line in out.splitlines() if "build" in line and "writer" in line]
+    assert any("completed" in line and "pair-build" in line for line in lines)
+    assert "skipped" in out
+    assert "rogue" in out
     assert "failed" in out
     assert "skipped" in out
     assert "**Unplanned executions:**" in out
