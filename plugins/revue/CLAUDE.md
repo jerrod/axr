@@ -34,13 +34,18 @@ revue has no `scripts/` and no `commands/` directories on purpose — it is pure
 
 ## Source
 
-Ported from `arqu-co/claude-skills` (`plugins/revue`) into the `jerrod/agent-plugins` marketplace.
+Ported from `arqu-co/claude-skills` (`plugins/revue`) into the `jerrod/agent-plugins` marketplace. Currently in sync with upstream `v1.0.1` (the post-hardening release that landed via [arqu-co/claude-skills#125](https://github.com/arqu-co/claude-skills/pull/125)). All four agent definitions, both skill files, the example workflow, and `.claude-plugin/plugin.json` are byte-identical with the upstream release.
 
-**Drift status:** This copy currently includes hardening fixes that have not yet landed upstream. Specifically:
+The marketplace-specific files in this directory (`README.md`, this `CLAUDE.md`) are local additions and are NOT mirrored upstream. Upstream's `CHANGELOG.md` is also not mirrored — it's a release artifact, not a runtime file.
 
-- `examples/revue-workflow.yml` — adds `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` to the docker run env (without it the four reviewer agents never spawn), uses a per-job mktemp log dir instead of `/tmp/revue-logs` with chmod 777, and inlines security-hardening comments about SHA-pinning actions and the docker image
-- `skills/respond/SKILL.md` — removes `Bash` and `WebFetch` from `allowed-tools` (the skill never uses them and they widen the prompt-injection blast radius), adds an explicit anti-injection instruction
-- `skills/review-pr/SKILL.md` — removes `Bash` and `WebFetch` from `allowed-tools` on the orchestrator, wraps the PR diff in `<pr_diff>` CDATA delimiters when building sub-agent prompts, replaces the heuristic JSON-array extraction with strict parsing, requires the `confidence` field on every dispatched agent
-- `agents/style/style.md` — fixes severity enum to include `medium` (the prose below already documented it)
+When re-syncing from upstream, copy only the runtime files:
 
-These changes should be upstreamed to `arqu-co/claude-skills` and then this copy re-synced to a single source of truth. Until then, do NOT blindly re-port from upstream — you will lose the hardening fixes.
+```bash
+UPSTREAM=/path/to/arqu-co/claude-skills
+cp "$UPSTREAM/plugins/revue/.claude-plugin/plugin.json" plugins/revue/.claude-plugin/plugin.json
+cp -R "$UPSTREAM/plugins/revue/agents"   plugins/revue/agents
+cp -R "$UPSTREAM/plugins/revue/skills"   plugins/revue/skills
+cp -R "$UPSTREAM/plugins/revue/examples" plugins/revue/examples
+```
+
+Do NOT copy `README.md`, `CLAUDE.md`, or `CHANGELOG.md`.
