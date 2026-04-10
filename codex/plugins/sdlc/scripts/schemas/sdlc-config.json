@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sdlc-config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_file_lines": {"type": ["integer", "null"]},
+        "max_function_lines": {"type": ["integer", "null"]},
+        "max_complexity": {"type": ["integer", "null"]},
+        "min_coverage": {"type": ["integer", "null"]}
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {"type": ["integer", "null"]}
+      }
+    },
+    "path_overrides": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {"type": ["integer", "null"]}
+      }
+    },
+    "plan_required": {"type": "boolean"},
+    "github_issues": {"type": "boolean"},
+    "allow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "filesize":             {"type": "array", "items": {"$ref": "#/$defs/file_reason"}},
+        "complexity":           {"type": "array", "items": {"$ref": "#/$defs/file_reason_optional_function"}},
+        "lint":                 {"type": "array", "items": {"$ref": "#/$defs/file_reason"}},
+        "tests":                {"type": "array", "items": {"$ref": "#/$defs/file_reason"}},
+        "coverage":             {"type": "array", "items": {"$ref": "#/$defs/file_reason"}},
+        "dead-code":            {"type": "array", "items": {"$ref": "#/$defs/dead_code_entry"}},
+        "performance":          {"type": "array", "items": {"$ref": "#/$defs/performance_entry"}},
+        "performance-patterns": {"type": "array", "items": {"$ref": "#/$defs/file_pattern_reason"}},
+        "test-quality":         {"type": "array", "items": {"$ref": "#/$defs/file_pattern_reason"}},
+        "plan":                 {"type": "array", "items": {"$ref": "#/$defs/branch_reason"}},
+        "review":               {"type": "array", "items": {"$ref": "#/$defs/branch_reason"}}
+      }
+    },
+    "qa": {"type": "object"},
+    "design_audit": {"type": "object"},
+    "commands": {"type": "object"}
+  },
+  "$defs": {
+    "branch_reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["branch", "reason"],
+      "properties": {
+        "branch": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9/_.+*?~-]+$",
+          "description": "Git branch name or glob pattern — alphanumerics, slash, dot, underscore, hyphen, plus, tilde, and the glob wildcards * and ?"
+        },
+        "reason": {"$ref": "#/$defs/reason"}
+      }
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 15
+    },
+    "file_reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "reason"],
+      "properties": {
+        "file": {"type": "string", "minLength": 1},
+        "reason": {"$ref": "#/$defs/reason"}
+      }
+    },
+    "file_reason_optional_function": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "reason"],
+      "properties": {
+        "file": {"type": "string", "minLength": 1},
+        "function": {"type": "string"},
+        "reason": {"$ref": "#/$defs/reason"}
+      }
+    },
+    "file_pattern_reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "pattern", "reason"],
+      "properties": {
+        "file": {"type": "string", "minLength": 1},
+        "pattern": {"type": "string", "minLength": 1},
+        "reason": {"$ref": "#/$defs/reason"}
+      }
+    },
+    "dead_code_entry": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "name", "type", "reason"],
+          "properties": {
+            "file": {"type": "string", "minLength": 1},
+            "name": {"type": "string", "minLength": 1},
+            "type": {"type": "string", "enum": ["unused_import", "rubocop"]},
+            "reason": {"$ref": "#/$defs/reason"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "reason"],
+          "properties": {
+            "type": {"type": "string", "const": "commented_code"},
+            "reason": {"$ref": "#/$defs/reason"}
+          }
+        }
+      ]
+    },
+    "performance_entry": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "pattern", "reason"],
+          "properties": {
+            "file": {"type": "string", "minLength": 1},
+            "pattern": {"type": "string", "minLength": 1},
+            "reason": {"$ref": "#/$defs/reason"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "line", "type", "reason"],
+          "properties": {
+            "file": {"type": "string", "minLength": 1},
+            "line": {"type": "integer"},
+            "type": {"type": "string", "minLength": 1},
+            "reason": {"$ref": "#/$defs/reason"}
+          }
+        }
+      ]
+    }
+  }
+}

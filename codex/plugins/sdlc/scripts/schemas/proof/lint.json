@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proof-lint",
+  "allOf": [{ "$ref": "base.json" }],
+  "properties": {
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "check": { "type": "string" },
+          "exit_code": { "type": "integer" },
+          "output": { "type": "string" }
+        },
+        "required": ["check", "exit_code", "output"]
+      }
+    }
+  },
+  "required": ["gate", "sha", "status", "timestamp", "error", "failures"]
+}

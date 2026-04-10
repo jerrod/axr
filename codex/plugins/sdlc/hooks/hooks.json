@@ -1,0 +1,78 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CODEX_PLUGIN_ROOT}/hooks/session-start\"",
+            "async": false
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if [ -d \".quality/checkpoints\" ]; then bash \"${CODEX_PLUGIN_ROOT}/scripts/checkpoint.sh\" drift 2>&1 || { echo \"BLOCKED: Quality checkpoints have drifted — run gates before committing\"; exit 1; }; fi'"
+          },
+          {
+            "type": "command",
+            "command": "\"${CODEX_PLUGIN_ROOT}/hooks/require-critic-approval\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(git push*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CODEX_PLUGIN_ROOT}/scripts/run-gates.sh\" all 2>&1"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(gh pr create*)|Bash(gh pr edit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CODEX_PLUGIN_ROOT}/hooks/enforce-review-before-pr\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(gh pr merge*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CODEX_PLUGIN_ROOT}/hooks/block-merge-without-ci\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(git commit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CODEX_PLUGIN_ROOT}/scripts/mock-pattern-guard.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CODEX_PLUGIN_ROOT}/hooks/enforce-fixes\""
+          }
+        ]
+      }
+    ]
+  }
+}

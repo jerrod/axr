@@ -1,0 +1,39 @@
+{
+  "name": "revue",
+  "version": "1.0.1",
+  "description": "Enterprise code review agent team — 4 specialized reviewers analyze PRs in parallel",
+  "author": {
+    "name": "arqu-co"
+  },
+  "homepage": "https://github.com/jerrod/agent-plugins",
+  "repository": "https://github.com/jerrod/agent-plugins",
+  "license": "MIT",
+  "keywords": [
+    "code-review",
+    "security",
+    "architecture",
+    "correctness",
+    "style",
+    "agents"
+  ],
+  "interface": {
+    "displayName": "Revue",
+    "shortDescription": "Enterprise code review agent team — 4 specialized reviewers analyze PRs in parallel",
+    "longDescription": "Enterprise code review agent team — 4 specialized reviewers analyze PRs in parallel",
+    "developerName": "arqu-co",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/jerrod/agent-plugins",
+    "privacyPolicyURL": "https://github.com/jerrod/agent-plugins",
+    "termsOfServiceURL": "https://github.com/jerrod/agent-plugins",
+    "defaultPrompt": [
+      "Enterprise code review agent team — 4 specialized reviewers analyze PRs in parallel"
+    ],
+    "brandColor": "#3B82F6",
+    "screenshots": []
+  },
+  "skills": "./skills/"
+}
