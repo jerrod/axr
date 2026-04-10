@@ -239,13 +239,14 @@ else
                     else
                         stale=false
                         if [ -n "$(find -P "$plugin_dir" \
-                            \( -path "$plugin_dir/agents/*.md" \
-                            -o -path "$plugin_dir/skills/*/SKILL.md" \
-                            -o -path "$plugin_dir/commands/*.md" \
-                            -o -name "hooks.json" -path "$plugin_dir/hooks/*" \
-                            -o -name "plugin.json" -path "$plugin_dir/.claude-plugin/*" \
-                            -o -name "codex-hook-overrides.json" -path "$plugin_dir/*" \
-                            -o -name "AGENTS.md" -path "$plugin_dir/*" \) \
+                            -not -path "$plugin_dir/dist/*" \
+                            \( \( -path "$plugin_dir/agents/*" -name '*.md' \) \
+                            -o \( -path "$plugin_dir/skills/*" -name 'SKILL.md' \) \
+                            -o \( -path "$plugin_dir/commands/*" -name '*.md' \) \
+                            -o \( -name "hooks.json" -path "$plugin_dir/hooks/*" \) \
+                            -o \( -name "plugin.json" -path "$plugin_dir/.claude-plugin/*" \) \
+                            -o \( -name "codex-hook-overrides.json" -path "$plugin_dir/*" \) \
+                            -o \( -name "AGENTS.md" -path "$plugin_dir/*" \) \) \
                             -newer "$build_stamp" -print -quit 2>/dev/null)" ]; then
                             stale=true
                         fi
