@@ -1,0 +1,26 @@
+{
+  "description": "Claude Code to OpenAI Codex tool name mapping. Applied to agent body text during dist/codex generation.",
+  "version": "1.0.0",
+  "mappings": {
+    "tools": {
+      "Bash": "Bash",
+      "Read": "Read",
+      "Write": "Write",
+      "Edit": "Edit",
+      "Glob": "Glob",
+      "Grep": "Grep",
+      "WebFetch": "WebFetch",
+      "WebSearch": "WebSearch"
+    },
+    "variables": {
+      "${CLAUDE_PLUGIN_ROOT}": "${CODEX_PLUGIN_ROOT}"
+    },
+    "notes": {
+      "Glob": "Needs verification against live Codex install",
+      "Grep": "Needs verification against live Codex install",
+      "WebFetch": "Needs verification against live Codex install",
+      "WebSearch": "Needs verification against live Codex install",
+      "Agent": "No direct mapping — parallel Agent dispatch rewritten to sequential in skill bodies"
+    }
+  }
+}

@@ -1,0 +1,300 @@
+#!/usr/bin/env bash
+# bin/build-codex — generate dist/codex/ artifacts from Claude Code plugins.
+#
+# Reads tool-mapping.json for name/variable remaps. Iterates plugins/*/ and
+# skips any with platforms.codex.status == "unsupported". Transforms skills,
+# agents, hooks, commands, and scripts into Codex-compatible format.
+
+set -euo pipefail
+
+cd_repo_root() {
+  local root
+  if root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+    cd "$root" || exit 1
+  else
+    cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
+  fi
+}
+
+cd_repo_root
+
+MAPPING_FILE="tool-mapping.json"
+if [[ ! -f "$MAPPING_FILE" ]]; then
+  echo "ERROR: $MAPPING_FILE not found at repo root" >&2
+  exit 1
+fi
+
+# parse_frontmatter_field — extract a YAML frontmatter field from a markdown file.
+# Usage: parse_frontmatter_field <file> <field>
+parse_frontmatter_field() {
+  local file="$1" field="$2"
+  awk -v f="$field" '
+    /^---$/ { block++; next }
+    block == 1 && $0 ~ "^"f":" {
+      sub("^"f":[ ]*", ""); print; exit
+    }
+    block >= 2 { exit }
+  ' "$file"
+}
+
+# extract_body — print everything after the second --- line.
+extract_body() {
+  awk '/^---$/ { block++; next } block >= 2 { print }' "$1"
+}
+
+# apply_tool_mappings — sed-replace tool names using tool-mapping.json.
+apply_tool_mappings() {
+  local text="$1"
+  local keys
+  keys=$(jq -r '.mappings.tools | keys[]' "$MAPPING_FILE")
+  for key in $keys; do
+    local val
+    val=$(jq -r ".mappings.tools[\"$key\"]" "$MAPPING_FILE")
+    if [[ "$key" != "$val" ]]; then
+      text=$(printf '%s' "$text" | sed "s/$key/$val/g")
+    fi
+  done
+  echo "$text"
+}
+
+# apply_variable_mappings — sed-replace variables using tool-mapping.json.
+apply_variable_mappings() {
+  local text="$1"
+  local keys
+  keys=$(jq -r '.mappings.variables | keys[]' "$MAPPING_FILE")
+  for key in $keys; do
+    local val
+    val=$(jq -r ".mappings.variables[\"$key\"]" "$MAPPING_FILE")
+    local escaped_key escaped_val
+    escaped_key=$(printf '%s' "$key" | sed 's/[]\/$*.^[]/\\&/g')
+    escaped_val=$(printf '%s' "$val" | sed 's/[\/&]/\\&/g')
+    text=$(printf '%s' "$text" | sed "s/$escaped_key/$escaped_val/g")
+  done
+  echo "$text"
+}
+
+# normalize_tools_line — convert comma-separated or JSON array to TOML array.
+# Input: "Read, Glob, Grep" or '["Read", "Glob", "Grep"]'
+# Output: ["Read", "Glob", "Grep"]
+normalize_tools_line() {
+  local raw="$1"
+  raw=$(printf '%s' "$raw" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  if [[ "$raw" == "["* ]]; then
+    echo "$raw"
+  else
+    local result="["
+    local first=true
+    IFS=',' read -ra parts <<< "$raw"
+    for part in "${parts[@]}"; do
+      part=$(printf '%s' "$part" | sed 's/^[[:space:]]*//;s/[[:space:]]*"//' | tr -d '"')
+      if $first; then first=false; else result+=", "; fi
+      result+="\"$part\""
+    done
+    result+="]"
+    echo "$result"
+  fi
+}
+
+# transform_skills — copy SKILL.md files preserving directory structure.
+transform_skills() {
+  local plugin_dir="$1" dist_dir="$2"
+  [[ -d "$plugin_dir/skills" ]] || return 0
+  while IFS= read -r -d '' skill_file; do
+    local rel_path="${skill_file#"$plugin_dir/skills/"}"
+    local target_dir
+    target_dir="$dist_dir/skills/$(dirname "$rel_path")"
+    mkdir -p "$target_dir"
+    cp "$skill_file" "$target_dir/"
+  done < <(find -P "$plugin_dir/skills" -name 'SKILL.md' -print0)
+}
+
+# transform_agent — convert a single agent .md to TOML in dist.
+transform_agent() {
+  local agent_file="$1" dist_dir="$2"
+  local basename
+  basename=$(basename "$agent_file" .md)
+  local name description tools body
+  name=$(parse_frontmatter_field "$agent_file" "name")
+  description=$(parse_frontmatter_field "$agent_file" "description")
+  tools=$(parse_frontmatter_field "$agent_file" "tools")
+  body=$(extract_body "$agent_file")
+  body=$(apply_tool_mappings "$body")
+  body=$(apply_variable_mappings "$body")
+  mkdir -p "$dist_dir/agents"
+  local out="$dist_dir/agents/${basename}.toml"
+  {
+    printf 'name = "%s"\n' "$name"
+    printf 'description = "%s"\n' "$(printf '%s' "$description" | sed 's/"/\\"/g')"
+    if [[ -n "$tools" ]]; then
+      printf 'tools = %s\n' "$(normalize_tools_line "$tools")"
+    fi
+    printf 'developer_instructions = """\n%s\n"""\n' "$body"
+  } > "$out"
+}
+
+# transform_agents — find and convert all agent .md files.
+transform_agents() {
+  local plugin_dir="$1" dist_dir="$2"
+  [[ -d "$plugin_dir/agents" ]] || return 0
+  while IFS= read -r -d '' agent_file; do
+    transform_agent "$agent_file" "$dist_dir"
+  done < <(find -P "$plugin_dir/agents" -name '*.md' \
+    -not -name 'README.md' -not -name 'SCHEMA.md' -print0)
+}
+
+# remap_hook_entry — apply a single override remap to hooks JSON.
+remap_hook_entry() {
+  local hooks_json="$1" override="$2"
+  local src_event src_matcher tgt_event tgt_matcher convert replacement
+  src_event=$(printf '%s' "$override" | jq -r '.source_event')
+  src_matcher=$(printf '%s' "$override" | jq -r '.source_matcher')
+  tgt_event=$(printf '%s' "$override" | jq -r '.target_event')
+  tgt_matcher=$(printf '%s' "$override" | jq -r '.target_matcher // empty')
+  convert=$(printf '%s' "$override" | jq -r '.convert_prompt_to_command // false')
+  replacement=$(printf '%s' "$override" | jq -r '.replacement_command // empty')
+
+  # Extract matching hook entries, transform, and move them
+  local extracted moved
+  extracted=$(printf '%s' "$hooks_json" | jq -c \
+    --arg se "$src_event" --arg sm "$src_matcher" \
+    '[.hooks[$se][] | select(.matcher == $sm) | .hooks[]] // []')
+  if [[ "$convert" == "true" && -n "$replacement" ]]; then
+    extracted=$(printf '%s' "$extracted" | jq -c \
+      --arg cmd "$replacement" \
+      '[.[] | .type = "command" | .command = $cmd | del(.prompt, .model)]')
+  fi
+  moved=$(printf '%s' "$hooks_json" | jq -c \
+    --arg se "$src_event" --arg sm "$src_matcher" \
+    --arg te "$tgt_event" --arg tm "$tgt_matcher" \
+    --argjson entries "$extracted" '
+    .hooks[$se] = [.hooks[$se][] | select(.matcher != $sm)] |
+    if (.hooks[$se] | length) == 0 then del(.hooks[$se]) else . end |
+    .hooks[$te] = (.hooks[$te] // []) + [{
+      matcher: (if $tm == "" then null else $tm end),
+      hooks: $entries
+    }]')
+  echo "$moved"
+}
+
+# apply_default_write_edit_remaps — move remaining Write|Edit hooks.
+apply_default_write_edit_remaps() {
+  local hooks_json="$1"
+  # PreToolUse Write|Edit → UserPromptSubmit (drop matcher, drop prompt hooks)
+  hooks_json=$(printf '%s' "$hooks_json" | jq -c '
+    if .hooks.PreToolUse then
+      .hooks.PreToolUse as $pre |
+      [.hooks.PreToolUse[] | select(.matcher == "Write|Edit")] as $we |
+      if ($we | length) > 0 then
+        .hooks.PreToolUse = [.hooks.PreToolUse[] | select(.matcher != "Write|Edit")] |
+        if (.hooks.PreToolUse | length) == 0 then del(.hooks.PreToolUse) else . end |
+        [($we[].hooks[] | select(.type != "prompt"))] as $cmds |
+        if ($cmds | length) > 0 then
+          .hooks.UserPromptSubmit = (.hooks.UserPromptSubmit // []) +
+            [{ hooks: $cmds }]
+        else . end
+      else . end
+    else . end')
+  # PostToolUse Write|Edit → Stop (drop matcher)
+  hooks_json=$(printf '%s' "$hooks_json" | jq -c '
+    if .hooks.PostToolUse then
+      [.hooks.PostToolUse[] | select(.matcher == "Write|Edit")] as $we |
+      if ($we | length) > 0 then
+        .hooks.PostToolUse = [.hooks.PostToolUse[] | select(.matcher != "Write|Edit")] |
+        if (.hooks.PostToolUse | length) == 0 then del(.hooks.PostToolUse) else . end |
+        [($we[].hooks[] | select(.type != "prompt"))] as $cmds |
+        if ($cmds | length) > 0 then
+          .hooks.Stop = (.hooks.Stop // []) + [{ hooks: $cmds }]
+        else . end
+      else . end
+    else . end')
+  echo "$hooks_json"
+}
+
+# transform_hooks — remap hooks.json for Codex compatibility.
+transform_hooks() {
+  local plugin_dir="$1" dist_dir="$2"
+  [[ -f "$plugin_dir/hooks/hooks.json" ]] || return 0
+  local hooks_json overrides_file
+  hooks_json=$(cat "$plugin_dir/hooks/hooks.json")
+  overrides_file="$plugin_dir/codex-hook-overrides.json"
+  if [[ -f "$overrides_file" ]]; then
+    local count i override
+    count=$(jq '.remaps | length' "$overrides_file")
+    for ((i = 0; i < count; i++)); do
+      override=$(jq -c ".remaps[$i]" "$overrides_file")
+      hooks_json=$(remap_hook_entry "$hooks_json" "$override")
+    done
+  fi
+  hooks_json=$(apply_default_write_edit_remaps "$hooks_json")
+  hooks_json=$(apply_variable_mappings "$hooks_json")
+  mkdir -p "$dist_dir/hooks"
+  printf '%s' "$hooks_json" | jq '.' > "$dist_dir/hooks/hooks.json"
+}
+
+# transform_commands — convert command .md files to skill SKILL.md files.
+transform_commands() {
+  local plugin_dir="$1" dist_dir="$2"
+  [[ -d "$plugin_dir/commands" ]] || return 0
+  while IFS= read -r -d '' cmd_file; do
+    local cmd_name description body
+    cmd_name=$(basename "$cmd_file" .md)
+    description=$(parse_frontmatter_field "$cmd_file" "description")
+    body=$(extract_body "$cmd_file")
+    local target_dir="$dist_dir/skills/$cmd_name"
+    mkdir -p "$target_dir"
+    {
+      printf -- '---\n'
+      printf 'name: %s\n' "$cmd_name"
+      printf 'description: "%s"\n' "$(printf '%s' "$description" | sed 's/"/\\"/g')"
+      printf -- '---\n\n'
+      printf '%s\n' "$body"
+    } > "$target_dir/SKILL.md"
+  done < <(find -P "$plugin_dir/commands" -name '*.md' -print0)
+}
+
+# transform_scripts — copy scripts directory as-is.
+transform_scripts() {
+  local plugin_dir="$1" dist_dir="$2"
+  [[ -d "$plugin_dir/scripts" ]] || return 0
+  cp -R "$plugin_dir/scripts" "$dist_dir/scripts"
+}
+
+# --- Main ---
+
+for plugin_dir in plugins/*/; do
+  plugin_dir="${plugin_dir%/}"
+  rm -rf "$plugin_dir/dist/codex"
+done
+errors=0
+
+for plugin_dir in plugins/*/; do
+  plugin_dir="${plugin_dir%/}"
+  plugin_json="$plugin_dir/.claude-plugin/plugin.json"
+  [[ -f "$plugin_json" ]] || continue
+
+  plugin_name=$(jq -r '.name' "$plugin_json")
+  codex_status=$(jq -r '.platforms.codex.status // "missing"' "$plugin_json")
+  if [[ "$codex_status" == "unsupported" ]]; then
+    echo "SKIP $plugin_name (unsupported)"
+    continue
+  fi
+
+  dist_dir="$plugin_dir/dist/codex"
+  mkdir -p "$dist_dir"
+  echo "BUILD $plugin_name"
+
+  transform_skills "$plugin_dir" "$dist_dir"
+  transform_agents "$plugin_dir" "$dist_dir"
+  transform_hooks "$plugin_dir" "$dist_dir"
+  transform_commands "$plugin_dir" "$dist_dir"
+  transform_scripts "$plugin_dir" "$dist_dir"
+
+  date -u +%Y-%m-%dT%H:%M:%SZ > "$dist_dir/.build-stamp"
+done
+
+if [[ $errors -gt 0 ]]; then
+  echo "FAILED with $errors errors" >&2
+  exit 1
+fi
+
+echo "DONE — plugins/*/dist/codex/ built successfully"

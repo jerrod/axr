@@ -13,5 +13,9 @@
     "code-quality",
     "rubric",
     "claude-code"
-  ]
+  ],
+  "platforms": {
+    "claude": { "status": "supported" },
+    "codex": { "status": "skill-compatible" }
+  }
 }
