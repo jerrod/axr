@@ -33,3 +33,12 @@ All hooks resolve scripts via `${CLAUDE_PLUGIN_ROOT}/scripts/*.sh` so the plugin
 ## Source
 
 Ported from `arqu-co/claude-skills` (`plugins/therapist`) into the `jerrod/axr` marketplace. The runtime behavior is unchanged — only packaging and the marketplace wrapper command are new.
+
+## Codex Limitations
+
+On Codex, two hooks fire at different times than on Claude Code:
+
+- **rubber-band** (distortion detection): Fires at the start of each new turn (`UserPromptSubmit`) instead of before each file write. Reviews the previous turn's output holistically rather than intercepting individual writes.
+- **socratic** (reflective questioning): Fires at turn-end (`Stop`) instead of after each file write. Reflects on the full turn's work rather than per-edit.
+
+All other hooks (affirmation, pause, mirror, reframe, activate) fire identically on both platforms.

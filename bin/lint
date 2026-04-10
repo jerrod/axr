@@ -36,7 +36,7 @@ FAIL=0
 #    and plugins/*/bin dir that exists. Containment-check each candidate
 #    so a symlinked external directory isn't added to SH_ROOTS.
 SH_ROOTS=(bin)
-for p in plugins/*/scripts plugins/*/bin; do
+for p in plugins/*/scripts plugins/*/bin plugins/*/dist/codex/scripts; do
     [ -d "$p" ] || continue
     p_real="$(cd "$p" 2>/dev/null && pwd -P)" || continue
     case "$p_real" in

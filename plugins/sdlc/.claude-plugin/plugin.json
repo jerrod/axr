@@ -13,5 +13,9 @@
     "ci",
     "gates"
   ],
-  "instructions": "REQUIRED: At session start, invoke the sdlc:using-sdlc skill before doing any work. This loads the routing and discipline layer that ensures every user message is checked against the skill catalog before responding. Without it, skills will not be invoked automatically. If the user's first message is a task, invoke sdlc:using-sdlc first, then handle the task."
+  "instructions": "REQUIRED: At session start, invoke the sdlc:using-sdlc skill before doing any work. This loads the routing and discipline layer that ensures every user message is checked against the skill catalog before responding. Without it, skills will not be invoked automatically. If the user's first message is a task, invoke sdlc:using-sdlc first, then handle the task.",
+  "platforms": {
+    "claude": { "status": "supported" },
+    "codex": { "status": "hook-dependent" }
+  }
 }

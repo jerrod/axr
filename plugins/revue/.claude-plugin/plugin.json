@@ -12,5 +12,9 @@
     "correctness",
     "style",
     "agents"
-  ]
+  ],
+  "platforms": {
+    "claude": { "status": "supported" },
+    "codex": { "status": "skill-compatible" }
+  }
 }

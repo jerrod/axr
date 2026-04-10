@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proof-test-quality",
+  "allOf": [{ "$ref": "base.json" }],
+  "properties": {
+    "scanned_files": { "type": "integer" },
+    "violations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "pattern": { "type": "string" },
+          "code": { "type": "string" }
+        },
+        "required": ["file", "line", "pattern", "code"]
+      }
+    }
+  },
+  "required": ["gate", "sha", "status", "timestamp", "error", "scanned_files", "violations"]
+}

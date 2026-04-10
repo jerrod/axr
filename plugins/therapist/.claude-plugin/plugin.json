@@ -16,5 +16,9 @@
     "behavioral-experiments",
     "positive-reinforcement",
     "relapse-prevention"
-  ]
+  ],
+  "platforms": {
+    "claude": { "status": "supported" },
+    "codex": { "status": "hook-dependent" }
+  }
 }
