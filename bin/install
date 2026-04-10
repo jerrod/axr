@@ -1,0 +1,261 @@
+#!/usr/bin/env bash
+# bin/install — install the agent-plugins Codex marketplace into a user's
+# personal marketplace, following the "Personal marketplace" pattern from
+# https://developers.openai.com/codex/plugins/build (plugins live under
+# ~/.codex/plugins/<name>/, marketplace manifest at
+# ~/.agents/plugins/marketplace.json).
+#
+# Works both from a clone (`bin/install`) and via curl | bash:
+#
+#   curl -fsSL https://raw.githubusercontent.com/jerrod/agent-plugins/main/bin/install | bash
+#
+# Re-run to update. `--uninstall` removes everything this script put in place.
+
+set -euo pipefail
+
+REPO_SLUG="jerrod/agent-plugins"
+REF="${AGENT_PLUGINS_REF:-main}"
+PLUGIN_DIR="${AGENT_PLUGINS_PLUGIN_DIR:-$HOME/.codex/plugins}"
+MARKETPLACE_FILE="${AGENT_PLUGINS_MARKETPLACE:-$HOME/.agents/plugins/marketplace.json}"
+MARKETPLACE_NAME="agent-plugins"
+MARKETPLACE_DISPLAY="agent-plugins"
+PLUGINS=(axr revue sdlc therapist)
+FORCE="${AGENT_PLUGINS_FORCE:-0}"
+UNINSTALL=0
+
+usage() {
+  cat <<USAGE
+Usage: bin/install [--ref REF] [--plugin-dir DIR] [--marketplace FILE] [--force] [--uninstall]
+
+Install the agent-plugins Codex marketplace as a personal marketplace.
+Copies each plugin under \$PLUGIN_DIR/<name>/ and writes a marketplace
+manifest at \$MARKETPLACE_FILE with source.path entries relative to the
+marketplace root (parent of .agents/).
+
+Options:
+  --ref REF         Git ref to fetch from GitHub (default: main)
+  --plugin-dir DIR  Where plugins land   (default: \$HOME/.codex/plugins)
+  --marketplace F   Personal marketplace (default: \$HOME/.agents/plugins/marketplace.json)
+  --force           Overwrite an existing personal marketplace with a
+                    different marketplace name. Without this, the installer
+                    refuses to clobber a marketplace you already own.
+  --uninstall       Remove plugin directories and the agent-plugins entries
+                    from the marketplace file. Leaves other entries intact.
+  -h, --help        Show this help.
+
+Environment overrides:
+  AGENT_PLUGINS_REF, AGENT_PLUGINS_PLUGIN_DIR, AGENT_PLUGINS_MARKETPLACE,
+  AGENT_PLUGINS_FORCE
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --ref)         REF="$2"; shift 2 ;;
+    --plugin-dir)  PLUGIN_DIR="$2"; shift 2 ;;
+    --marketplace) MARKETPLACE_FILE="$2"; shift 2 ;;
+    --force)       FORCE=1; shift ;;
+    --uninstall)   UNINSTALL=1; shift ;;
+    -h|--help)     usage; exit 0 ;;
+    *)             echo "install: unknown option: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+
+for bin in curl tar python3; do
+  if ! command -v "$bin" >/dev/null 2>&1; then
+    echo "install: '$bin' is required but not on PATH" >&2
+    exit 1
+  fi
+done
+
+# Marketplace root = three directories up from the marketplace file, i.e. the
+# parent of `.agents/`. Codex resolves source.path relative to this root.
+# Example: ~/.agents/plugins/marketplace.json → root = ~
+MARKETPLACE_ROOT="$(dirname "$(dirname "$(dirname "$MARKETPLACE_FILE")")")"
+mkdir -p "$PLUGIN_DIR" "$MARKETPLACE_ROOT"
+PLUGIN_DIR_ABS="$(cd "$PLUGIN_DIR" && pwd -P)"
+MARKETPLACE_ROOT_ABS="$(cd "$MARKETPLACE_ROOT" && pwd -P)"
+
+# Compute source.path relative to marketplace root. Codex requires source.path
+# to start with `./` and stay inside the marketplace root.
+REL="$(python3 -c 'import os, sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "$PLUGIN_DIR_ABS" "$MARKETPLACE_ROOT_ABS")"
+case "$REL" in
+  ..*|/*)
+    echo "install: plugin dir ($PLUGIN_DIR_ABS) must live under marketplace root ($MARKETPLACE_ROOT_ABS)" >&2
+    exit 1
+    ;;
+esac
+
+# --- uninstall path ---
+if [[ "$UNINSTALL" == "1" ]]; then
+  for p in "${PLUGINS[@]}"; do
+    # ${PLUGIN_DIR:?} guards against an unset/empty PLUGIN_DIR turning this
+    # into `rm -rf /<plugin>`. Fails loudly if the variable is empty.
+    if [ -e "${PLUGIN_DIR:?}/$p" ]; then
+      rm -rf "${PLUGIN_DIR:?}/$p"
+      echo "install: removed $PLUGIN_DIR/$p"
+    fi
+  done
+  if [ -f "$MARKETPLACE_FILE" ]; then
+    MARKETPLACE_FILE="$MARKETPLACE_FILE" PLUGINS_CSV="${PLUGINS[*]}" python3 - <<'PY'
+import json, os, sys
+path = os.environ["MARKETPLACE_FILE"]
+names = set(os.environ["PLUGINS_CSV"].split())
+try:
+    with open(path) as f:
+        data = json.load(f)
+except json.JSONDecodeError:
+    sys.stderr.write(f"install: {path} is not valid JSON — skipping uninstall edit\n")
+    sys.exit(0)
+kept = [p for p in data.get("plugins", []) if p.get("name") not in names]
+if not kept:
+    os.remove(path)
+    print(f"install: removed empty {path}")
+else:
+    data["plugins"] = kept
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    print(f"install: cleaned agent-plugins entries from {path}")
+PY
+  fi
+  cat <<'MSG'
+
+agent-plugins uninstalled.
+
+Remember to also remove any [plugins."*@agent-plugins"] blocks from
+~/.codex/config.toml if you added them manually, then restart Codex.
+MSG
+  exit 0
+fi
+
+# --- install path ---
+TMPDIR="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR"' EXIT
+
+URL="https://codeload.github.com/$REPO_SLUG/tar.gz/$REF"
+echo "install: fetching $URL"
+
+# Build the explicit tarball paths to extract. --strip-components=3 drops
+# `agent-plugins-<ref>/codex/plugins/` so each plugin lands at $TMPDIR/<name>/.
+EXTRACT_PATHS=()
+for p in "${PLUGINS[@]}"; do
+  EXTRACT_PATHS+=("agent-plugins-${REF}/codex/plugins/${p}")
+done
+
+if ! curl -fsSL "$URL" | tar -xz --strip-components=3 -C "$TMPDIR" "${EXTRACT_PATHS[@]}"; then
+  echo "install: failed to download or extract tarball from $URL" >&2
+  exit 1
+fi
+
+for p in "${PLUGINS[@]}"; do
+  if [ ! -d "$TMPDIR/$p" ]; then
+    echo "install: expected $p/ in tarball but it is missing" >&2
+    exit 1
+  fi
+done
+
+# Move into place, replacing any previous install of the same plugin.
+# Guard with ${var:?} so an unset/empty PLUGIN_DIR can't become rm -rf /<plugin>.
+for p in "${PLUGINS[@]}"; do
+  dest="${PLUGIN_DIR:?}/$p"
+  rm -rf "$dest"
+  mv "$TMPDIR/$p" "$dest"
+  echo "install: placed $dest"
+done
+
+# Merge / write the marketplace manifest. Safe-default: if a personal
+# marketplace already exists with a different top-level name, refuse unless
+# --force.
+MARKETPLACE_FILE="$MARKETPLACE_FILE" \
+  MARKETPLACE_NAME="$MARKETPLACE_NAME" \
+  MARKETPLACE_DISPLAY="$MARKETPLACE_DISPLAY" \
+  REL="$REL" \
+  PLUGINS_CSV="${PLUGINS[*]}" \
+  FORCE="$FORCE" \
+  python3 - <<'PY'
+import json, os, sys
+
+path    = os.environ["MARKETPLACE_FILE"]
+name    = os.environ["MARKETPLACE_NAME"]
+display = os.environ["MARKETPLACE_DISPLAY"]
+rel     = os.environ["REL"]
+plugins = os.environ["PLUGINS_CSV"].split()
+force   = os.environ["FORCE"] == "1"
+
+def source_path(plugin_name: str) -> str:
+    if rel == ".":
+        return f"./{plugin_name}"
+    return f"./{rel}/{plugin_name}"
+
+our_entries = [
+    {
+        "name": p,
+        "source": {"source": "local", "path": source_path(p)},
+        "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+        "category": "Coding",
+    }
+    for p in plugins
+]
+
+existing = None
+if os.path.exists(path):
+    try:
+        with open(path) as f:
+            existing = json.load(f)
+    except json.JSONDecodeError:
+        sys.stderr.write(f"install: {path} is not valid JSON — refusing to overwrite\n")
+        sys.exit(1)
+
+if existing is None:
+    data = {"name": name, "interface": {"displayName": display}, "plugins": our_entries}
+elif existing.get("name") in (name, None):
+    # Fresh install or updating a previous agent-plugins install.
+    data = existing
+    data["name"] = name
+    data.setdefault("interface", {})["displayName"] = display
+    names = {p["name"] for p in our_entries}
+    data["plugins"] = [p for p in data.get("plugins", []) if p.get("name") not in names] + our_entries
+else:
+    if not force:
+        sys.stderr.write(
+            f"install: {path} is an existing '{existing.get('name')}' marketplace.\n"
+            f"install: Codex only reads one personal marketplace file. Either\n"
+            f"install:   * move that file aside and re-run, or\n"
+            f"install:   * re-run with --force to replace it with agent-plugins.\n"
+        )
+        sys.exit(1)
+    data = {"name": name, "interface": {"displayName": display}, "plugins": our_entries}
+
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+print(f"install: wrote {path} ({len(data['plugins'])} plugin entries)")
+PY
+
+cat <<'MSG'
+
+agent-plugins installed.
+
+Next steps:
+  1. Restart Codex so it picks up the new personal marketplace.
+  2. Enable the plugins you want by adding any of these blocks to
+     ~/.codex/config.toml:
+
+         [plugins."axr@agent-plugins"]
+         enabled = true
+
+         [plugins."revue@agent-plugins"]
+         enabled = true
+
+         [plugins."sdlc@agent-plugins"]
+         enabled = true
+
+         [plugins."therapist@agent-plugins"]
+         enabled = true
+
+To update: re-run this installer. Existing files are replaced atomically.
+To uninstall: re-run with --uninstall (removes plugin dirs and the four
+marketplace entries; leaves your other marketplace entries intact).
+MSG
