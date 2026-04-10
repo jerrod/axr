@@ -197,7 +197,23 @@ run_selected_tests() {
         -- "${_sel_array[@]}"
     fi
   elif [ -n "${TEST_CMD:-}" ]; then
-    _run_test_cmd_eval "$TEST_CMD"
+    # TEST_CMD goes through eval, so enforce the invariant from the
+    # _run_test_cmd_eval docstring: only `cd <path> && <known runner>`
+    # forms produced by detect-test-runner.sh are safe. Reject newlines
+    # and require the string to begin with `cd `. Anything else is
+    # silently ignored (falls through to no-op) so a hostile env var
+    # cannot execute arbitrary commands under the gate's credentials.
+    case "$TEST_CMD" in
+      *$'\n'* | *$'\r'*)
+        echo "select-affected-tests: refusing TEST_CMD with newline" >&2
+        ;;
+      "cd "*)
+        _run_test_cmd_eval "$TEST_CMD"
+        ;;
+      *)
+        echo "select-affected-tests: refusing TEST_CMD that does not start with 'cd '" >&2
+        ;;
+    esac
   fi
 
   rm -f "$TEST_OUTPUT_FILE"

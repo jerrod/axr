@@ -26,6 +26,15 @@ set -uo pipefail
 # prefix; returns 1 (and prints a warning to stderr) otherwise.
 _validate_cmd_run() {
   local cmd_run="$1"
+  # Reject embedded newlines before word-splitting: a multi-line run value
+  # would split into separate array elements, any of which could be treated
+  # as a distinct command by the caller's `"${_cmd_array[@]}"` execution.
+  case "$cmd_run" in
+    *$'\n'*)
+      echo "commands-config: rejecting run field containing newline" >&2
+      return 1
+      ;;
+  esac
   local first_token="${cmd_run%% *}"
   case "$first_token" in
     bin/*|./bin/*|./gradlew|./gradlew/*) return 0 ;;

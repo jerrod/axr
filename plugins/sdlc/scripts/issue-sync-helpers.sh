@@ -36,12 +36,23 @@ _sdlc_eval_prior_trap() {
   if [ -z "$prior" ]; then
     return 0
   fi
+  # Reject newline and NUL bytes explicitly — a trap body containing a
+  # newline would be eval'd as two (or more) statements, and the case
+  # pattern below cannot express "no newline" on its own.
   case "$prior" in
-    *[\$\`\(\)\<\>\&\|]*)
-      echo "issue-sync-helpers: refusing to eval prior trap with shell metacharacters: $prior" >&2
+    *$'\n'* | *$'\000'*)
+      echo "issue-sync-helpers: refusing to eval prior trap with newline or NUL" >&2
       return 1
       ;;
   esac
+  # Positive allowlist: only function-name-like tokens (alphanumerics,
+  # underscore, colon) optionally separated by `;` or space.
+  local stripped
+  stripped=$(printf '%s' "$prior" | tr -d 'A-Za-z0-9_:; ')
+  if [ -n "$stripped" ]; then
+    echo "issue-sync-helpers: refusing to eval prior trap with disallowed characters: $prior" >&2
+    return 1
+  fi
   # shellcheck disable=SC2294  # intentional eval of allowlisted trap body
   eval "$prior"
 }

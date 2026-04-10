@@ -30,8 +30,13 @@ do_create() {
   local title body_file safe_title
   title=$(extract_title "$plan_file")
   [ -z "$title" ] && title="Implementation plan"
-  # Strip double-quotes from title to neutralize flag-injection attempts (F3).
-  safe_title=$(printf '%s' "$title" | tr -d '"')
+  # The title is rendered via gh under double-quotes, so $ and backtick
+  # would trigger command substitution before gh ever sees the value.
+  # Strip every shell-significant character, not just `"`.
+  # Shell double-quote expansion processes `$`, backtick, `\`, and `"`, so
+  # each of these can produce command substitution inside gh's invocation.
+  local _strip=$'"$`\\'
+  safe_title=$(printf '%s' "$title" | tr -d "$_strip")
 
   body_file=$(_sdlc_mktemp)
   build_issue_body "$plan_file" >"$body_file"
