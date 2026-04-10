@@ -5,6 +5,9 @@
 STATE_DIR="$HOME/.claude/plugins/data/sdlc"
 SNOOZE_FILE="$STATE_DIR/update-snoozed"
 UPDATE_CONFIG_FILE="$STATE_DIR/update-config.json"
+# Export so the sdlc-update.sh guards that reference these vars also see
+# them in any subshell spawned after sourcing this file.
+export STATE_DIR SNOOZE_FILE UPDATE_CONFIG_FILE
 
 mkdir -p "$STATE_DIR"
 

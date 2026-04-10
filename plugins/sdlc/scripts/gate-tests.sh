@@ -193,7 +193,8 @@ if [ "$TEST_RUNNER" != "bin-test" ]; then
     sub_output=$(eval "$DETECTED_CMD") || sub_exit=$?
     SUBPROJECTS_RAN=true
     if [ $sub_exit -ne 0 ]; then
-      sub_name=$(basename "$local_root")
+      # Sanitize before embedding into JSON (see gate-lint.sh rationale).
+      sub_name=$(basename "$local_root" | tr -dc 'a-zA-Z0-9._-')
       junit_path=""
       [ "$DETECTED_RUNNER" = "pytest" ] && junit_path="$local_root/.quality/proof/junit.xml"
       sub_failures=$(parse_failures "$DETECTED_RUNNER" "$sub_output" "$SCRIPT_DIR" "$junit_path")

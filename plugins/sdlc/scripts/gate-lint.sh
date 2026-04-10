@@ -204,7 +204,11 @@ if [ $BIN_HANDLED_LINT -eq 0 ] || [ $BIN_HANDLED_TYPECHECK -eq 0 ]; then
   # Run lint/typecheck in each discovered subdirectory (guarded for set -u)
   for sub_root in "${DISCOVERED_ROOTS[@]:-}"; do
     [ -n "$sub_root" ] || continue
-    sub_name=$(basename "$sub_root")
+    # Strip anything but alphanumerics, `_`, `-`, and `.` from the sub-
+    # project name before interpolating into run_check labels. The name
+    # is later embedded into JSON proof output, so a directory with
+    # metacharacters would otherwise produce malformed or injected JSON.
+    sub_name=$(basename "$sub_root" | tr -dc 'a-zA-Z0-9._-')
     pushd "$sub_root" >/dev/null 2>&1 || continue
 
     # pushd above already cd'd into $sub_root; do NOT interpolate paths into run_check (eval injection).

@@ -75,10 +75,13 @@ else
   METRICS_REPO=""
 fi
 
-# Build metrics JSON via Python (reads proof files)
-METRICS_JSON=$(python3 -c "
-$(cat "$SCRIPT_DIR/collect_metrics_payload.py")
-" "$PROOF_DIR" "" "0" \
+# Build metrics JSON via Python (reads proof files). Invoke the payload
+# module directly rather than via `python3 -c "$(cat …)"` so the Python
+# source is not re-scanned by the shell (which would break on any
+# embedded double-quote or backslash) and editors/linters can see the
+# file as a first-class module.
+METRICS_JSON=$(python3 "$SCRIPT_DIR/collect_metrics_payload.py" \
+  "$PROOF_DIR" "" "0" \
   "$REPO_NAME" "$BRANCH" "$SHA" "$USER_NAME" "$TIMESTAMP" \
   "$PHASE" "$GATE_NAME" "$METRICS_DATA_DIR" "$USER_EMAIL" 2>/dev/null) || {
   echo "WARN: failed to build metrics JSON" >&2
