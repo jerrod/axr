@@ -29,9 +29,11 @@ def _load_matched(tracking_file):
                 rec = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            entry_key = rec.get("entry_key", "")
-            if entry_key:
-                matched.add(entry_key)
+            # Name the local deliberately to avoid shadowing the
+            # module-level `entry_key` function imported above.
+            matched_key = rec.get("entry_key", "")
+            if matched_key:
+                matched.add(matched_key)
     return matched
 
 

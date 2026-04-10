@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Tests for parse-test-failures.py — runner-format parsing.
 
-XML-safety tests, direct-function unit tests, and main-entry coverage
-live in test_parse_test_failures_xml.py.
+This file holds subprocess-driven integration tests for each runner
+(jest/mocha/go/rspec/junit). XML-safety, direct-function unit tests,
+and main-entry coverage live in test_parse_test_failures_xml.py.
 """
 
 import json
@@ -184,7 +185,10 @@ class TestRspecJson:
         assert failures[0]["line"] == 42
 
 
-class TestJunitXml:
+class TestJunitRunner:
+    """JUnit XML runner integration (subprocess). XML-safety and direct-
+    function coverage live in test_parse_test_failures_xml.py."""
+
     def test_parses_failures_from_xml(self):
         xml_content = """<?xml version="1.0" encoding="UTF-8"?>
 <testsuites>

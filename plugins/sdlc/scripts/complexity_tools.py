@@ -217,18 +217,24 @@ def _violations_from_gocyclo(lines, max_complexity=0):
     violations = []
     for line in lines:
         parts = line.split()
-        if len(parts) >= 3:
+        if len(parts) < 3 or not parts[0].isdigit():
+            # Skip blank lines, malformed output, and gocyclo warning
+            # banners that start with a non-numeric first token.
+            continue
+        try:
             complexity = int(parts[0])
-            func_name = parts[1]
-            file_info = parts[2]
-            filepath = file_info.split(":")[0]
-            violations.append({
-                "file": filepath,
-                "function": func_name,
-                "complexity": complexity,
-                "max": max_complexity,
-                "type": "cyclomatic_complexity",
-            })
+        except ValueError:
+            continue
+        func_name = parts[1]
+        file_info = parts[2]
+        filepath = file_info.split(":")[0]
+        violations.append({
+            "file": filepath,
+            "function": func_name,
+            "complexity": complexity,
+            "max": max_complexity,
+            "type": "cyclomatic_complexity",
+        })
     return violations
 
 
