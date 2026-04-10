@@ -35,33 +35,51 @@ def _run_radon(files):
     return None
 
 
+def _radon_func_violations(filepath, func, max_lines, max_complexity):
+    """Return violations for a single radon function/method entry.
+
+    Class entries are skipped here — their methods are already counted
+    independently by radon as type=="method". Including the enclosing
+    class would double-count and produce false positives on legitimate
+    multi-test classes (TestJestVitest, etc.).
+    """
+    if func.get("type") == "class":
+        return []
+
+    name = func.get("name", "unknown")
+    lineno = func.get("lineno", 0)
+    endline = func.get("endline", 0)
+    complexity = func.get("complexity", 0)
+    func_length = endline - lineno + 1 if endline >= lineno else 0
+
+    out = []
+    if max_lines and func_length > max_lines:
+        out.append({
+            "file": filepath,
+            "function": name,
+            "lines": func_length,
+            "max": max_lines,
+            "type": "function_length",
+        })
+    if max_complexity and complexity > max_complexity:
+        out.append({
+            "file": filepath,
+            "function": name,
+            "complexity": complexity,
+            "max": max_complexity,
+            "type": "cyclomatic_complexity",
+        })
+    return out
+
+
 def _violations_from_radon(data, max_lines, max_complexity):
     """Extract violations from radon JSON output."""
     violations = []
     for filepath, functions in data.items():
         for func in functions:
-            name = func.get("name", "unknown")
-            lineno = func.get("lineno", 0)
-            endline = func.get("endline", 0)
-            complexity = func.get("complexity", 0)
-            func_length = endline - lineno + 1 if endline >= lineno else 0
-
-            if max_lines and func_length > max_lines:
-                violations.append({
-                    "file": filepath,
-                    "function": name,
-                    "lines": func_length,
-                    "max": max_lines,
-                    "type": "function_length",
-                })
-            if max_complexity and complexity > max_complexity:
-                violations.append({
-                    "file": filepath,
-                    "function": name,
-                    "complexity": complexity,
-                    "max": max_complexity,
-                    "type": "cyclomatic_complexity",
-                })
+            violations.extend(
+                _radon_func_violations(filepath, func, max_lines, max_complexity)
+            )
     return violations
 
 

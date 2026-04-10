@@ -47,6 +47,51 @@ def test_radon_no_violations():
     assert _violations_from_radon(data, 50, 8) == []
 
 
+def test_radon_skips_class_entries():
+    """Classes are not functions; their methods are counted independently.
+
+    Including the enclosing class would double-count and falsely flag any
+    multi-test class (e.g., TestJestVitest) against max_function_lines.
+    Regression test for the TestJestVitest false positive.
+    """
+    data = {
+        "test_parse_test_failures.py": [
+            # A 75-line class — would be flagged against max_lines=50 if not skipped
+            {
+                "type": "class",
+                "name": "TestJestVitest",
+                "lineno": 27,
+                "endline": 101,
+                "complexity": 1,
+            },
+            # A method inside that class — small, should NOT be flagged
+            {
+                "type": "method",
+                "name": "TestJestVitest.test_one",
+                "lineno": 30,
+                "endline": 40,
+                "complexity": 2,
+            },
+            # Another method that IS too long — SHOULD be flagged
+            {
+                "type": "method",
+                "name": "TestJestVitest.test_long",
+                "lineno": 41,
+                "endline": 100,
+                "complexity": 2,
+            },
+        ]
+    }
+    violations = _violations_from_radon(data, 50, 8)
+    # Exactly one violation: the 60-line method, NOT the 75-line class
+    assert len(violations) == 1
+    assert violations[0]["function"] == "TestJestVitest.test_long"
+    assert violations[0]["type"] == "function_length"
+    assert violations[0]["lines"] == 60
+    # Make sure the class itself is not in the violations list
+    assert not any(v["function"] == "TestJestVitest" for v in violations)
+
+
 # --- _violations_from_oxlint ---
 
 
