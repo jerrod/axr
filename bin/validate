@@ -1,24 +1,23 @@
 #!/usr/bin/env bash
-# bin/validate — structural integrity checks for the jerrod/axr marketplace.
+# bin/validate — structural integrity checks for the agent-plugins marketplace.
 #
-# Checks:
-#   1. Every *.json file parses with jq.
-#   2. .claude-plugin/marketplace.json has name + owner + plugins[] with
-#      name/description/source/category on every entry, relative sources.
-#   3. For each plugin under plugins/*/ (containment-checked against repo root):
-#        a. .claude-plugin/plugin.json has name, version, description (Claude
-#           Code auto-discovers commands from commands/*.md — no manifest
-#           registration needed, and including a `commands` field fails
-#           Claude Code's plugin-install schema validation).
-#        b. commands/ directory present with at least one *.md, each having
-#           closed YAML frontmatter with description:.
-#        c. scripts/ directory present with at least one *.sh, all executable.
-#        d. If bin/validate exists and is executable, invoke it (plugin-local
-#           validation hook — e.g., rubric schema checks).
-#        e. If agents/ directory exists, every *.md (except SCHEMA.md/README.md)
-#           must have closed YAML frontmatter with a description: field.
+# Checks: (1) every *.json parses; (2) marketplace.json manifest fields and
+# relative source paths; (3) per-plugin: plugin.json fields, at least one
+# entry-point dir (commands/|skills/|agents/), frontmatter on each, optional
+# scripts/ executability, and plugin-local bin/validate hook.
 
 set -uo pipefail
+
+ERRORS=()
+
+pass() { printf '  ✓ %s\n' "$1"; }
+fail() { printf '  ✗ %s\n' "$1"; ERRORS+=("$1"); }
+section() { printf '\n%s\n' "$1"; }
+
+# sanitize — strip shell-unsafe chars (including newlines and tabs) from
+# strings flowing into error output so a malicious marketplace.json cannot
+# inject fake pass/fail lines via embedded control characters.
+sanitize() { printf '%s' "$1" | tr -d "\$()\`\n\r\t<>&|"; }
 
 cd_repo_root() {
     local root
@@ -35,34 +34,36 @@ has_closed_frontmatter() {
     awk 'FNR>1 && /^---$/ {found=1; exit} END{exit !found}' "$file"
 }
 
-# validate_frontmatter_dir — iterate *.md under $root matching $find_args,
-# require closed YAML frontmatter with a description: field on each.
-# Args:
-#   $1 = plugin_name (for error messages)
-#   $2 = label       (e.g. "command", "skill", "agent" — used in pass/fail text)
-#   $3 = root        (directory to search)
-#   $4..$N = extra find args (e.g. -maxdepth 1, -mindepth 2 -maxdepth 2 -name SKILL.md)
-#
-# SCHEMA.md and README.md are exempted by basename in ALL directories —
-# harmless for commands/ and skills/ (no legitimate command or skill has
-# those names) and necessary for agents/ (revue ports may add agent READMEs).
+# validate_frontmatter_dir <plugin_name> <label> <root> <name_glob> [mindepth] [maxdepth]
+# Iterates *.md under $root at the given depth bounds and asserts closed YAML
+# frontmatter with a description: field on each. SCHEMA.md and README.md are
+# basename-exempted (agents/ ports may carry these). Named positional args
+# instead of variadic — restricts callers to safe find usage.
 validate_frontmatter_dir() {
-    local plugin_name="$1"
-    local label="$2"
-    local root="$3"
-    shift 3
-    local files=()
-    local f base fm
+    local plugin_name="$1" label="$2" root="$3" name_glob="$4"
+    local mindepth="${5:-}" maxdepth="${6:-}"
+
+    # find args in POSIX order: global opts (-P, -mindepth, -maxdepth) BEFORE
+    # predicates (-type, -name). GNU find warns otherwise.
+    local find_args=(-P "$root")
+    [ -n "$mindepth" ] && find_args+=(-mindepth "$mindepth")
+    [ -n "$maxdepth" ] && find_args+=(-maxdepth "$maxdepth")
+    find_args+=(-type f -not -type l -name "$name_glob")
+
+    local files=() found_any=false f base fm
     while IFS= read -r -d '' f; do
+        found_any=true
         base=$(basename "$f")
-        case "$base" in
-            SCHEMA.md|README.md) continue ;;
-        esac
+        case "$base" in SCHEMA.md|README.md) continue ;; esac
         files+=("$f")
-    done < <(find -P "$root" -type f -not -type l "$@" -print0 2>/dev/null)
+    done < <(find "${find_args[@]}" -print0 2>/dev/null)
 
     if [ ${#files[@]} -eq 0 ]; then
-        fail "$plugin_name: $root exists but has no $label files"
+        if $found_any; then
+            fail "$plugin_name: $root contains only exempted files (SCHEMA.md/README.md) — no $label files"
+        else
+            fail "$plugin_name: $root exists but has no $label files"
+        fi
         return 0
     fi
 
@@ -80,19 +81,10 @@ validate_frontmatter_dir() {
     done
 }
 
-# sanitize — strip shell-unsafe chars from strings flowing into error output.
-sanitize() { printf '%s' "$1" | tr -d "\$()\`"; }
-
 cd_repo_root
 
 REPO_ROOT_REAL="$(pwd -P)" || { printf 'bin/validate: fatal: pwd -P failed\n' >&2; exit 1; }
 [ -n "$REPO_ROOT_REAL" ] || { printf 'bin/validate: fatal: REPO_ROOT_REAL is empty\n' >&2; exit 1; }
-
-ERRORS=()
-
-pass() { printf '  ✓ %s\n' "$1"; }
-fail() { printf '  ✗ %s\n' "$1"; ERRORS+=("$1"); }
-section() { printf '\n%s\n' "$1"; }
 
 # ---------------------------------------------------------------------------
 # Check 1: All *.json files parse
@@ -209,7 +201,7 @@ else
         # 3c. commands/ (optional) — flat *.md with description: frontmatter.
         if $has_commands; then
             validate_frontmatter_dir "$plugin_name" "command" \
-                "$plugin_dir/commands" -maxdepth 1 -name '*.md'
+                "$plugin_dir/commands" '*.md' '' 1
         fi
 
         # 3d. skills/ (optional) — skills/<name>/SKILL.md with description:
@@ -217,7 +209,7 @@ else
         # nested sub-skills (skills/<name>/<sub>/SKILL.md) are not validated.
         if $has_skills; then
             validate_frontmatter_dir "$plugin_name" "skill" \
-                "$plugin_dir/skills" -mindepth 2 -maxdepth 2 -name 'SKILL.md'
+                "$plugin_dir/skills" 'SKILL.md' 2 2
         fi
 
         # 3e. agents/ (optional) — recurses to support both flat (agents/foo.md)
@@ -225,7 +217,7 @@ else
         # via validate_frontmatter_dir's basename filter.
         if $has_agents; then
             validate_frontmatter_dir "$plugin_name" "agent" \
-                "$plugin_dir/agents" -name '*.md'
+                "$plugin_dir/agents" '*.md'
         fi
 
         # 3f. scripts/ (optional) — if present, every *.sh must be executable.
