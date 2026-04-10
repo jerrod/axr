@@ -140,7 +140,7 @@ def _format_entry_row(e):
     return f"| {ts} | {phase} | {name} | {action_str} | {dur} | {tools} | `{sha}` |"
 
 
-def _render_trail_details(entries, started_set, executed_set):
+def _render_trail_details(entries, executed_set, started_set):
     if not entries:
         return
     print(f"<details><summary>Audit Trail ({len(entries)} entries)</summary>")
@@ -183,7 +183,7 @@ def _render_report():
     _render_summary_block(task, plugin_version, planned_set, executed_set,
                           skipped, unplanned, total_duration, total_tools)
     _render_plan_table(plan, entries, executed_set, started_set, unplanned)
-    _render_trail_details(entries, started_set, executed_set)
+    _render_trail_details(entries, executed_set, started_set)
 
 
 def _render_show():

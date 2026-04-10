@@ -164,7 +164,18 @@ build_issue_body() {
     body+="$checkboxes"$'\n\n'
   fi
   body+="<details><summary>Full plan</summary>"$'\n\n'
-  body+="$(cat "$plan_file")"$'\n\n'
+  # GitHub Issues bodies cap at 65_536 chars. Inline the plan only if
+  # it's small enough to leave headroom for the surrounding envelope
+  # (goal/branch/checkboxes/details tags). Beyond the cap, emit a
+  # truncation notice and let the reader open the file at the branch.
+  local plan_bytes plan_cap=50000
+  plan_bytes=$(wc -c <"$plan_file" | tr -d '[:space:]')
+  if [ "${plan_bytes:-0}" -le "$plan_cap" ]; then
+    body+="$(cat "$plan_file")"$'\n\n'
+  else
+    body+="_Plan is too large to inline (${plan_bytes} bytes > ${plan_cap} cap)._"$'\n'
+    body+="_Open the plan file at branch \`$branch\` to view the full text._"$'\n\n'
+  fi
   body+="</details>"
   echo "$body"
 }

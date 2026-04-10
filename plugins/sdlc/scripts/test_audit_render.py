@@ -176,7 +176,9 @@ def test_format_entry_row_minimal_and_raw_ts():
 def test_render_trail_details_with_orphans(capsys):
     entries = [{"timestamp": "T1", "phase": "p", "name": "n",
                 "action": "started", "sha": "x"}]
-    _render_trail_details(entries, {("p", "n"), ("orph", "ned")}, set())
+    # Signature is (entries, executed_set, started_set). Orphaned =
+    # started - executed, so pass empty executed + the two started keys.
+    _render_trail_details(entries, set(), {("p", "n"), ("orph", "ned")})
     out = capsys.readouterr().out
     assert "<details>" in out
     assert "Audit Trail (1 entries)" in out
@@ -310,3 +312,6 @@ def test_main_report_subprocess(tmp_path):
     assert result.returncode == 0
     assert "### Execution Summary" in result.stdout
     assert "### Execution Plan" in result.stdout
+    # Empty entries list must suppress the Audit Trail section, so a
+    # regression that prints an empty <details> block fails the test.
+    assert "Audit Trail" not in result.stdout
