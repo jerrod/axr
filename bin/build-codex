@@ -126,12 +126,15 @@ transform_agent() {
   mkdir -p "$dist_dir/agents"
   local out="$dist_dir/agents/${basename}.toml"
   {
-    printf 'name = "%s"\n' "$name"
-    printf 'description = "%s"\n' "$(printf '%s' "$description" | sed 's/"/\\"/g')"
+    printf 'name = "%s"\n' "$(printf '%s' "$name" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+    printf 'description = "%s"\n' "$(printf '%s' "$description" | sed 's/\\/\\\\/g; s/"/\\"/g')"
     if [[ -n "$tools" ]]; then
       printf 'tools = %s\n' "$(normalize_tools_line "$tools")"
     fi
-    printf 'developer_instructions = """\n%s\n"""\n' "$body"
+    # Escape triple-quotes in body to prevent TOML string termination
+    local body_safe
+    body_safe=$(printf '%s' "$body" | sed 's/"""/""\\"/g')
+    printf 'developer_instructions = """\n%s\n"""\n' "$body_safe"
   } > "$out"
 }
 
