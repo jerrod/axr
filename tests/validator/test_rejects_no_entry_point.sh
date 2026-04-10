@@ -4,46 +4,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-FIXTURE="$REPO_ROOT/tests/fixtures/validator-cases/no-entry-point"
+# shellcheck source=tests/validator/_lib_setup.sh
+. "$SCRIPT_DIR/_lib_setup.sh"
 
-WORK="$(mktemp -d)"
+WORK="$(setup_validator_workspace no-entry-point)"
 trap 'rm -rf "$WORK"' EXIT
 
-mkdir -p "$WORK/.claude-plugin" "$WORK/plugins"
-cp -R "$REPO_ROOT/bin" "$WORK/bin"
-
-cat > "$WORK/.claude-plugin/marketplace.json" <<'EOF'
-{
-  "name": "test-marketplace",
-  "version": "1.0",
-  "owner": { "name": "test" },
-  "plugins": [
-    {
-      "name": "no-entry-point-fixture",
-      "description": "fixture",
-      "source": "./plugins/no-entry-point-fixture",
-      "category": "test"
-    }
-  ]
-}
-EOF
-
-cp -R "$FIXTURE" "$WORK/plugins/no-entry-point-fixture"
-
-(
-    cd "$WORK"
-    GIT_CONFIG_GLOBAL=/dev/null git init -q
-    GIT_CONFIG_GLOBAL=/dev/null git \
-        -c user.email=t@t -c user.name=t -c commit.gpgsign=false \
-        add -A
-    GIT_CONFIG_GLOBAL=/dev/null git \
-        -c user.email=t@t -c user.name=t -c commit.gpgsign=false \
-        commit -q -m init
-)
-
-rc=0
-( cd "$WORK" && bin/validate ) > "$WORK/out.log" 2>&1 || rc=$?
+rc="$(run_validator_in "$WORK" "$WORK/out.log")"
 
 # Expect non-zero exit AND the specific error message.
 if [ "$rc" -eq 0 ]; then
@@ -52,7 +19,9 @@ if [ "$rc" -eq 0 ]; then
     exit 1
 fi
 
-if ! grep -q "no entry point" "$WORK/out.log"; then
+# Anchor tightly so a future reword of the error message forces a conscious
+# test update rather than silently making this assertion vacuous.
+if ! grep -q 'no entry point — need at least one of commands/, skills/, agents/' "$WORK/out.log"; then
     echo "FAIL: validator rejected the plugin but not for the expected reason"
     cat "$WORK/out.log"
     exit 1

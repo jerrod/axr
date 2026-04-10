@@ -3,57 +3,25 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-FIXTURE="$REPO_ROOT/tests/fixtures/validator-cases/skills-only"
+# shellcheck source=tests/validator/_lib_setup.sh
+. "$SCRIPT_DIR/_lib_setup.sh"
 
-# Disposable workspace that looks like a marketplace root.
-WORK="$(mktemp -d)"
+WORK="$(setup_validator_workspace skills-only)"
 trap 'rm -rf "$WORK"' EXIT
 
-mkdir -p "$WORK/.claude-plugin" "$WORK/plugins"
-
-# Copy the ENTIRE bin/ directory so future _lib extraction still works.
-cp -R "$REPO_ROOT/bin" "$WORK/bin"
-
-cat > "$WORK/.claude-plugin/marketplace.json" <<'EOF'
-{
-  "name": "test-marketplace",
-  "version": "1.0",
-  "owner": { "name": "test" },
-  "plugins": [
-    {
-      "name": "skills-only-fixture",
-      "description": "fixture",
-      "source": "./plugins/skills-only-fixture",
-      "category": "test"
-    }
-  ]
-}
-EOF
-
-cp -R "$FIXTURE" "$WORK/plugins/skills-only-fixture"
-
-# Isolated git repo — no global config, no signing, no hooks.
-(
-    cd "$WORK"
-    GIT_CONFIG_GLOBAL=/dev/null git init -q
-    GIT_CONFIG_GLOBAL=/dev/null git \
-        -c user.email=t@t -c user.name=t \
-        -c commit.gpgsign=false \
-        add -A
-    GIT_CONFIG_GLOBAL=/dev/null git \
-        -c user.email=t@t -c user.name=t \
-        -c commit.gpgsign=false \
-        commit -q -m init
-)
-
-# Run the validator with explicit rc capture (set -e would kill the test on
-# any non-zero exit — we want to inspect the exit code, not abort).
-rc=0
-( cd "$WORK" && bin/validate ) > "$WORK/out.log" 2>&1 || rc=$?
+rc="$(run_validator_in "$WORK" "$WORK/out.log")"
 
 if [ "$rc" -ne 0 ]; then
     echo "FAIL: validator rejected skills-only plugin (exit $rc)"
+    cat "$WORK/out.log"
+    exit 1
+fi
+
+# Positive assertion: the validator must have actually run to completion and
+# emitted its success summary. Without this, a future bug that exits 0 before
+# any check fires would silently pass this test.
+if ! grep -q 'all checks passed' "$WORK/out.log"; then
+    echo "FAIL: validator exited 0 but did not emit 'all checks passed' summary"
     cat "$WORK/out.log"
     exit 1
 fi
