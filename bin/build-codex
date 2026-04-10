@@ -51,7 +51,10 @@ apply_tool_mappings() {
     local val
     val=$(jq -r ".mappings.tools[\"$key\"]" "$MAPPING_FILE")
     if [[ "$key" != "$val" ]]; then
-      text=$(printf '%s' "$text" | sed "s/$key/$val/g")
+      local escaped_key escaped_val
+      escaped_key=$(printf '%s' "$key" | sed 's/[]\/$*.^[]/\\&/g')
+      escaped_val=$(printf '%s' "$val" | sed 's/[\/&]/\\&/g')
+      text=$(printf '%s' "$text" | sed "s/$escaped_key/$escaped_val/g")
     fi
   done
   echo "$text"
