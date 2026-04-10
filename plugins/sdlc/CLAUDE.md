@@ -27,7 +27,7 @@ Every user-visible and internal reference changed during the fork:
 | Slash commands `/rq:foo` | `/sdlc:foo` |
 | Subagent types `rq:foo` | `sdlc:foo` |
 | Plugin paths `plugins/rq/` | `plugins/sdlc/` |
-| Env vars `RQ_*` (30+ distinct) | `SDLC_*` (EXCEPT `RQ_METRICS_DIR` which is a user-scoped env var unrelated to plugin identity) |
+| Env vars `RQ_*` (30+ distinct) | `SDLC_*` (EXCEPT `RQ_METRICS_DIR`, a user-scoped path unrelated to plugin identity; `SDLC_METRICS_REMOTE` is the renamed form of `RQ_METRICS_REMOTE`, which is still read as a legacy fallback) |
 | Config file `rq.config.json` | `sdlc.config.json` |
 | State dir `~/.claude/plugins/data/rq` | `~/.claude/plugins/data/sdlc` |
 | Visual-companion dir `.rq/brainstorm/` | `.sdlc/brainstorm/` |

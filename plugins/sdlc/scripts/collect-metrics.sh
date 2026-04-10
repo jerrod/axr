@@ -28,8 +28,12 @@ fi
 # Returns 1 if no repo could be located.
 #
 # Environment variables:
-#   RQ_METRICS_DIR    — absolute path to local sdlc-metrics clone (preferred)
-#   RQ_METRICS_REMOTE — GitHub owner/repo to clone from (default: arqu-co/sdlc-metrics)
+#   RQ_METRICS_DIR      — absolute path to local sdlc-metrics clone (preferred,
+#                         documented exception to the RQ_→SDLC_ rename because
+#                         it's a user-scoped path unrelated to plugin identity)
+#   SDLC_METRICS_REMOTE — GitHub owner/repo to clone from (default:
+#                         arqu-co/sdlc-metrics). Legacy RQ_METRICS_REMOTE is
+#                         still honored as a fallback for existing user shells.
 find_or_clone_metrics_repo() {
   # 1. Explicit path via env var (most reliable)
   if [ -n "${RQ_METRICS_DIR:-}" ] && [ -d "$RQ_METRICS_DIR/.git" ]; then
@@ -48,7 +52,7 @@ find_or_clone_metrics_repo() {
   done
 
   # 3. Clone from GitHub
-  local remote="${RQ_METRICS_REMOTE:-arqu-co/sdlc-metrics}"
+  local remote="${SDLC_METRICS_REMOTE:-${RQ_METRICS_REMOTE:-arqu-co/sdlc-metrics}}"
   local target="${RQ_METRICS_DIR:-$HOME/Sites/sdlc-metrics}"
   if gh repo view "$remote" &>/dev/null 2>&1; then
     git clone --depth 1 "https://github.com/$remote.git" \

@@ -8,17 +8,25 @@ Output: JSON to stdout — dict of filepath -> {"lines": {"pct": N}}.
 import glob
 import json
 import sys
-from xml.etree.ElementTree import fromstring as _xml_fromstring
+
+try:
+    import defusedxml.ElementTree as ET
+except ImportError:
+    import xml.etree.ElementTree as ET
 
 
 def _safe_parse(path):
-    """Parse XML rejecting entity definitions to mitigate XXE/billion-laughs."""
-    # Read file content and reject DTD entity declarations
+    """Parse XML rejecting entity definitions to mitigate XXE/billion-laughs.
+
+    defusedxml forbids DTD/entity declarations at parse time. When defusedxml
+    is not installed, the stdlib fallback is combined with an explicit entity
+    scan so the parser still refuses obvious XXE payloads.
+    """
     with open(path) as f:
         content = f.read()
     if "<!ENTITY" in content:
         raise ValueError(f"XML contains entity declarations (potential XXE): {path}")
-    return _xml_fromstring(content)
+    return ET.fromstring(content)
 
 
 def _extract_line_pct(sourcefile_el):
