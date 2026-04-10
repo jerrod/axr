@@ -28,11 +28,11 @@ apply_tool_mappings() {
   keys=$(jq -r '.mappings.tools | keys[]' "$MAPPING_FILE")
   for key in $keys; do
     local val
-    val=$(jq -r ".mappings.tools[\"$key\"]" "$MAPPING_FILE")
+    val=$(jq -r --arg k "$key" '.mappings.tools[$k]' "$MAPPING_FILE")
     if [[ "$key" != "$val" ]]; then
       local escaped_key escaped_val
       escaped_key=$(printf '%s' "$key" | sed 's/[]\/$*.^[]/\\&/g')
-      escaped_val=$(printf '%s' "$val" | sed 's/[\/&]/\\&/g')
+      escaped_val=$(printf '%s' "$val" | sed 's/\\/\\\\/g; s/[/&]/\\&/g')
       text=$(printf '%s' "$text" | sed "s/$escaped_key/$escaped_val/g")
     fi
   done
@@ -46,10 +46,10 @@ apply_variable_mappings() {
   keys=$(jq -r '.mappings.variables | keys[]' "$MAPPING_FILE")
   for key in $keys; do
     local val
-    val=$(jq -r ".mappings.variables[\"$key\"]" "$MAPPING_FILE")
+    val=$(jq -r --arg k "$key" '.mappings.variables[$k]' "$MAPPING_FILE")
     local escaped_key escaped_val
     escaped_key=$(printf '%s' "$key" | sed 's/[]\/$*.^[]/\\&/g')
-    escaped_val=$(printf '%s' "$val" | sed 's/[\/&]/\\&/g')
+    escaped_val=$(printf '%s' "$val" | sed 's/\\/\\\\/g; s/[/&]/\\&/g')
     text=$(printf '%s' "$text" | sed "s/$escaped_key/$escaped_val/g")
   done
   echo "$text"

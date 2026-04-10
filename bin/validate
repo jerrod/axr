@@ -18,11 +18,7 @@ cd_repo_root() {
         cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
     fi
 }
-has_closed_frontmatter() {
-    local file="$1"
-    [ "$(head -n1 "$file")" = "---" ] || return 1
-    awk 'FNR>1 && /^---$/ {found=1; exit} END{exit !found}' "$file"
-}
+# has_closed_frontmatter is sourced from bin/lib/common.sh below, after cd_repo_root.
 # validate_frontmatter_dir <plugin_name> <label> <root> <name_glob> [mindepth] [maxdepth]
 # Asserts closed YAML frontmatter with description: on each *.md (exempts SCHEMA/README).
 validate_frontmatter_dir() {
@@ -65,6 +61,8 @@ cd_repo_root
 REPO_ROOT_REAL="$(pwd -P)" || { printf 'bin/validate: fatal: pwd -P failed\n' >&2; exit 1; }
 [ -n "$REPO_ROOT_REAL" ] || { printf 'bin/validate: fatal: REPO_ROOT_REAL is empty\n' >&2; exit 1; }
 
+# shellcheck source=bin/lib/common.sh
+source "bin/lib/common.sh"
 # shellcheck source=bin/lib/validate-codex.sh
 source "bin/lib/validate-codex.sh"
 

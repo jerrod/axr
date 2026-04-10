@@ -16,6 +16,39 @@
     }
   },
   "allow": {
+    "test-quality": [
+      {
+        "file": "codex/plugins/sdlc/scripts/test_gh_client.py",
+        "pattern": "@patch without wraps",
+        "reason": "Generated copy of sdlc test file — mock patterns exist in source, not introduced by codex port"
+      },
+      {
+        "file": "codex/plugins/sdlc/scripts/test_inspect_pr_checks.py",
+        "pattern": "@patch without wraps",
+        "reason": "Generated copy of sdlc test file — mock patterns exist in source, not introduced by codex port"
+      },
+      {
+        "file": "codex/plugins/sdlc/scripts/test_scan_disguised_mocks.py",
+        "pattern": "@patch without wraps",
+        "reason": "Generated copy of test-quality gate test — contains mock patterns as detection targets"
+      },
+      {
+        "file": "codex/plugins/sdlc/scripts/test_scan_disguised_mocks.py",
+        "pattern": "patch.object with return_value (no wraps)",
+        "reason": "Generated copy of test-quality gate test — contains patterns as detection targets"
+      },
+      {
+        "file": "codex/plugins/sdlc/scripts/test_scan_disguised_mocks.py",
+        "pattern": "Mock/MagicMock assignment",
+        "reason": "Generated copy of test-quality gate test — contains patterns as detection targets"
+      }
+    ],
+    "complexity": [
+      {
+        "file": "codex/plugins/*/scripts/*",
+        "reason": "Generated copies of source scripts — complexity already passes on originals"
+      }
+    ],
     "lint": [
       {
         "file": "plugins/sdlc/scripts/mock-pattern-guard.sh",

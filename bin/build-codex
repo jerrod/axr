@@ -51,6 +51,12 @@ for plugin_dir in plugins/*/; do
   [[ -f "$plugin_json" ]] || continue
 
   plugin_name=$(jq -r '.name' "$plugin_json")
+  # Sanitize: plugin_name flows into a filesystem write path. Refuse anything
+  # other than kebab/snake-case identifiers to block traversal or absolute paths.
+  if [[ ! "$plugin_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    echo "ERROR: invalid plugin name '$plugin_name' in $plugin_json (must match [a-zA-Z0-9_-]+)" >&2
+    exit 1
+  fi
   codex_status=$(jq -r '.platforms.codex.status // "missing"' "$plugin_json")
   if [[ "$codex_status" == "unsupported" ]]; then
     echo "SKIP $plugin_name (unsupported)"
@@ -69,6 +75,8 @@ for plugin_dir in plugins/*/; do
   copy_agents_md "$plugin_dir" "$dist_dir"
   generate_plugin_manifest "$plugin_dir" "$dist_dir"
 
+  # Stamp contents are informational only — staleness is derived from git log
+  # commit order of the stamp file itself in bin/lib/validate-codex.sh.
   date -u +%Y-%m-%dT%H:%M:%SZ > "$dist_dir/.build-stamp"
 done
 

@@ -19,16 +19,13 @@ cd_repo_root() {
     fi
 }
 
-has_closed_frontmatter() {
-    local file="$1"
-    [ "$(head -n1 "$file")" = "---" ] || return 1
-    awk 'FNR>1 && /^---$/ {found=1; exit} END{exit !found}' "$file"
-}
-
 cd_repo_root
 
 REPO_ROOT_REAL="$(pwd -P)" || { printf 'bin/lint: fatal: pwd -P failed\n' >&2; exit 1; }
 [ -n "$REPO_ROOT_REAL" ] || { printf 'bin/lint: fatal: REPO_ROOT_REAL is empty\n' >&2; exit 1; }
+
+# shellcheck source=bin/lib/common.sh
+source "bin/lib/common.sh"
 
 FAIL=0
 

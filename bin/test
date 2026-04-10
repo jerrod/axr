@@ -71,58 +71,9 @@ for checker in plugins/*/scripts/check-*.sh; do
     fi
 done
 
-# 3. Codex dist validation — generated TOML parses, hooks.json valid, skills
-# have frontmatter, and every generated plugin has a parseable .codex-plugin/
-# plugin.json. Runs against the repo-root codex/ tree produced by bin/build-codex.
-for codex_dist in codex/plugins/*; do
-    [ -d "$codex_dist" ] || continue
-    # TOML files parse (basic: no empty name/description)
-    for toml_file in "$codex_dist"/agents/*.toml; do
-        [ -f "$toml_file" ] || continue
-        if ! grep -q '^name[[:space:]]*=' "$toml_file"; then
-            printf '%s:1: TOML missing name field\n' "$toml_file"
-            FAIL=1
-        fi
-        if ! grep -q '^description[[:space:]]*=' "$toml_file"; then
-            printf '%s:1: TOML missing description field\n' "$toml_file"
-            FAIL=1
-        fi
-    done
-
-    # hooks.json parses
-    codex_hooks="$codex_dist/hooks/hooks.json"
-    if [ -f "$codex_hooks" ]; then
-        if ! jq empty "$codex_hooks" >/dev/null 2>&1; then
-            printf '%s:1: invalid JSON\n' "$codex_hooks"
-            FAIL=1
-        fi
-    fi
-
-    # Generated plugin.json parses
-    codex_manifest="$codex_dist/.codex-plugin/plugin.json"
-    if [ -f "$codex_manifest" ]; then
-        if ! jq empty "$codex_manifest" >/dev/null 2>&1; then
-            printf '%s:1: invalid JSON\n' "$codex_manifest"
-            FAIL=1
-        fi
-    fi
-
-    # Generated skills have frontmatter
-    while IFS= read -r -d '' skill_file; do
-        if ! head -n1 "$skill_file" | grep -q '^---$'; then
-            printf '%s:1: missing YAML frontmatter\n' "$skill_file"
-            FAIL=1
-        fi
-    done < <(find -P "$codex_dist/skills" -name 'SKILL.md' -print0 2>/dev/null)
-done
-
-# 4. Codex marketplace manifest parses.
-CODEX_MARKETPLACE="codex/.agents/plugins/marketplace.json"
-if [ -f "$CODEX_MARKETPLACE" ]; then
-    if ! jq empty "$CODEX_MARKETPLACE" >/dev/null 2>&1; then
-        printf '%s:1: invalid JSON\n' "$CODEX_MARKETPLACE"
-        FAIL=1
-    fi
-fi
+# NOTE: Codex artifact validation (TOML agents, hooks.json, skill frontmatter,
+# .codex-plugin/plugin.json structure, marketplace manifest) runs inside
+# bin/validate via bin/lib/validate-codex.sh and is exercised by step 1 above.
+# Do not re-check those invariants here — bin/validate is the source of truth.
 
 exit $FAIL
