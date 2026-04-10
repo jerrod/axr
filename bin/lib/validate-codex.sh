@@ -78,7 +78,8 @@ _validate_codex_artifacts() {
   local toml_file
   if [ -d "$codex_dist/agents" ]; then
     for toml_file in "$codex_dist"/agents/*.toml; do
-      [ -f "$toml_file" ] && [ ! -L "$toml_file" ] || continue
+      [ -f "$toml_file" ] || continue
+      [ ! -L "$toml_file" ] || continue
       if grep -q '^name[[:space:]]*=' "$toml_file" \
          && grep -q '^description[[:space:]]*=' "$toml_file"; then
         pass "$plugin_name: $toml_file has name and description"
