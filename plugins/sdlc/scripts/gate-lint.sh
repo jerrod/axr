@@ -245,16 +245,15 @@ if [ $BIN_HANDLED_LINT -eq 0 ] || [ $BIN_HANDLED_TYPECHECK -eq 0 ]; then
   done
 fi
 
-# Check for lint suppressions in changed files, respecting allow-list
-FILTERED_SUPPRESSIONS=""
-CURRENT_FILE=""
+# Check for lint suppressions in changed code files (skip docs/config/shell to avoid false positives)
+FILTERED_SUPPRESSIONS=""; CURRENT_FILE=""; IS_CODE=0
+CODE_EXT_RE='\.(py|ts|tsx|js|jsx|rb|go|java|kt|rs|c|cpp|cc|h|hpp|m|mm|swift|scala)$'
 while IFS= read -r line; do
   if [[ "$line" =~ ^\+\+\+\ b/(.*) ]]; then
     CURRENT_FILE="${BASH_REMATCH[1]}"
-  elif [[ "$line" =~ ^\+.*(@Suppress\(|@SuppressWarnings\(|eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|noqa|nolint|\#nosec|rubocop:disable|NOLINT) ]]; then
-    if ! is_allowed "lint" "file=$CURRENT_FILE"; then
-      FILTERED_SUPPRESSIONS+="$line"$'\n'
-    fi
+    if [[ "$CURRENT_FILE" =~ $CODE_EXT_RE ]]; then IS_CODE=1; else IS_CODE=0; fi
+  elif [[ "$IS_CODE" -eq 1 && "$line" =~ ^\+.*(@Suppress\(|@SuppressWarnings\(|eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|noqa|nolint|\#nosec|rubocop:disable|NOLINT) ]]; then
+    is_allowed "lint" "file=$CURRENT_FILE" || FILTERED_SUPPRESSIONS+="$line"$'\n'
   fi
 done < <(git diff "$SDLC_DEFAULT_BRANCH"...HEAD 2>/dev/null || true)
 
