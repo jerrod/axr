@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# PostToolUse hook for Bash commands.
+# When a quality-related command fails, injects context telling Claude
+# to fix the issues instead of making excuses or stopping.
+#
+# Input: JSON on stdin with tool_input.command and tool_output
+# Output: JSON with additionalContext on failure, empty on success
+
+INPUT=$(cat)
+
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
+OUTPUT=$(echo "$INPUT" | jq -r '.tool_output // ""')
+
+# Only act on quality-related commands
+is_quality_command() {
+  local cmd="$1"
+  echo "$cmd" | grep -qiE '(bin/test|bin/lint|bin/format|bin/typecheck|pytest|vitest|jest|mocha|eslint|ruff|mypy|tsc --noEmit|run-gates|gate-|coverage|bin/check)'
+}
+
+if ! is_quality_command "$COMMAND"; then
+  exit 0
+fi
+
+# Detect failure patterns in output
+has_failure() {
+  local output="$1"
+  echo "$output" | grep -qiE '(FAIL|FAILED|ERROR|error:|failure|assert.*(Error|Failed)|exit code [1-9]|✗|❌|GATE FAILED|not found|ModuleNotFoundError|SyntaxError|TypeError|ImportError|NameError|AttributeError)'
+}
+
+if ! has_failure "$OUTPUT"; then
+  exit 0
+fi
+
+# Inject context — Claude sees this before composing its response
+jq -n '{
+  hookSpecificOutput: {
+    additionalContext: "QUALITY GATE FAILURE DETECTED. You MUST fix these failures now. Do NOT make excuses, do NOT categorize them as pre-existing, do NOT defer them. Read the errors above, identify root causes, fix the code, and re-run the command until it passes. If you are unsure how to fix an issue, investigate — do not skip it."
+  }
+}'

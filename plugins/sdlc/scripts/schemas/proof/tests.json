@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proof-tests",
+  "allOf": [{ "$ref": "base.json" }],
+  "properties": {
+    "fingerprint": { "type": "string" },
+    "test_runner": { "type": "string" },
+    "test_failures": { "type": "array" },
+    "missing_tests": { "type": "array", "items": { "type": "string" } },
+    "failed_subprojects": { "type": "array" }
+  },
+  "required": ["gate", "sha", "status", "timestamp", "error", "fingerprint", "test_runner", "test_failures", "missing_tests", "failed_subprojects"]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "sdlc",
+  "version": "0.1.0",
+  "description": "Full development lifecycle with executable quality gates. Brainstorm, plan, pair-build, review, and ship \u2014 every gate is a script, every claim is proven.",
+  "author": {
+    "name": "arqu-co"
+  },
+  "keywords": [
+    "quality",
+    "testing",
+    "coverage",
+    "review",
+    "ci",
+    "gates"
+  ],
+  "instructions": "REQUIRED: At session start, invoke the sdlc:using-sdlc skill before doing any work. This loads the routing and discipline layer that ensures every user message is checked against the skill catalog before responding. Without it, skills will not be invoked automatically. If the user's first message is a task, invoke sdlc:using-sdlc first, then handle the task."
+}

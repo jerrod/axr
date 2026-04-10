@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# PreToolUse hook for Bash(gh pr create*)|Bash(gh pr edit*) commands.
+# Blocks PR creation/editing unless review has been completed.
+# Checks for .quality/proof/review-coverage.json with status "complete"
+# and .quality/proof/PROOF.md existence.
+#
+# Skips enforcement when:
+#   - No .quality/ directory (not an sdlc-managed project)
+#   - Command is not gh pr create or gh pr edit
+
+INPUT=$(cat)
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
+
+# Only enforce on gh pr create/edit
+case "$COMMAND" in
+    gh\ pr\ create* | gh\ pr\ edit*) ;;
+    *)
+        echo '{"decision": "allow"}'
+        exit 0
+        ;;
+esac
+
+# Compute repo root first — needed for all path checks
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+
+# Skip if no .quality directory — not an sdlc-managed project
+if [ ! -d "$REPO_ROOT/.quality" ]; then
+    echo '{"decision": "allow"}'
+    exit 0
+fi
+
+PROOF_DIR="$REPO_ROOT/.quality/proof"
+
+# Check review coverage proof exists
+if [ ! -f "$PROOF_DIR/review-coverage.json" ]; then
+    jq -n --arg reason "BLOCKED: No review proof found. Run /sdlc:review before creating a PR. The sdlc workflow requires: plan → pair-build → review → ship." \
+        '{decision: "block", reason: $reason}'
+    exit 0
+fi
+
+# Check review status is complete
+REVIEW_STATUS=$(jq -r '.status // ""' "$PROOF_DIR/review-coverage.json" 2>/dev/null || echo "")
+
+if [ "$REVIEW_STATUS" != "complete" ]; then
+    jq -n --arg reason "BLOCKED: Review coverage is incomplete. Run /sdlc:review to get full coverage before creating a PR." \
+        '{decision: "block", reason: $reason}'
+    exit 0
+fi
+
+# Check review SHA matches current HEAD (reject stale proof)
+# Skip if either SHA is empty (missing field or no commits yet)
+REVIEW_SHA=$(jq -r '.sha // ""' "$PROOF_DIR/review-coverage.json" 2>/dev/null || echo "")
+CURRENT_SHA=$(git rev-parse HEAD 2>/dev/null || echo "")
+
+if [ -n "$CURRENT_SHA" ] && [ -n "$REVIEW_SHA" ] && [ "$REVIEW_SHA" != "$CURRENT_SHA" ]; then
+    jq -n --arg reason "BLOCKED: Review proof is stale (reviewed at $REVIEW_SHA, HEAD is now $CURRENT_SHA). Re-run /sdlc:review at the current commit." \
+        '{decision: "block", reason: $reason}'
+    exit 0
+fi
+
+# Check PROOF.md exists (ship skill generates this)
+if [ ! -f "$PROOF_DIR/PROOF.md" ]; then
+    jq -n --arg reason "BLOCKED: No PROOF.md found. Run /sdlc:ship to generate proof before creating a PR." \
+        '{decision: "block", reason: $reason}'
+    exit 0
+fi
+
+echo '{"decision": "allow"}'

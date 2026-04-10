@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proof-coverage",
+  "allOf": [{ "$ref": "base.json" }],
+  "properties": {
+    "coverage_tool": { "type": "string" },
+    "below_threshold": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "coverage": { "type": "number" },
+          "min": { "type": "number" }
+        },
+        "required": ["file", "coverage", "min"]
+      }
+    }
+  },
+  "required": ["gate", "sha", "status", "timestamp", "error", "coverage_tool", "below_threshold"]
+}

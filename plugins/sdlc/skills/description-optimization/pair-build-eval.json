@@ -1,0 +1,20 @@
+[
+  {"query": "build the plan — implement all the items", "should_trigger": true},
+  {"query": "start implementing the feature from the plan", "should_trigger": true},
+  {"query": "pair-build it", "should_trigger": true},
+  {"query": "implement the next plan item with quality review", "should_trigger": true},
+  {"query": "let's build this feature — I have a plan with 5 items", "should_trigger": true},
+  {"query": "start coding the implementation plan", "should_trigger": true},
+  {"query": "build with writer and critic", "should_trigger": true},
+  {"query": "implement the remaining unchecked items in the plan", "should_trigger": true},
+  {"query": "review this branch for issues", "should_trigger": false},
+  {"query": "create the PR and ship it", "should_trigger": false},
+  {"query": "brainstorm the feature design", "should_trigger": false},
+  {"query": "write an implementation plan from the spec", "should_trigger": false},
+  {"query": "fix the failing tests", "should_trigger": false},
+  {"query": "what should I work on next?", "should_trigger": false},
+  {"query": "dispatch subagents to build each task independently", "should_trigger": false},
+  {"query": "audit the codebase performance", "should_trigger": false},
+  {"query": "scaffold the bin/ scripts for this project", "should_trigger": false},
+  {"query": "clean up and merge this branch", "should_trigger": false}
+]
