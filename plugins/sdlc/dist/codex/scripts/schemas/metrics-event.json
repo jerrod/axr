@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "metrics-event",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "repo": { "type": "string" },
+    "branch": { "type": "string" },
+    "sha": { "type": "string" },
+    "user": { "type": "string" },
+    "user_email": { "type": ["string", "null"] },
+    "timestamp": { "type": "string" },
+    "phase": { "type": "string" },
+    "run_number": { "type": "integer" },
+    "gate_name": { "type": ["string", "null"] },
+    "critic_verdict": { "type": "string" },
+    "critic_findings_count": { "type": "integer" },
+    "critic_findings_by_rule": { "type": "object" },
+    "critic_findings": { "type": "array" },
+    "gates_first_pass": { "type": "boolean" },
+    "gate_failures_after_critic": { "type": "integer" },
+    "missed_gates": { "type": "array", "items": { "type": "string" } },
+    "gates_run": { "type": "array", "items": { "type": "string" } },
+    "gates": { "type": "object" },
+    "duration_seconds": { "type": ["number", "null"] }
+  },
+  "required": [
+    "schema_version", "repo", "branch", "sha", "user", "timestamp",
+    "phase", "run_number", "gate_name", "critic_verdict",
+    "critic_findings_count", "critic_findings_by_rule", "critic_findings",
+    "gates_first_pass", "gate_failures_after_critic", "missed_gates",
+    "gates_run", "gates", "duration_seconds"
+  ],
+  "additionalProperties": false
+}

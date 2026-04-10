@@ -46,3 +46,9 @@ Run `/sdlc:using-sdlc` at session start (the SessionStart hook does this automat
 ## Origin
 
 `sdlc` is a hard fork of [arqu-co/claude-skills/plugins/rq](https://github.com/arqu-co/claude-skills/tree/main/plugins/rq) at v1.29.8, renamed end-to-end and adopted as the agent-plugins marketplace's own full-lifecycle plugin. See `CLAUDE.md` for the full rename mapping and drift status.
+
+## Codex Limitations
+
+- **Multi-agent workflows run sequentially.** Pair-build (writer + critic), tech-lead orchestration, and subagent-build dispatch agents one at a time instead of in parallel. Output quality is identical; execution is slower.
+- **Mock-detection check runs at commit-time** instead of write-time. The inline prompt hook is converted to a script-based check (`scripts/mock-pattern-guard.sh`) that runs before `git commit`.
+- All git-level enforcement hooks (critic approval, push gates, PR gates, merge blocking) work identically on both platforms.

@@ -1,0 +1,14 @@
+{
+  "description": "SDLC Codex hook remapping overrides",
+  "remaps": [
+    {
+      "source_event": "PreToolUse",
+      "source_matcher": "Write|Edit",
+      "target_event": "PreToolUse",
+      "target_matcher": "Bash(git commit*)",
+      "convert_prompt_to_command": true,
+      "replacement_command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/mock-pattern-guard.sh\"",
+      "comment": "Mock-detection retimed from write-time to commit-time. Prompt hook converted to command hook since Codex prompt hook support is unverified."
+    }
+  ]
+}

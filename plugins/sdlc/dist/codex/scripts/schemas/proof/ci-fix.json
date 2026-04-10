@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proof-ci-fix",
+  "allOf": [{ "$ref": "base.json" }],
+  "properties": {
+    "iterations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "check": { "type": "string" },
+          "tier": { "enum": ["compile", "test", "infra"] },
+          "context": { "type": "string" },
+          "fix_applied": { "type": "string" },
+          "result": { "type": "string" }
+        },
+        "required": ["check", "tier", "context", "fix_applied", "result"]
+      }
+    }
+  },
+  "required": ["gate", "sha", "status", "timestamp", "error", "iterations"]
+}
