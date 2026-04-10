@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+# bin/prove-codex — prove the repo-root codex/ marketplace actually loads in Codex.
+#
+# Boots `codex app-server` over JSON-RPC stdio, calls initialize + plugin/list
+# with the codex/ directory passed via cwds so Codex discovers
+# codex/.agents/plugins/marketplace.json, then calls plugin/read for each
+# plugin we expect. Fails loudly on:
+#   - `codex` not on PATH
+#   - marketplace file missing
+#   - plugin/list returning any marketplaceLoadErrors
+#   - our marketplace absent from the response
+#   - expected plugins missing from the marketplace
+#   - plugin/read returning a JSON-RPC error
+#   - generated skills/apps/mcpServers arrays missing from the returned detail
+#
+# Silent on success. Exits 0 when Codex has accepted every plugin; non-zero
+# otherwise with a diagnostic on stderr.
+
+set -euo pipefail
+
+cd_repo_root() {
+  local root
+  if root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+    cd "$root" || exit 1
+  else
+    cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
+  fi
+}
+
+cd_repo_root
+
+if ! command -v codex >/dev/null 2>&1; then
+  echo "bin/prove-codex: 'codex' CLI not found on PATH — install Codex first" >&2
+  exit 1
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "bin/prove-codex: python3 is required to drive the JSON-RPC handshake" >&2
+  exit 1
+fi
+
+MARKETPLACE="codex/.agents/plugins/marketplace.json"
+if [[ ! -f "$MARKETPLACE" ]]; then
+  echo "bin/prove-codex: $MARKETPLACE missing — run bin/build-codex first" >&2
+  exit 1
+fi
+
+# Expected plugin names are every marketplace entry. Derived from the file we
+# just confirmed exists so this stays in sync with bin/build-codex.
+EXPECTED_PLUGINS=$(jq -r '.plugins[].name' "$MARKETPLACE" | paste -sd, -)
+
+CODEX_ROOT_ABS="$(pwd)/codex"
+MARKETPLACE_ABS="$(pwd)/$MARKETPLACE"
+
+# Drive codex app-server via JSON-RPC. Python handles bidirectional stdio
+# cleanly; bash co-procs are fiddly and we only need request/response.
+CODEX_ROOT="$CODEX_ROOT_ABS" MARKETPLACE="$MARKETPLACE_ABS" EXPECTED="$EXPECTED_PLUGINS" python3 - <<'PYEOF'
+import json
+import os
+import subprocess
+import sys
+
+
+def fail(msg: str) -> None:
+    sys.stderr.write(f"bin/prove-codex: {msg}\n")
+    sys.exit(1)
+
+
+codex_root = os.environ["CODEX_ROOT"]
+marketplace_path = os.environ["MARKETPLACE"]
+expected = [name for name in os.environ["EXPECTED"].split(",") if name]
+if not expected:
+    fail("marketplace.json has no plugins — nothing to prove")
+
+proc = subprocess.Popen(
+    ["codex", "app-server"],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True,
+)
+
+
+def send(obj: dict) -> None:
+    assert proc.stdin is not None
+    proc.stdin.write(json.dumps(obj) + "\n")
+    proc.stdin.flush()
+
+
+def recv(expect_id: int | None = None) -> dict:
+    assert proc.stdout is not None
+    line = proc.stdout.readline()
+    if not line:
+        err = proc.stderr.read() if proc.stderr else ""
+        fail(f"codex app-server closed stdout unexpectedly: {err}")
+    resp = json.loads(line)
+    if expect_id is not None and resp.get("id") != expect_id:
+        fail(f"unexpected JSON-RPC id (got {resp.get('id')!r}, want {expect_id})")
+    if resp.get("error"):
+        fail(f"JSON-RPC error: {json.dumps(resp['error'])}")
+    return resp
+
+
+try:
+    send({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {"clientInfo": {"name": "prove-codex", "version": "0.1.0"}},
+    })
+    recv(expect_id=1)
+
+    send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
+
+    send({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "plugin/list",
+        "params": {"cwds": [codex_root], "forceRemoteSync": False},
+    })
+    list_resp = recv(expect_id=2)
+    result = list_resp.get("result", {})
+
+    load_errors = result.get("marketplaceLoadErrors", [])
+    if load_errors:
+        fail(f"plugin/list returned marketplaceLoadErrors: {json.dumps(load_errors)}")
+
+    marketplaces = result.get("marketplaces", [])
+    ours = next((m for m in marketplaces if m.get("name") == "agent-plugins"), None)
+    if ours is None:
+        names = [m.get("name") for m in marketplaces]
+        fail(f"agent-plugins marketplace not present in plugin/list (saw: {names})")
+
+    if ours.get("path") != marketplace_path:
+        fail(f"marketplace path mismatch (got {ours.get('path')!r}, want {marketplace_path!r})")
+
+    got_names = [p.get("name") for p in ours.get("plugins", [])]
+    missing = [name for name in expected if name not in got_names]
+    if missing:
+        fail(f"expected plugins missing from marketplace: {missing} (saw: {got_names})")
+
+    # Spot-check: every returned plugin has a non-null id, local source, and
+    # interface block with the required fields populated.
+    required_iface = {
+        "displayName", "shortDescription", "longDescription", "developerName",
+        "category", "capabilities", "websiteUrl", "privacyPolicyUrl",
+        "termsOfServiceUrl", "defaultPrompt", "brandColor", "screenshots",
+    }
+    for plugin in ours["plugins"]:
+        name = plugin.get("name", "<unknown>")
+        if not plugin.get("id"):
+            fail(f"plugin {name}: missing id")
+        source = plugin.get("source") or {}
+        if source.get("type") != "local":
+            fail(f"plugin {name}: source.type != 'local' (got {source.get('type')!r})")
+        if not str(source.get("path", "")).startswith(codex_root):
+            fail(f"plugin {name}: source.path not under {codex_root} (got {source.get('path')!r})")
+        iface = plugin.get("interface") or {}
+        missing_fields = sorted(required_iface - set(iface.keys()))
+        if missing_fields:
+            fail(f"plugin {name}: interface missing fields {missing_fields}")
+        for field in ("displayName", "shortDescription", "longDescription"):
+            if not iface.get(field):
+                fail(f"plugin {name}: interface.{field} is empty")
+
+    # plugin/read each plugin to force Codex to fully resolve the artifacts
+    # (skills dir, hooks, scripts, assets) from disk. Any bad path or malformed
+    # file surfaces here.
+    for idx, plugin in enumerate(ours["plugins"], start=3):
+        name = plugin["name"]
+        send({
+            "jsonrpc": "2.0",
+            "id": idx,
+            "method": "plugin/read",
+            "params": {"marketplacePath": marketplace_path, "pluginName": name},
+        })
+        read_resp = recv(expect_id=idx)
+        detail = read_resp.get("result", {}).get("plugin", {})
+        if detail.get("marketplaceName") != "agent-plugins":
+            fail(f"plugin/read {name}: marketplaceName mismatch")
+        if not isinstance(detail.get("skills"), list):
+            fail(f"plugin/read {name}: skills array missing")
+        if not isinstance(detail.get("apps"), list):
+            fail(f"plugin/read {name}: apps array missing")
+        if not isinstance(detail.get("mcpServers"), list):
+            fail(f"plugin/read {name}: mcpServers array missing")
+        summary = detail.get("summary") or {}
+        if summary.get("id") != f"{name}@agent-plugins":
+            fail(f"plugin/read {name}: summary.id mismatch (got {summary.get('id')!r})")
+finally:
+    if proc.stdin is not None:
+        try:
+            proc.stdin.close()
+        except BrokenPipeError:
+            pass
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+PYEOF

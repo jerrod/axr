@@ -76,4 +76,14 @@ done
 # bin/validate via bin/lib/validate-codex.sh and is exercised by step 1 above.
 # Do not re-check those invariants here — bin/validate is the source of truth.
 
+# 3. Live Codex load proof — only when the `codex` CLI is installed. On CI
+# without Codex this step is skipped (silent success); locally, it fails the
+# test suite if Codex refuses any plugin.
+if command -v codex >/dev/null 2>&1 && [ -x bin/prove-codex ]; then
+    if ! PROVE_OUT="$(bin/prove-codex 2>&1 | strip_ansi)"; then
+        FAIL=1
+        printf '%s\n' "$PROVE_OUT"
+    fi
+fi
+
 exit $FAIL
