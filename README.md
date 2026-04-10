@@ -68,4 +68,4 @@ The marketplace is structured as:
 
 Plugins may use any of `commands/`, `skills/`, or `agents/` as their entry point. `scripts/` is optional (agent-team plugins like revue have none).
 
-See `CLAUDE.md` for workflow conventions. All changes go through the rq workflow: plan → build → review → ship.
+See `CLAUDE.md` for workflow conventions. All changes go through the sdlc workflow: brainstorm → plan → pair-build → review → ship.

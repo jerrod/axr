@@ -24,11 +24,11 @@ def _extract_lines(file_data):
 
 def _compute_percentage(lines):
     """Compute covered-line percentage from a SimpleCov line-hit array."""
-    relevant = [l for l in lines if l is not None]
+    relevant = [hit for hit in lines if hit is not None]
     total = len(relevant)
     if total == 0:
         return 100.0
-    covered = len([l for l in relevant if l > 0])
+    covered = len([hit for hit in relevant if hit > 0])
     return covered / total * 100
 
 

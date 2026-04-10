@@ -226,6 +226,23 @@ def test_safe_parse_rejects_entity_declaration(tmp_path):
         _safe_parse(path)
 
 
+def test_safe_parse_rejects_billion_laughs(tmp_path):
+    # Nested entity expansion (billion-laughs) must also be rejected, not
+    # just the trivial single <!ENTITY> case.
+    xml = """\
+<?xml version="1.0" ?>
+<!DOCTYPE coverage [
+  <!ENTITY lol "lol">
+  <!ENTITY lol2 "&lol;&lol;&lol;&lol;">
+  <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;">
+]>
+<coverage><packages/></coverage>
+"""
+    path = _write_xml(tmp_path, xml, "billion.xml")
+    with pytest.raises(ValueError, match="entity declarations"):
+        _safe_parse(path)
+
+
 def test_parse_cobertura_rejects_entity_declaration_via_public_api(tmp_path):
     xml = """\
 <?xml version="1.0" ?>

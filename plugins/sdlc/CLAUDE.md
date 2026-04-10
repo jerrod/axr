@@ -9,9 +9,9 @@ This is the `sdlc` Claude Code plugin. It enforces a full development lifecycle 
 - `skills/<name>/SKILL.md` — 24 user-facing skills
 - `agents/<name>.md` — 23 specialized subagents
 - `hooks/hooks.json` + `hooks/*` — 8 lifecycle hooks
-- `scripts/*.sh` (49) — gate scripts and utilities
-- `scripts/*.py` (60) — gate helpers and test suite
-- `scripts/test_*.{sh,py}` (46) — test files
+- `scripts/*.sh` (50) — gate scripts and utilities
+- `scripts/*.py` (62) — gate helpers and test suite
+- `scripts/test_*.{sh,py}` (47) — test files
 
 ## Origin: hard fork of upstream `rq` v1.29.8
 

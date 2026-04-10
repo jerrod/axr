@@ -14,7 +14,7 @@ AUDIT_SCRIPT=$(find . -name "audit-trail.sh" -path "*/sdlc/*" 2>/dev/null | head
 [ -z "$AUDIT_SCRIPT" ] && AUDIT_SCRIPT=$(find "$HOME/.claude" -name "audit-trail.sh" -path "*/sdlc/*" 2>/dev/null | sort -V | tail -1)
 ```
 
-- **Start:** `bash "$AUDIT_SCRIPT" log build sdlc:parallel-dispatch started --context="$ARGUMENTS"`
+- **Start:** `bash "$AUDIT_SCRIPT" log build sdlc:parallel-dispatch started --context "$ARGUMENTS"`
 - **End:** `bash "$AUDIT_SCRIPT" log build sdlc:parallel-dispatch completed --context="<summary>"`
 
 ## Overview

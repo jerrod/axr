@@ -2,7 +2,7 @@
 
 Full development lifecycle with executable quality gates. Brainstorm, plan, pair-build, review, and ship — every gate is a script, every claim is proven.
 
-`sdlc` is the agent-plugins marketplace's own branded full-lifecycle plugin: 24 user-facing skills, 23 specialized subagents, 55 shell scripts + 60 Python scripts, and 8 lifecycle hooks that enforce discipline at every Claude Code session.
+`sdlc` is the agent-plugins marketplace's own branded full-lifecycle plugin: 24 user-facing skills, 23 specialized subagents, 50 shell scripts + 62 Python scripts, and 8 lifecycle hooks that enforce discipline at every Claude Code session.
 
 ## What it does
 
@@ -37,7 +37,7 @@ In Claude Code:
 | Cyclomatic complexity | 8 |
 | Lint/format/typecheck | zero errors |
 
-See the top-level `sdlc.config.json` in this repo for the concrete example.
+Create `sdlc.config.json` at your repo root to override thresholds (see [this repo's sdlc.config.json](../../sdlc.config.json) for an example). Without it, built-in defaults apply.
 
 ## Skills inventory
 

@@ -35,8 +35,22 @@ json.dump(data, open(os.environ['SDLC_OUT'], 'w'), indent=2)
 " 2>/dev/null
 }
 
+# Snooze file format (one-line, space-separated):
+#   <literal "snooze"> <level 1-3> <unix-timestamp>
+# The leading "snooze" sentinel is checked by validate_snooze_file before use,
+# so any other shape (empty, truncated, foreign) is treated as "no snooze".
+validate_snooze_file() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+  local first_word
+  read -r first_word _ _ <"$file"
+  [ "$first_word" = "snooze" ]
+}
+
 is_snoozed() {
   [ ! -f "$SNOOZE_FILE" ] && return 1
+  validate_snooze_file "$SNOOZE_FILE" || return 1
+  # Format: snooze <level> <unix-ts>
   read -r _snz_ver _snz_level _snz_ts <"$SNOOZE_FILE"
   local now
   now=$(date +%s)
@@ -49,9 +63,13 @@ is_snoozed() {
   [ $((now - _snz_ts)) -lt "$ttl" ]
 }
 
+# do_snooze writes the snooze file in the format documented above
+# (snooze <level> <unix-ts>). When extending the level, a corrupted or
+# foreign existing file is treated as "no snooze in effect" — level resets to 0.
 do_snooze() {
   local cur_level=0
-  if [ -f "$SNOOZE_FILE" ]; then
+  if validate_snooze_file "$SNOOZE_FILE"; then
+    # Format: snooze <level> <unix-ts>
     read -r _sv cur_level _st <"$SNOOZE_FILE"
     case "$cur_level" in *[!0-9]*) cur_level=0 ;; esac
   fi
@@ -70,6 +88,11 @@ do_snooze() {
 
 snooze_status() {
   if [ -f "$SNOOZE_FILE" ]; then
+    if ! validate_snooze_file "$SNOOZE_FILE"; then
+      echo "no"
+      return 0
+    fi
+    # Format: snooze <level> <unix-ts>
     read -r _snz_ver snz_level snz_ts <"$SNOOZE_FILE"
     local now ttl remaining
     now=$(date +%s)

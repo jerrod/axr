@@ -16,14 +16,7 @@ import json
 import os
 import sys
 
-from allow_entry import entry_pattern
-
-
-def _entry_key(entry):
-    """Canonical identity of an allow entry — all non-reason fields, sorted."""
-    return json.dumps(
-        {k: v for k, v in entry.items() if k != "reason"}, sort_keys=True
-    )
+from allow_entry import entry_key, entry_pattern
 
 
 def _load_matched(tracking_file):
@@ -51,7 +44,7 @@ def main(argv):
         return 0
     matched = _load_matched(tracking_file)
     for entry in all_entries:
-        if _entry_key(entry) in matched:
+        if entry_key(entry) in matched:
             continue
         pattern = entry_pattern(entry)
         if not pattern:

@@ -2,7 +2,6 @@
 
 import json
 import os
-import tempfile
 
 import pytest
 
@@ -31,32 +30,24 @@ SAMPLE_JACOCO = """\
 """
 
 
-def _write_xml(content, dir=None):
-    f = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".xml", delete=False, dir=dir
-    )
-    f.write(content)
-    f.flush()
-    f.close()
-    return f.name
+def _write_xml(tmp_path, content, name="report.xml"):
+    path = tmp_path / name
+    path.write_text(content)
+    return str(path)
 
 
-def test_parse_basic_coverage():
-    path = _write_xml(SAMPLE_JACOCO)
-    try:
-        result = parse_jacoco(path)
-        foo = result["co/arqu/core/service/FooService.kt"]
-        assert foo["lines"]["pct"] == 80.0  # 20/(20+5)*100
-        bar = result["co/arqu/core/service/BarService.kt"]
-        assert bar["lines"]["pct"] == 100.0
-        user = result["co/arqu/core/model/User.kt"]
-        assert user["lines"]["pct"] == 50.0
-    finally:
-        os.unlink(path)
+def test_parse_basic_coverage(tmp_path):
+    path = _write_xml(tmp_path, SAMPLE_JACOCO)
+    result = parse_jacoco(path)
+    foo = result["co/arqu/core/service/FooService.kt"]
+    assert foo["lines"]["pct"] == 80.0  # 20/(20+5)*100
+    bar = result["co/arqu/core/service/BarService.kt"]
+    assert bar["lines"]["pct"] == 100.0
+    user = result["co/arqu/core/model/User.kt"]
+    assert user["lines"]["pct"] == 50.0
 
 
-def test_parse_glob_multiple_reports():
-    dir = tempfile.mkdtemp()
+def test_parse_glob_multiple_reports(tmp_path):
     report1 = """\
 <?xml version="1.0" encoding="UTF-8"?>
 <report name="module-a">
@@ -77,23 +68,14 @@ def test_parse_glob_multiple_reports():
   </package>
 </report>
 """
-    path1 = os.path.join(dir, "report1.xml")
-    path2 = os.path.join(dir, "report2.xml")
-    with open(path1, "w") as f:
-        f.write(report1)
-    with open(path2, "w") as f:
-        f.write(report2)
-    try:
-        result = parse_jacoco(os.path.join(dir, "*.xml"))
-        assert result["com/example/a/A.kt"]["lines"]["pct"] == 90.0
-        assert result["com/example/b/B.kt"]["lines"]["pct"] == 50.0
-    finally:
-        os.unlink(path1)
-        os.unlink(path2)
-        os.rmdir(dir)
+    _write_xml(tmp_path, report1, "report1.xml")
+    _write_xml(tmp_path, report2, "report2.xml")
+    result = parse_jacoco(os.path.join(str(tmp_path), "*.xml"))
+    assert result["com/example/a/A.kt"]["lines"]["pct"] == 90.0
+    assert result["com/example/b/B.kt"]["lines"]["pct"] == 50.0
 
 
-def test_parse_zero_lines():
+def test_parse_zero_lines(tmp_path):
     xml = """\
 <?xml version="1.0" encoding="UTF-8"?>
 <report name="empty">
@@ -104,12 +86,9 @@ def test_parse_zero_lines():
   </package>
 </report>
 """
-    path = _write_xml(xml)
-    try:
-        result = parse_jacoco(path)
-        assert result["com/example/Empty.kt"]["lines"]["pct"] == 0
-    finally:
-        os.unlink(path)
+    path = _write_xml(tmp_path, xml)
+    result = parse_jacoco(path)
+    assert result["com/example/Empty.kt"]["lines"]["pct"] == 0.0
 
 
 def test_parse_no_matching_files():
@@ -117,7 +96,7 @@ def test_parse_no_matching_files():
     assert result == {}
 
 
-def test_parse_sourcefile_without_line_counter_is_skipped():
+def test_parse_sourcefile_without_line_counter_is_skipped(tmp_path):
     # A sourcefile that only has BRANCH/METHOD counters (no LINE) must be
     # skipped entirely — _extract_line_pct returns None.
     xml = """\
@@ -134,16 +113,13 @@ def test_parse_sourcefile_without_line_counter_is_skipped():
   </package>
 </report>
 """
-    path = _write_xml(xml)
-    try:
-        result = parse_jacoco(path)
-        assert "com/example/NoLine.kt" not in result
-        assert result["com/example/HasLine.kt"]["lines"]["pct"] == 100.0
-    finally:
-        os.unlink(path)
+    path = _write_xml(tmp_path, xml)
+    result = parse_jacoco(path)
+    assert "com/example/NoLine.kt" not in result
+    assert result["com/example/HasLine.kt"]["lines"]["pct"] == 100.0
 
 
-def test_parse_rejects_xml_with_entity_declarations():
+def test_parse_rejects_xml_with_entity_declarations(tmp_path):
     # Billion-laughs / XXE guard: presence of "<!ENTITY" must raise.
     xml = """\
 <?xml version="1.0"?>
@@ -158,15 +134,12 @@ def test_parse_rejects_xml_with_entity_declarations():
   </package>
 </report>
 """
-    path = _write_xml(xml)
-    try:
-        with pytest.raises(ValueError, match="entity declarations"):
-            parse_jacoco(path)
-    finally:
-        os.unlink(path)
+    path = _write_xml(tmp_path, xml)
+    with pytest.raises(ValueError, match="entity declarations"):
+        parse_jacoco(path)
 
 
-def test_parse_sourcefile_without_package_name_uses_bare_filename():
+def test_parse_sourcefile_without_package_name_uses_bare_filename(tmp_path):
     # When package name is empty, the file key should be just the sourcefile name
     # (not prefixed with "/"). Exercises the `file_key = fname` branch.
     xml = """\
@@ -179,12 +152,9 @@ def test_parse_sourcefile_without_package_name_uses_bare_filename():
   </package>
 </report>
 """
-    path = _write_xml(xml)
-    try:
-        result = parse_jacoco(path)
-        assert result["Root.kt"]["lines"]["pct"] == 100.0
-    finally:
-        os.unlink(path)
+    path = _write_xml(tmp_path, xml)
+    result = parse_jacoco(path)
+    assert result["Root.kt"]["lines"]["pct"] == 100.0
 
 
 # --- __main__ entrypoint ---
@@ -205,21 +175,18 @@ def test_main_no_args_exits_with_usage_error(monkeypatch, capsys):
     assert "Usage" in err
 
 
-def test_main_with_arg_prints_parsed_json(monkeypatch, capsys):
+def test_main_with_arg_prints_parsed_json(tmp_path, monkeypatch, capsys):
     import runpy
 
-    path = _write_xml(SAMPLE_JACOCO)
-    try:
-        monkeypatch.setattr("sys.argv", ["parse_jacoco.py", path])
-        runpy.run_path(_MODULE_PATH, run_name="__main__")
-        out = capsys.readouterr().out.strip()
-        parsed = json.loads(out)
-        assert parsed["co/arqu/core/service/FooService.kt"] == {
-            "lines": {"pct": 80.0}
-        }
-        assert parsed["co/arqu/core/service/BarService.kt"] == {
-            "lines": {"pct": 100.0}
-        }
-        assert parsed["co/arqu/core/model/User.kt"] == {"lines": {"pct": 50.0}}
-    finally:
-        os.unlink(path)
+    path = _write_xml(tmp_path, SAMPLE_JACOCO)
+    monkeypatch.setattr("sys.argv", ["parse_jacoco.py", path])
+    runpy.run_path(_MODULE_PATH, run_name="__main__")
+    out = capsys.readouterr().out.strip()
+    parsed = json.loads(out)
+    assert parsed["co/arqu/core/service/FooService.kt"] == {
+        "lines": {"pct": 80.0}
+    }
+    assert parsed["co/arqu/core/service/BarService.kt"] == {
+        "lines": {"pct": 100.0}
+    }
+    assert parsed["co/arqu/core/model/User.kt"] == {"lines": {"pct": 50.0}}

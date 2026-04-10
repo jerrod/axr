@@ -33,7 +33,8 @@ class TestBuildCheckBase:
 
     def test_missing_url(self):
         base = _build({"name": "X"})
-        assert base["runId"] is None and base["jobId"] is None
+        assert base["runId"] is None
+        assert base["jobId"] is None
 
 
 class TestParseChecksJson:
@@ -46,6 +47,7 @@ class TestParseChecksJson:
         assert "shape" in capsys.readouterr().err
 
     def test_empty_stdout_returns_empty_list(self):
+        # Empty string falls through `stdout or "[]"` -> json.loads("[]") -> []
         assert inspect_pr_checks._parse_checks_json("") == []
 
 
@@ -183,15 +185,18 @@ class TestRenderText:
             "logSnippet": "ERROR: test failed", "tier": "test",
         }])
         out = capsys.readouterr().out
-        assert "PR #42" in out and "CI" in out
-        assert "ERROR: test failed" in out and "test" in out
+        assert "PR #42" in out
+        assert "CI" in out
+        assert "ERROR: test failed" in out
+        assert "test" in out
 
     def test_renders_external_check(self, capsys):
         inspect_pr_checks.render_text("10", [{
             "name": "Codecov", "status": "external", "note": "No run ID.",
         }])
         out = capsys.readouterr().out
-        assert "Codecov" in out and "external" in out
+        assert "Codecov" in out
+        assert "external" in out
 
     def test_renders_error_check(self, capsys):
         inspect_pr_checks.render_text(
@@ -283,4 +288,5 @@ class TestMainOutput:
         with patch("sys.argv", ["prog"]):
             assert inspect_pr_checks.main() == 1
         out = capsys.readouterr().out
-        assert "CI" in out and "FAIL: test_something" in out
+        assert "CI" in out
+        assert "FAIL: test_something" in out

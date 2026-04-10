@@ -206,10 +206,13 @@ def _run_gocyclo(files, threshold):
     return None
 
 
-def _violations_from_gocyclo(lines):
+def _violations_from_gocyclo(lines, max_complexity=0):
     """Parse gocyclo output lines into violations.
 
     Format: '8 pkg.FuncName path/file.go:10:1'
+    The ``max_complexity`` argument is recorded on each violation so callers
+    don't have to post-process the list. It defaults to 0 only to keep older
+    test fixtures that don't care about the threshold working.
     """
     violations = []
     for line in lines:
@@ -223,7 +226,7 @@ def _violations_from_gocyclo(lines):
                 "file": filepath,
                 "function": func_name,
                 "complexity": complexity,
-                "max": 0,  # filled in by caller
+                "max": max_complexity,
                 "type": "cyclomatic_complexity",
             })
     return violations
@@ -238,10 +241,7 @@ def analyze_go_files(files, max_lines, max_complexity):
         print("Analyzing Go complexity with gocyclo...", file=sys.stderr)
         lines = _run_gocyclo(files, max_complexity)
         if lines is not None:
-            gocyclo_violations = _violations_from_gocyclo(lines)
-            for v in gocyclo_violations:
-                v["max"] = max_complexity
-            violations.extend(gocyclo_violations)
+            violations.extend(_violations_from_gocyclo(lines, max_complexity))
         else:
             print(
                 "gocyclo unavailable, using heuristic for complexity",

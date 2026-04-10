@@ -14,7 +14,7 @@ PLUGIN_DIR=$(find . -name "run-gates.sh" -path "*/sdlc/*" -exec dirname {} \; 2>
 [ -z "$PLUGIN_DIR" ] && PLUGIN_DIR=$(find "$HOME/.claude" -name "run-gates.sh" -path "*/sdlc/*" -exec dirname {} \; 2>/dev/null | sort -V | tail -1)
 ```
 
-- **Start:** `bash "$PLUGIN_DIR/../scripts/audit-trail.sh" log build sdlc:pair-build started --context="$ARGUMENTS"`
+- **Start:** `bash "$PLUGIN_DIR/../scripts/audit-trail.sh" log build sdlc:pair-build started --context "$ARGUMENTS"`
 - **End:** `bash "$PLUGIN_DIR/../scripts/audit-trail.sh" log build sdlc:pair-build completed --context="<summary>"`
 
 ## How It Works

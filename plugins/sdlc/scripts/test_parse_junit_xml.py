@@ -146,7 +146,7 @@ SAMPLE_WITH_ENTITY = """\
 
 
 def test_parse_with_error_element():
-    """Line 39: error element classification."""
+    """<error> element is classified as errored, not failed."""
     path = _write_xml(SAMPLE_WITH_ERROR)
     try:
         result = parse_junit_xml(path)
@@ -161,7 +161,7 @@ def test_parse_with_error_element():
 
 
 def test_parse_error_falls_back_to_text_and_empty_classname():
-    """Covers _failure_detail fallback to element text and no-classname branch."""
+    """<error> with no message attr uses element text; missing classname yields bare test name."""
     path = _write_xml(SAMPLE_ERROR_NO_MESSAGE_NO_CLASSNAME)
     try:
         result = parse_junit_xml(path)
@@ -173,7 +173,7 @@ def test_parse_error_falls_back_to_text_and_empty_classname():
 
 
 def test_failure_takes_precedence_over_error():
-    """_classify_testcase: failure element wins when both present."""
+    """When a testcase has both <failure> and <error>, failure wins for classification."""
     path = _write_xml(SAMPLE_FAILURE_AND_ERROR)
     try:
         result = parse_junit_xml(path)
@@ -185,7 +185,7 @@ def test_failure_takes_precedence_over_error():
 
 
 def test_parse_unknown_root_tag():
-    """Line 52: root is neither testsuites nor testsuite — iter fallback."""
+    """When root is neither <testsuites> nor <testsuite>, parser still finds nested suites."""
     path = _write_xml(SAMPLE_UNKNOWN_ROOT)
     try:
         result = parse_junit_xml(path)
@@ -196,7 +196,7 @@ def test_parse_unknown_root_tag():
 
 
 def test_parse_rejects_entity_declarations():
-    """Line 19: _safe_parse raises on <!ENTITY to mitigate XXE."""
+    """XML containing <!ENTITY declarations is rejected to mitigate XXE."""
     path = _write_xml(SAMPLE_WITH_ENTITY)
     try:
         with pytest.raises(ValueError, match="entity declarations"):
@@ -206,7 +206,7 @@ def test_parse_rejects_entity_declarations():
 
 
 def test_parse_no_matching_files_returns_empty_result():
-    """Lines 56, 63: glob with no matches returns _empty_result()."""
+    """Glob with no matching files returns the zero-counts empty-result shape."""
     result = parse_junit_xml("/nonexistent/path/**/*.xml")
     assert result == {
         "total": 0,
@@ -219,7 +219,7 @@ def test_parse_no_matching_files_returns_empty_result():
 
 
 def test_main_missing_argument_exits_with_usage():
-    """Lines 85-87: __main__ with no args prints usage and exits 1."""
+    """CLI with no arguments prints usage to stderr and exits non-zero."""
     script = os.path.join(os.path.dirname(__file__), "parse_junit_xml.py")
     proc = subprocess.run(
         [sys.executable, script],
@@ -231,7 +231,7 @@ def test_main_missing_argument_exits_with_usage():
 
 
 def test_main_prints_json_for_glob():
-    """Lines 88-90: __main__ happy path dumps JSON to stdout."""
+    """CLI happy path: matching glob produces JSON summary on stdout."""
     dir = tempfile.mkdtemp()
     xml_path = os.path.join(dir, "result.xml")
     with open(xml_path, "w") as f:

@@ -257,12 +257,26 @@ class TestImportFallback:
 
 class TestNoJsonschema:
     def test_gate_proof_returns_true_without_jsonschema(self, monkeypatch):
-        monkeypatch.setattr(vp, "_HAS_JSONSCHEMA", False)
-        assert validate_gate_proof({}, "filesize") is True
+        import importlib
+        monkeypatch.setitem(sys.modules, "jsonschema", None)
+        monkeypatch.setitem(sys.modules, "referencing", None)
+        importlib.reload(vp)
+        try:
+            assert vp.validate_gate_proof({}, "filesize") is True
+        finally:
+            monkeypatch.undo()
+            importlib.reload(vp)
 
     def test_metrics_event_returns_true_without_jsonschema(self, monkeypatch):
-        monkeypatch.setattr(vp, "_HAS_JSONSCHEMA", False)
-        assert validate_metrics_event({}) is True
+        import importlib
+        monkeypatch.setitem(sys.modules, "jsonschema", None)
+        monkeypatch.setitem(sys.modules, "referencing", None)
+        importlib.reload(vp)
+        try:
+            assert vp.validate_metrics_event({}) is True
+        finally:
+            monkeypatch.undo()
+            importlib.reload(vp)
 
 
 class TestDefaultSchemaDir:

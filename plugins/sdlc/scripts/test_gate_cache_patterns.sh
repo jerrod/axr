@@ -31,6 +31,28 @@ assert_contains() {
   fi
 }
 
+assert_true() {
+  local test_name="$1"; shift
+  if "$@"; then
+    PASS=$((PASS + 1))
+    echo "  PASS: $test_name"
+  else
+    FAIL=$((FAIL + 1))
+    echo "  FAIL: $test_name (expected true)"
+  fi
+}
+
+assert_false() {
+  local test_name="$1"; shift
+  if "$@"; then
+    FAIL=$((FAIL + 1))
+    echo "  FAIL: $test_name (expected false)"
+  else
+    PASS=$((PASS + 1))
+    echo "  PASS: $test_name"
+  fi
+}
+
 # Source just the helper functions from run-gates.sh without running main.
 # We extract lines from the "Cache helpers" section up to the cache-check loop.
 source_cache_helpers() {
@@ -122,13 +144,8 @@ test_sh_change_invalidates_lint_cache() {
   git add script.sh
   git commit -q -m "add sh"
   CURRENT_SHA=$(git rev-parse HEAD)
-  if _files_changed_for_gate lint "$old_sha"; then
-    PASS=$((PASS + 1))
-    echo "  PASS: *.sh change invalidates lint cache"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  FAIL: *.sh change should invalidate lint cache but didn't"
-  fi
+  assert_true "*.sh change invalidates lint cache" \
+    _files_changed_for_gate lint "$old_sha"
   teardown_repo
 }
 
@@ -140,13 +157,8 @@ test_sh_change_invalidates_dead_code_cache() {
   git add script.sh
   git commit -q -m "add sh"
   CURRENT_SHA=$(git rev-parse HEAD)
-  if _files_changed_for_gate dead-code "$old_sha"; then
-    PASS=$((PASS + 1))
-    echo "  PASS: *.sh change invalidates dead-code cache"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  FAIL: *.sh change should invalidate dead-code cache but didn't"
-  fi
+  assert_true "*.sh change invalidates dead-code cache" \
+    _files_changed_for_gate dead-code "$old_sha"
   teardown_repo
 }
 
@@ -158,13 +170,8 @@ test_md_change_does_not_invalidate_lint_cache() {
   git add doc.md
   git commit -q -m "add md"
   CURRENT_SHA=$(git rev-parse HEAD)
-  if _files_changed_for_gate lint "$old_sha"; then
-    FAIL=$((FAIL + 1))
-    echo "  FAIL: *.md change should NOT invalidate lint cache"
-  else
-    PASS=$((PASS + 1))
-    echo "  PASS: *.md change does not invalidate lint cache"
-  fi
+  assert_false "*.md change does not invalidate lint cache" \
+    _files_changed_for_gate lint "$old_sha"
   teardown_repo
 }
 
@@ -176,13 +183,8 @@ test_py_change_invalidates_lint_cache() {
   git add script.py
   git commit -q -m "add py"
   CURRENT_SHA=$(git rev-parse HEAD)
-  if _files_changed_for_gate lint "$old_sha"; then
-    PASS=$((PASS + 1))
-    echo "  PASS: *.py change invalidates lint cache"
-  else
-    FAIL=$((FAIL + 1))
-    echo "  FAIL: *.py change should invalidate lint cache"
-  fi
+  assert_true "*.py change invalidates lint cache" \
+    _files_changed_for_gate lint "$old_sha"
   teardown_repo
 }
 
@@ -190,13 +192,8 @@ test_same_sha_means_cache_valid() {
   setup_repo
   source_cache_helpers
   # No changes since seed commit — CURRENT_SHA equals old_sha
-  if _files_changed_for_gate lint "$CURRENT_SHA"; then
-    FAIL=$((FAIL + 1))
-    echo "  FAIL: same SHA should mean cache is still valid"
-  else
-    PASS=$((PASS + 1))
-    echo "  PASS: same SHA keeps cache valid"
-  fi
+  assert_false "same SHA keeps cache valid" \
+    _files_changed_for_gate lint "$CURRENT_SHA"
   teardown_repo
 }
 

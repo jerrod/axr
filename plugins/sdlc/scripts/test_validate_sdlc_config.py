@@ -14,7 +14,11 @@ def run_validator(config_dict):
         config_path = f.name
     try:
         # Pass paths via env rather than interpolating into the shell command.
-        env = {**os.environ, "SDLC_CONFIG_FILE": config_path, "LOAD_CONFIG": f"{SCRIPT_DIR}/load-config.sh"}
+        env = {
+            **os.environ,
+            "SDLC_CONFIG_FILE": config_path,
+            "LOAD_CONFIG": f"{SCRIPT_DIR}/load-config.sh",
+        }
         result = subprocess.run(
             ["bash", "-c", 'source "$LOAD_CONFIG" && validate_sdlc_config'],
             capture_output=True, text=True, env=env,

@@ -14,12 +14,44 @@ trap 'exit 0' ERR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 AUDIT_DIR="${AUDIT_DIR:-.quality/audit}"
+
+# Containment check: AUDIT_DIR is read from the environment, so a caller
+# could point it at a shared/world-writable directory and turn the lock and
+# trail files into a symlink-TOCTOU vector. Resolve the path and require it
+# to live inside the repo root, HOME, or the per-user system temp dir
+# (where mktemp -d puts test fixtures). Anything else: bail silently — the
+# script must always exit 0 because logging failures must never block.
+mkdir -p "$AUDIT_DIR" 2>/dev/null || true
+AUDIT_DIR_REAL=$(cd "$AUDIT_DIR" 2>/dev/null && pwd -P) || AUDIT_DIR_REAL=""
+REPO_ROOT_REAL=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
+TMP_REAL=$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P) || TMP_REAL=""
+case "$AUDIT_DIR_REAL" in
+  "$REPO_ROOT_REAL"/* | "$HOME"/*) : ;;
+  *)
+    if [ -n "$TMP_REAL" ] && [ "${AUDIT_DIR_REAL#"$TMP_REAL"/}" != "$AUDIT_DIR_REAL" ]; then
+      :
+    else
+      echo "audit-trail.sh: refusing AUDIT_DIR outside repo root, HOME, or TMPDIR: $AUDIT_DIR" >&2
+      exit 0
+    fi
+    ;;
+esac
+
 TRAIL_FILE="$AUDIT_DIR/trail.json"
 LOCK_FILE="$AUDIT_DIR/.trail.lock"
 PLAN_FILE="$AUDIT_DIR/execution-plan.json"
 
-# shellcheck source=plugins/sdlc/scripts/_audit_lib.sh
-source "$SCRIPT_DIR/_audit_lib.sh"
+# AUDIT_SYNC_WRITES forces an immediate merge after every log call so tests
+# on macOS (no flock) can read trail.json directly. It re-introduces the
+# concurrent-write race the per-entry fallback is designed to prevent — so
+# warn loudly if it leaks into a non-test environment. Tests acknowledge
+# the risk by also exporting SDLC_TESTING=1.
+if [ -n "${AUDIT_SYNC_WRITES:-}" ] && [ -z "${SDLC_TESTING:-}" ]; then
+  echo "WARNING: AUDIT_SYNC_WRITES=1 set outside test context — concurrent writes may corrupt trail.json. Set SDLC_TESTING=1 to acknowledge." >&2
+fi
+
+# shellcheck source=plugins/sdlc/scripts/audit-helpers.sh
+source "$SCRIPT_DIR/audit-helpers.sh"
 
 # ─── Helpers ────────────────────────────────────────────────────
 
@@ -64,35 +96,8 @@ current_sha() {
 }
 
 # ─── Commands ───────────────────────────────────────────────────
-
-cmd_init() {
-  local task="${1:-}"
-  mkdir -p "$AUDIT_DIR"
-
-  if [ ! -f "$TRAIL_FILE" ]; then
-    local version
-    version=$(get_plugin_version)
-    AT_VERSION="$version" \
-      AT_TS="$(timestamp_iso)" \
-      AT_TRAIL_FILE="$TRAIL_FILE" \
-      python3 -c "
-import json, os
-trail = {
-    'version': 1,
-    'plugin_version': os.environ['AT_VERSION'],
-    'initialized_at': os.environ['AT_TS'],
-    'entries': []
-}
-json.dump(trail, open(os.environ['AT_TRAIL_FILE'], 'w'), indent=2)
-"
-  fi
-
-  if [ -n "$task" ]; then
-    echo "$task" >"$AUDIT_DIR/task.txt"
-  fi
-
-  echo "Audit trail initialized in $AUDIT_DIR"
-}
+# cmd_init, cmd_plan, cmd_report, cmd_show, and merge_pending_entries
+# all live in audit-helpers.sh (sourced above).
 
 cmd_log() {
   local phase="${1:-}"

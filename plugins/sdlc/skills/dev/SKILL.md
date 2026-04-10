@@ -13,7 +13,7 @@ Log skill invocation:
 
 Use `$PLUGIN_DIR` (detected in Step 1 via `find . -name "run-gates.sh"`):
 
-- **Start:** `bash "$PLUGIN_DIR/../scripts/audit-trail.sh" log orchestration sdlc:dev started --context="$ARGUMENTS"`
+- **Start:** `bash "$PLUGIN_DIR/../scripts/audit-trail.sh" log orchestration sdlc:dev started --context "$ARGUMENTS"`
 - **End:** `bash "$PLUGIN_DIR/../scripts/audit-trail.sh" log orchestration sdlc:dev completed --context="<summary of what was done>"`
 
 This skill is an **orchestrator**. It diagnoses project state, spawns the appropriate worker agent, then re-diagnoses and continues until the workflow is complete or the user intervenes.

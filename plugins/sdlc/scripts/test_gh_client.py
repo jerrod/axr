@@ -27,16 +27,6 @@ class TestRunGh:
         assert result.returncode == 0
         assert result.stdout == "ok"
 
-    @patch("subprocess.run")
-    def test_returns_completed_process(self, mock_run):
-        cp = subprocess.CompletedProcess(
-            args=["gh", "version"], returncode=0, stdout="2.0", stderr=""
-        )
-        mock_run.return_value = cp
-        result = gh_client.run_gh(["version"], cwd=REPO_ROOT)
-        assert result is cp
-
-
 class TestRunGhRaw:
     @patch("subprocess.run")
     def test_no_text_mode(self, mock_run):

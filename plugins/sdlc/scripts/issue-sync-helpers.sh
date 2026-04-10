@@ -13,13 +13,42 @@ _sdlc_cleanup() {
   done
 }
 
-# Compose with any existing EXIT trap — preserve caller's cleanup
+# Compose with any existing EXIT trap — preserve caller's cleanup.
+#
+# Trust assumption: the prior EXIT trap is captured from whatever code
+# sourced this helper. In normal use that is trusted SDLC plumbing setting
+# a simple cleanup function name. We do NOT want to blindly eval an
+# arbitrary trap body — if untrusted code ran before this helper was
+# sourced, its trap string would otherwise be re-executed verbatim on
+# every chained EXIT. _sdlc_eval_prior_trap below allowlists the shape
+# of trap bodies we are willing to re-run (defense-in-depth).
 _SDLC_PRIOR_EXIT_TRAP=$(trap -p EXIT 2>/dev/null | sed -E "s/^trap -- '(.*)' EXIT$/\\1/")
+
+# _sdlc_eval_prior_trap: re-runs a previously-captured EXIT trap body iff
+# it matches a known-safe shape. Known-safe = empty, or a sequence of
+# function-name-like tokens (alphanumeric, underscore, colon) optionally
+# separated by `;`. Anything containing shell metacharacters that could
+# expand subshells, command substitutions, redirections, or pipelines is
+# refused with a stderr warning. Returns 0 on safe-eval-or-empty, 1 on
+# refusal so callers can detect tampering if they care.
+_sdlc_eval_prior_trap() {
+  local prior="$1"
+  if [ -z "$prior" ]; then
+    return 0
+  fi
+  case "$prior" in
+    *[\$\`\(\)\<\>\&\|]*)
+      echo "issue-sync-helpers: refusing to eval prior trap with shell metacharacters: $prior" >&2
+      return 1
+      ;;
+  esac
+  # shellcheck disable=SC2294  # intentional eval of allowlisted trap body
+  eval "$prior"
+}
+
 _sdlc_cleanup_chained() {
   _sdlc_cleanup
-  if [ -n "$_SDLC_PRIOR_EXIT_TRAP" ]; then
-    eval "$_SDLC_PRIOR_EXIT_TRAP"
-  fi
+  _sdlc_eval_prior_trap "$_SDLC_PRIOR_EXIT_TRAP" || true
   return 0
 }
 trap _sdlc_cleanup_chained EXIT

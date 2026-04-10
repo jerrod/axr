@@ -5,7 +5,9 @@ set -euo pipefail
 # AUDIT_SYNC_WRITES=1 forces the no-flock fallback to merge per-entry files
 # into trail.json on every log call so macOS tests can read trail.json
 # directly. Production MUST NOT set it — it reintroduces a write race.
+# SDLC_TESTING=1 acknowledges the risk and silences the runtime warning.
 export AUDIT_SYNC_WRITES=1
+export SDLC_TESTING=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUDIT_SCRIPT="$SCRIPT_DIR/audit-trail.sh"
@@ -34,15 +36,14 @@ assert_exit_zero() {
   if [ "$rc" -eq 0 ]; then _pass "$name"; else _fail "$name (exit code $rc, expected 0)"; fi
 }
 
-# Safe JSON field reader — avoids shell injection in python -c
-json_field() {
-  local file="$1" expr="$2"
-  JF_FILE="$file" JF_EXPR="$expr" python3 -c "
-import json, os
-d = json.load(open(os.environ['JF_FILE']))
-print(eval(os.environ['JF_EXPR'], {'d': d, 'len': len}))
-" 2>/dev/null
+_jpath() {
+  JF_FILE="$1" JF_PATH="$2" JF_MODE="$3" python3 -c 'import json,os,re
+d=json.load(open(os.environ["JF_FILE"]))
+for t in re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*|\[\d+\]",os.environ["JF_PATH"]):d=d[int(t[1:-1])] if t[0]=="[" else d[t]
+print(len(d) if os.environ["JF_MODE"]=="len" else d)' 2>/dev/null
 }
+json_field() { _jpath "$1" "$2" val; }
+json_len() { _jpath "$1" "$2" len; }
 
 setup() {
   TMPDIR=$(mktemp -d); cd "$TMPDIR"
@@ -72,9 +73,9 @@ setup
 bash "$AUDIT_SCRIPT" init "test task" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" init "test task 2" >/dev/null 2>&1
 assert_eq "init is idempotent (trail not overwritten)" "1" \
-  "$(json_field "$AUDIT_DIR/trail.json" "d['version']")"
+  "$(json_field "$AUDIT_DIR/trail.json" "version")"
 assert_eq "init idempotent (entries still empty)" "0" \
-  "$(json_field "$AUDIT_DIR/trail.json" "len(d['entries'])")"
+  "$(json_len "$AUDIT_DIR/trail.json" "entries")"
 teardown
 
 setup
@@ -97,7 +98,7 @@ printf '%s' "$PLAN_BUILD" >"$TMPDIR/plan.json"
 bash "$AUDIT_SCRIPT" plan "$TMPDIR/plan.json" >/dev/null 2>&1
 assert_file_exists "plan registers execution-plan.json" "$AUDIT_DIR/execution-plan.json"
 assert_eq "plan has correct content" "build" \
-  "$(json_field "$AUDIT_DIR/execution-plan.json" "d['planned_phases'][0]['phase']")"
+  "$(json_field "$AUDIT_DIR/execution-plan.json" "planned_phases[0].phase")"
 teardown
 
 setup
@@ -115,7 +116,7 @@ bash "$AUDIT_SCRIPT" plan "$TMPDIR/plan1.json" >/dev/null 2>&1
 output=$(bash "$AUDIT_SCRIPT" plan "$TMPDIR/plan2.json" 2>&1)
 assert_contains "plan noop when exists" "$output" "already registered"
 assert_eq "plan keeps first registration" "first" \
-  "$(json_field "$AUDIT_DIR/execution-plan.json" "d['task']")"
+  "$(json_field "$AUDIT_DIR/execution-plan.json" "task")"
 teardown
 
 echo ""
@@ -127,33 +128,33 @@ setup
 bash "$AUDIT_SCRIPT" init "log test" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder started >/dev/null 2>&1
 assert_eq "log started" "started" \
-  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['action']")"
+  "$(json_field "$AUDIT_DIR/trail.json" "entries[0].action")"
 teardown
 
 setup
 bash "$AUDIT_SCRIPT" init "log test" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder completed --duration=120 --tools=30 --context="built feature" >/dev/null 2>&1
 assert_eq "log completed with duration" "120" \
-  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['duration_seconds']")"
+  "$(json_field "$AUDIT_DIR/trail.json" "entries[0].duration_seconds")"
 assert_eq "log completed with tools" "30" \
-  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['tool_calls']")"
+  "$(json_field "$AUDIT_DIR/trail.json" "entries[0].tool_calls")"
 assert_eq "log completed with context" "built feature" \
-  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['context']")"
+  "$(json_field "$AUDIT_DIR/trail.json" "entries[0].context")"
 teardown
 
 setup
 bash "$AUDIT_SCRIPT" init "log test" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder failed --context="stuck on gate" >/dev/null 2>&1
 assert_eq "log failed" "failed" \
-  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['action']")"
+  "$(json_field "$AUDIT_DIR/trail.json" "entries[0].action")"
 teardown
 
 setup
 bash "$AUDIT_SCRIPT" init "log test" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder started >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder completed >/dev/null 2>&1
-id1=$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['id']")
-id2=$(json_field "$AUDIT_DIR/trail.json" "d['entries'][1]['id']")
+id1=$(json_field "$AUDIT_DIR/trail.json" "entries[0].id")
+id2=$(json_field "$AUDIT_DIR/trail.json" "entries[1].id")
 assert_ne "log generates unique IDs" "$id1" "$id2"
 teardown
 
@@ -166,21 +167,21 @@ setup
 bash "$AUDIT_SCRIPT" init "special chars test" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder completed --context="it's a 'quoted' value" >/dev/null 2>&1
 assert_eq "context with single quotes" "it's a 'quoted' value" \
-  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['context']")"
+  "$(json_field "$AUDIT_DIR/trail.json" "entries[0].context")"
 teardown
 
 setup
 bash "$AUDIT_SCRIPT" init "special chars test" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder completed --context='has "double quotes" inside' >/dev/null 2>&1
 assert_eq "context with double quotes" 'has "double quotes" inside' \
-  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['context']")"
+  "$(json_field "$AUDIT_DIR/trail.json" "entries[0].context")"
 teardown
 
 setup
 bash "$AUDIT_SCRIPT" init "special chars test" >/dev/null 2>&1
 bash "$AUDIT_SCRIPT" log build sdlc:builder completed --context='has $dollar and `backtick`' >/dev/null 2>&1
 assert_eq "context with dollar and backtick" "has \$dollar and \`backtick\`" \
-  "$(json_field "$AUDIT_DIR/trail.json" "d['entries'][0]['context']")"
+  "$(json_field "$AUDIT_DIR/trail.json" "entries[0].context")"
 teardown
 
 setup

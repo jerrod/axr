@@ -9,6 +9,8 @@ import json
 import os
 import glob
 
+from allow_entry import entry_key, entry_pattern
+
 
 def _collect_active(proof_dir: str) -> tuple[list[dict], dict[str, set[str]]]:
     """Read JSONL tracking files. Returns (active_records, matched_keys_per_gate).
@@ -52,23 +54,16 @@ def _load_config(config_file: str) -> dict:
         return {}
 
 
-def _entry_key(entry: dict) -> str:
-    """Canonical identity — all non-reason fields, sorted. Mirrors is_allowed_check.py."""
-    return json.dumps(
-        {k: v for k, v in entry.items() if k != "reason"}, sort_keys=True
-    )
-
-
 def _stale_for_gate(
     gate: str, entries: list[dict], matched: set[str]
 ) -> list[dict]:
     """Return stale entries for a single gate."""
     out: list[dict] = []
     for entry in entries:
-        if _entry_key(entry) in matched:
+        if entry_key(entry) in matched:
             continue
-        # Priority matches _write_tracking() in is_allowed_check.py
-        pattern = entry.get("file", entry.get("pattern", entry.get("type", "")))
+        # Canonical helper covers all schema keys (file/pattern/branch/type).
+        pattern = entry_pattern(entry)
         if pattern:
             out.append(
                 {"gate": gate, "pattern": pattern, "reason": entry.get("reason", "")}
@@ -83,11 +78,10 @@ def _find_stale(
     cfg = _load_config(config_file)
     stale: list[dict] = []
     for gate, entries in cfg.get("allow", {}).items():
-        if gate not in matched_keys_per_gate:
-            continue
-        stale.extend(
-            _stale_for_gate(gate, entries, matched_keys_per_gate[gate])
-        )
+        # Gates with no tracking file matched nothing — treat as empty set
+        # so every allow entry is checked for staleness.
+        matched = matched_keys_per_gate.get(gate, set())
+        stale.extend(_stale_for_gate(gate, entries, matched))
     return stale
 
 
@@ -103,9 +97,10 @@ def _print_table(title: str, description: str, rows: list[dict]) -> None:
     print("| Gate | Pattern | Reason |")
     print("|------|---------|--------|")
     for rec in rows:
+        gate = str(rec.get("gate", "unknown")).replace("|", "\\|")
         pattern = str(rec.get("pattern", "")).replace("|", "\\|")
         reason = str(rec.get("reason", "")).replace("|", "\\|")
-        print(f'| {rec["gate"]} | `{pattern}` | {reason} |')
+        print(f'| {gate} | `{pattern}` | {reason} |')
 
 
 def _resolve_config_file() -> str:

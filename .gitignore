@@ -9,7 +9,7 @@
 .idea/
 *.swp
 
-# Claude Code / rq
+# Claude Code / sdlc
 .quality/
 .claude/local/
 

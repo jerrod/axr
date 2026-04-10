@@ -9,16 +9,26 @@ Output: JSON array of failures, max 50 entries:
   [{"test": "name", "file": "path", "line": 42, "message": "expected X got Y"}]
 
 Exit code: 0 if parsing succeeded (even if failures found), 1 if parse error.
+
+XML safety: if defusedxml is available, it is preferred for JUnit parsing
+because stdlib xml.etree.ElementTree does not protect against billion-laughs
+entity expansion. A MAX_XML_BYTES file-size cap is enforced regardless, as a
+belt-and-suspenders defense when defusedxml is not installed.
 """
 
 import json
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
+
+try:
+    import defusedxml.ElementTree as ET
+except ImportError:
+    import xml.etree.ElementTree as ET
 
 
 MAX_FAILURES = 50
 MAX_MESSAGE_LENGTH = 500
+MAX_XML_BYTES = 10 * 1024 * 1024  # 10 MB cap on JUnit XML inputs
 
 
 def truncate(text, max_length=MAX_MESSAGE_LENGTH):
@@ -82,14 +92,12 @@ def parse_mocha(raw_output):
 
     for test in data.get("failures", []):
         err = test.get("err", {})
-        failures.append(
-            {
-                "test": test.get("fullTitle", "unknown"),
-                "file": test.get("file", ""),
-                "line": None,
-                "message": truncate(err.get("message", "")),
-            }
-        )
+        failures.append({
+            "test": test.get("fullTitle", "unknown"),
+            "file": test.get("file", ""),
+            "line": None,
+            "message": truncate(err.get("message", "")),
+        })
         if len(failures) >= MAX_FAILURES:
             break
     return failures
@@ -123,15 +131,12 @@ def _collect_go_failures(failed_tests):
     for info in failed_tests.values():
         if not info.get("failed"):
             continue
-        output_text = "".join(info["output"])
-        failures.append(
-            {
-                "test": f"{info['package']}/{info['test']}",
-                "file": info["package"],
-                "line": None,
-                "message": truncate(output_text),
-            }
-        )
+        failures.append({
+            "test": f"{info['package']}/{info['test']}",
+            "file": info["package"],
+            "line": None,
+            "message": truncate("".join(info["output"])),
+        })
         if len(failures) >= MAX_FAILURES:
             break
     return failures
@@ -166,14 +171,12 @@ def parse_rspec_json(raw_output):
         if example.get("status") != "failed":
             continue
         exception = example.get("exception", {})
-        failures.append(
-            {
-                "test": example.get("full_description", "unknown"),
-                "file": example.get("file_path", ""),
-                "line": example.get("line_number"),
-                "message": truncate(exception.get("message", "")),
-            }
-        )
+        failures.append({
+            "test": example.get("full_description", "unknown"),
+            "file": example.get("file_path", ""),
+            "line": example.get("line_number"),
+            "message": truncate(exception.get("message", "")),
+        })
         if len(failures) >= MAX_FAILURES:
             break
     return failures
@@ -202,11 +205,13 @@ def _build_junit_failure(tc, element):
 
 
 def parse_junit_xml(report_path):
-    """Parse JUnit XML report (pytest --junitxml, gradle, maven)."""
+    """Parse JUnit XML report. Returns None for missing/oversized/malformed/refused."""
     failures = []
     try:
+        if Path(report_path).stat().st_size > MAX_XML_BYTES:
+            return None
         tree = ET.parse(report_path)
-    except (ET.ParseError, FileNotFoundError):
+    except (ET.ParseError, FileNotFoundError, OSError, ValueError):
         return None
     # Handle both <testsuites><testsuite>... and bare <testsuite>...
     for tc in tree.getroot().iter("testcase"):
@@ -219,21 +224,16 @@ def parse_junit_xml(report_path):
     return failures
 
 
+JUNIT_SEARCH_PATHS = (
+    "test-results.xml", "junit.xml", "report.xml",
+    "build/test-results/**/*.xml", "target/surefire-reports/*.xml",
+    "target/failsafe-reports/*.xml", "build/reports/tests/**/*.xml",
+)
+
+
 def find_junit_reports():
     """Search for JUnit XML reports in common locations."""
-    search_paths = [
-        "test-results.xml",
-        "junit.xml",
-        "report.xml",
-        "build/test-results/**/*.xml",
-        "target/surefire-reports/*.xml",
-        "target/failsafe-reports/*.xml",
-        "build/reports/tests/**/*.xml",
-    ]
-    found = []
-    for pattern in search_paths:
-        found.extend(Path(".").glob(pattern))
-    return found
+    return [p for pat in JUNIT_SEARCH_PATHS for p in Path(".").glob(pat)]
 
 
 def _dispatch_runner(runner, raw_output, report_file):

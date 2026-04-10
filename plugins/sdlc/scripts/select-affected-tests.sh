@@ -20,11 +20,19 @@ detect_testmon() {
   fi
 }
 
+# Hash stdin via md5sum (Linux), md5 -q (macOS), or openssl (portable fallback).
+# Emits a bare hex digest with no filename or "MD5 (...) =" prefix.
+_hash_stdin() {
+  md5sum 2>/dev/null || md5 -q 2>/dev/null || openssl dgst -md5 -hex 2>/dev/null
+}
+
 # Compute fingerprint from git index (source/test files only)
 compute_fingerprint() {
   local fp
-  fp=$(git ls-files -s -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.go' '*.rs' '*.rb' '*.java' '*.kt' 2>/dev/null |
-    md5sum 2>/dev/null || git ls-files -s -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.go' '*.rs' '*.rb' '*.java' '*.kt' 2>/dev/null | md5)
+  fp=$(git ls-files -s -- '*.py' '*.ts' '*.tsx' '*.js' '*.jsx' '*.go' '*.rs' '*.rb' '*.java' '*.kt' 2>/dev/null | _hash_stdin)
+  # Strip any "MD5(stdin)= " or "(stdin)= " prefix that openssl/md5 may emit,
+  # then take the first whitespace-separated token (the bare digest).
+  fp=${fp##*= }
   echo "${fp%% *}"
 }
 
@@ -32,8 +40,8 @@ compute_fingerprint() {
 compute_subproject_fingerprint() {
   local dir="$1"
   local fp
-  fp=$(git ls-files -s -- "$dir"/'*.py' "$dir"/'*.ts' "$dir"/'*.tsx' "$dir"/'*.js' "$dir"/'*.jsx' "$dir"/'*.go' "$dir"/'*.rs' "$dir"/'*.rb' "$dir"/'*.java' "$dir"/'*.kt' 2>/dev/null |
-    md5sum 2>/dev/null || git ls-files -s -- "$dir"/'*.py' "$dir"/'*.ts' "$dir"/'*.tsx' "$dir"/'*.js' "$dir"/'*.jsx' "$dir"/'*.go' "$dir"/'*.rs' "$dir"/'*.rb' "$dir"/'*.java' "$dir"/'*.kt' 2>/dev/null | md5)
+  fp=$(git ls-files -s -- "$dir"/'*.py' "$dir"/'*.ts' "$dir"/'*.tsx' "$dir"/'*.js' "$dir"/'*.jsx' "$dir"/'*.go' "$dir"/'*.rs' "$dir"/'*.rb' "$dir"/'*.java' "$dir"/'*.kt' 2>/dev/null | _hash_stdin)
+  fp=${fp##*= }
   echo "${fp%% *}"
 }
 
@@ -108,6 +116,30 @@ select_affected_tests() {
   printf '%s\n' "$paired_tests" "$changed_tests" "$affected_tests" | sort -u | grep -v '^$' || true
 }
 
+# Run a test command in argv form. Output captured to TEST_OUTPUT_FILE,
+# tail kept in TEST_OUTPUT, exit code in TEST_EXIT. Module-level (bash does not
+# scope nested function definitions — they leak to global on first call).
+_run_test_cmd() {
+  TESTS_RAN=true
+  "$@" >"$TEST_OUTPUT_FILE" 2>&1 || TEST_EXIT=$?
+  # Only keep last 200 lines to avoid shell ARG_MAX on large suites
+  TEST_OUTPUT=$(tail -200 "$TEST_OUTPUT_FILE")
+}
+
+# Run a test command via `eval` so a single TEST_CMD string can carry both a
+# `cd` and the test invocation.
+#
+# SECURITY INVARIANT — DO NOT pass arbitrary user input here. The argument
+# MUST be of the form `cd <printf-%q-quoted-path> && <known test runner>`,
+# constructed by detect-test-runner.sh using `printf '%q'`. Any other source
+# (env var, plan file, prompt, etc.) is unsafe — switch to _run_test_cmd
+# (argv form) before adding new callers.
+_run_test_cmd_eval() {
+  TESTS_RAN=true
+  eval "$1" >"$TEST_OUTPUT_FILE" 2>&1 || TEST_EXIT=$?
+  TEST_OUTPUT=$(tail -200 "$TEST_OUTPUT_FILE")
+}
+
 # Run tests with appropriate mode
 # Output is written to a temp file to avoid shell variable size limits
 # (bin/test can produce hundreds of KB of output which exceeds ARG_MAX)
@@ -123,19 +155,6 @@ run_selected_tests() {
   TEST_OUTPUT=""
   TEST_EXIT=0
   TESTS_RAN=false
-
-  _run_test_cmd() {
-    TESTS_RAN=true
-    "$@" >"$TEST_OUTPUT_FILE" 2>&1 || TEST_EXIT=$?
-    # Only keep last 200 lines to avoid shell ARG_MAX on large suites
-    TEST_OUTPUT=$(tail -200 "$TEST_OUTPUT_FILE")
-  }
-
-  _run_test_cmd_eval() {
-    TESTS_RAN=true
-    eval "$1" >"$TEST_OUTPUT_FILE" 2>&1 || TEST_EXIT=$?
-    TEST_OUTPUT=$(tail -200 "$TEST_OUTPUT_FILE")
-  }
 
   if [ "$test_runner" = "vitest" ]; then
     if [ -x "bin/test" ]; then

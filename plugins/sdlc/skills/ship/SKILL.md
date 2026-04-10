@@ -13,7 +13,7 @@ Log skill invocation:
 
 Use `$PLUGIN_DIR` (detected in Step 2 via `find . -name "run-gates.sh"`):
 
-- **Start:** `bash "$PLUGIN_DIR/../scripts/audit-trail.sh" log ship sdlc:ship started --context="$ARGUMENTS"`
+- **Start:** `bash "$PLUGIN_DIR/../scripts/audit-trail.sh" log ship sdlc:ship started --context "$ARGUMENTS"`
 - **End:** `bash "$PLUGIN_DIR/../scripts/audit-trail.sh" log ship sdlc:ship completed --context="<summary of what was done>"`
 
 ## Guiding Principle

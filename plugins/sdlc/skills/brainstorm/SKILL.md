@@ -12,12 +12,19 @@ Log skill invocation:
 ```bash
 AUDIT_SCRIPT=$(find . -name "audit-trail.sh" -path "*/sdlc/*" 2>/dev/null | head -1)
 [ -z "$AUDIT_SCRIPT" ] && AUDIT_SCRIPT=$(find "$HOME/.claude" -name "audit-trail.sh" -path "*/sdlc/*" 2>/dev/null | sort -V | tail -1)
-[[ "$AUDIT_SCRIPT" != "$HOME/.claude/"* && "$AUDIT_SCRIPT" != "./"* ]] && AUDIT_SCRIPT=""
-SAFE_ARGS="${ARGUMENTS//\"/\\\"}"
+AUDIT_SCRIPT=$(realpath "$AUDIT_SCRIPT" 2>/dev/null || echo "")
+HOME_REAL=$(realpath "$HOME/.claude" 2>/dev/null || echo "")
+PWD_REAL=$(realpath . 2>/dev/null || echo "")
+case "$AUDIT_SCRIPT" in
+  "$HOME_REAL"/*|"$PWD_REAL"/*) : ;;
+  *) AUDIT_SCRIPT="" ;;
+esac
 ```
 
-- **Start:** `bash "$AUDIT_SCRIPT" log design sdlc:brainstorm started --context="$SAFE_ARGS"`
-- **End:** `bash "$AUDIT_SCRIPT" log design sdlc:brainstorm completed --context="<summary>"`
+- **Start:** `bash "$AUDIT_SCRIPT" log design sdlc:brainstorm started --context "$ARGUMENTS"`
+- **End:** `bash "$AUDIT_SCRIPT" log design sdlc:brainstorm completed --context "<summary>"`
+
+## Overview
 
 Help turn ideas into fully formed designs and specs through collaborative dialogue with an Agent Team.
 

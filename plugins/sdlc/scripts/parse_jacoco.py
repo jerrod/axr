@@ -28,7 +28,7 @@ def _extract_line_pct(sourcefile_el):
             covered = int(counter.get("covered", 0))
             missed = int(counter.get("missed", 0))
             total = covered + missed
-            return round(covered / total * 100, 1) if total > 0 else 0
+            return round(covered / total * 100, 1) if total > 0 else 0.0
     return None
 
 

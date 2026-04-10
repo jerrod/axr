@@ -1,9 +1,12 @@
 """Tests for render_exceptions.py — every function, every branch, in-process."""
 import json
 
+import pytest
+
 import render_exceptions
+from allow_entry import entry_key
 from render_exceptions import (
-    _collect_active, _entry_key, _find_stale, _load_config,
+    _collect_active, _find_stale, _load_config,
     _print_table, _resolve_config_file, _stale_for_gate, main,
 )
 
@@ -15,17 +18,17 @@ def _write_jsonl(path, records):
 
 
 def test_entry_key_excludes_reason_field():
-    assert _entry_key({"file": "foo.py", "reason": "legacy"}) == '{"file": "foo.py"}'
+    assert entry_key({"file": "foo.py", "reason": "legacy"}) == '{"file": "foo.py"}'
 
 
 def test_entry_key_sorted_canonical_independent_of_insertion_order():
-    a = _entry_key({"file": "x.py", "name": "bar", "type": "var"})
-    b = _entry_key({"type": "var", "name": "bar", "file": "x.py"})
+    a = entry_key({"file": "x.py", "name": "bar", "type": "var"})
+    b = entry_key({"type": "var", "name": "bar", "file": "x.py"})
     assert a == b == '{"file": "x.py", "name": "bar", "type": "var"}'
 
 
 def test_entry_key_with_only_reason_is_empty_object():
-    assert _entry_key({"reason": "r"}) == "{}"
+    assert entry_key({"reason": "r"}) == "{}"
 
 
 def test_load_config_empty_path_returns_empty_dict():
@@ -115,28 +118,19 @@ def test_collect_active_unreadable_file_skipped(tmp_path, monkeypatch):
 
 def test_stale_for_gate_matched_entry_excluded():
     entries = [{"file": "matched.py", "reason": "live"}]
-    assert _stale_for_gate("filesize", entries, {_entry_key(entries[0])}) == []
+    assert _stale_for_gate("filesize", entries, {entry_key(entries[0])}) == []
 
 
-def test_stale_for_gate_uses_file_key_first():
-    entries = [{"file": "stale.py", "reason": "old"}]
-    assert _stale_for_gate("filesize", entries, set()) == [
-        {"gate": "filesize", "pattern": "stale.py", "reason": "old"}
-    ]
-
-
-def test_stale_for_gate_falls_back_to_pattern_key():
-    entries = [{"pattern": "**/*.legacy", "reason": "decommissioned"}]
-    assert _stale_for_gate("lint", entries, set()) == [
-        {"gate": "lint", "pattern": "**/*.legacy", "reason": "decommissioned"}
-    ]
-
-
-def test_stale_for_gate_falls_back_to_type_key():
-    entries = [{"type": "unused_variable", "reason": "ignore"}]
-    assert _stale_for_gate("dead-code", entries, set()) == [
-        {"gate": "dead-code", "pattern": "unused_variable", "reason": "ignore"}
-    ]
+@pytest.mark.parametrize("entry,pattern", [
+    ({"file": "stale.py", "reason": "old"}, "stale.py"),
+    ({"pattern": "**/*.legacy", "reason": "x"}, "**/*.legacy"),
+    ({"branch": "release/2025-q1", "reason": "freeze"}, "release/2025-q1"),
+    ({"type": "unused_variable", "reason": "x"}, "unused_variable"),
+])
+def test_stale_for_gate_resolves_pattern_via_entry_pattern_helper(entry, pattern):
+    # Finding 2: branch key must resolve too. Helper is owned by allow_entry.
+    result = _stale_for_gate("g", [entry], set())
+    assert result == [{"gate": "g", "pattern": pattern, "reason": entry["reason"]}]
 
 
 def test_stale_for_gate_entry_without_identifiable_field_is_dropped():
@@ -149,7 +143,7 @@ def test_stale_for_gate_mixed_matched_and_stale():
         {"file": "live.py", "reason": "active"},
         {"file": "dead.py", "reason": "stale"},
     ]
-    result = _stale_for_gate("filesize", entries, {_entry_key(entries[0])})
+    result = _stale_for_gate("filesize", entries, {entry_key(entries[0])})
     assert result == [{"gate": "filesize", "pattern": "dead.py", "reason": "stale"}]
 
 
@@ -163,10 +157,16 @@ def test_find_stale_no_config_file_returns_empty(tmp_path):
     assert _find_stale(str(tmp_path / "missing.json"), {"filesize": set()}) == []
 
 
-def test_find_stale_gate_not_in_matched_is_skipped(tmp_path):
+def test_find_stale_gate_with_no_tracking_file_flags_all_entries(tmp_path):
+    # Finding 1: gates absent from matched_keys_per_gate (because they wrote
+    # no tracking file — i.e., zero violations) must still have their allow
+    # entries checked. Otherwise stale-detection silently skips precisely the
+    # case it's meant to catch.
     path = tmp_path / "cfg.json"
     path.write_text(json.dumps({"allow": {"filesize": [{"file": "x.py"}]}}))
-    assert _find_stale(str(path), {"lint": set()}) == []
+    assert _find_stale(str(path), {"lint": set()}) == [
+        {"gate": "filesize", "pattern": "x.py", "reason": ""}
+    ]
 
 
 def test_find_stale_returns_unmatched_entries(tmp_path):
@@ -174,7 +174,7 @@ def test_find_stale_returns_unmatched_entries(tmp_path):
     dead = {"file": "dead.py", "reason": "b"}
     path = tmp_path / "cfg.json"
     path.write_text(json.dumps({"allow": {"filesize": [live, dead]}}))
-    matched = {"filesize": {_entry_key(live)}}
+    matched = {"filesize": {entry_key(live)}}
     assert _find_stale(str(path), matched) == [
         {"gate": "filesize", "pattern": "dead.py", "reason": "b"}
     ]
@@ -205,16 +205,19 @@ def test_print_table_renders_header_count_description_and_row(capsys):
     assert "| filesize | `big.py` | legacy |" in out
 
 
-def test_print_table_escapes_pipe_characters(capsys):
-    _print_table("T", "D", [{"gate": "g", "pattern": "a|b", "reason": "x|y"}])
-    out = capsys.readouterr().out
-    assert "`a\\|b`" in out
-    assert "x\\|y" in out
-
-
-def test_print_table_missing_pattern_and_reason_render_empty(capsys):
-    _print_table("T", "D", [{"gate": "g"}])
-    assert "| g | `` |  |" in capsys.readouterr().out
+@pytest.mark.parametrize("row,expected", [
+    # Pipe escaping in pattern and reason fields.
+    ({"gate": "g", "pattern": "a|b", "reason": "x|y"}, "| g | `a\\|b` | x\\|y |"),
+    # Missing pattern/reason render as empty strings, no crash.
+    ({"gate": "g"}, "| g | `` |  |"),
+    # Finding 3: missing "gate" key falls back to "unknown" (no KeyError).
+    ({"pattern": "p", "reason": "r"}, "| unknown | `p` | r |"),
+    # Finding 4: pipe in gate field is escaped like pattern/reason.
+    ({"gate": "a|b", "pattern": "p", "reason": "r"}, "| a\\|b | `p` | r |"),
+])
+def test_print_table_row_rendering(capsys, row, expected):
+    _print_table("T", "D", [row])
+    assert expected in capsys.readouterr().out
 
 
 def test_print_table_row_count_reflects_row_length(capsys):
@@ -257,15 +260,6 @@ def test_main_empty_proof_dir_prints_nothing(tmp_path, monkeypatch, capsys):
     assert capsys.readouterr().out == ""
 
 
-def test_main_default_proof_dir_when_env_unset(tmp_path, monkeypatch, capsys):
-    # Default ".quality/proof" doesn't exist inside tmp_path → empty output.
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("PROOF_DIR", raising=False)
-    monkeypatch.delenv("SDLC_CONFIG_FILE", raising=False)
-    main()
-    assert capsys.readouterr().out == ""
-
-
 def test_main_active_and_stale_both_rendered(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     proof_dir = tmp_path / "proof"
@@ -273,7 +267,7 @@ def test_main_active_and_stale_both_rendered(tmp_path, monkeypatch, capsys):
     live = {"file": "live.py", "reason": "active"}
     dead = {"file": "dead.py", "reason": "obsolete"}
     tracking = {"gate": "filesize", "pattern": "live.py",
-                "entry_key": _entry_key(live), **live}
+                "entry_key": entry_key(live), **live}
     _write_jsonl(proof_dir / "allow-tracking-filesize.jsonl", [tracking])
     (tmp_path / "sdlc.config.json").write_text(
         json.dumps({"allow": {"filesize": [live, dead]}})

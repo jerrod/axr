@@ -14,7 +14,7 @@ AUDIT_SCRIPT=$(find . -name "audit-trail.sh" -path "*/sdlc/*" 2>/dev/null | head
 [ -z "$AUDIT_SCRIPT" ] && AUDIT_SCRIPT=$(find "$HOME/.claude" -name "audit-trail.sh" -path "*/sdlc/*" 2>/dev/null | sort -V | tail -1)
 ```
 
-- **Start:** `bash "$AUDIT_SCRIPT" log build sdlc:test-fixer started --context="$ARGUMENTS"`
+- **Start:** `bash "$AUDIT_SCRIPT" log build sdlc:test-fixer started --context "$ARGUMENTS"`
 - **End:** `bash "$AUDIT_SCRIPT" log build sdlc:test-fixer completed --context="<summary>"`
 
 Find and fix ALL testing antipatterns in the current codebase. Framework-agnostic — covers Python (pytest, unittest), JavaScript/TypeScript (vitest, jest, mocha), Java (JUnit, Mockito, TestNG), Kotlin (JUnit, MockK), Go (testing, testify), and Ruby (RSpec, Minitest).

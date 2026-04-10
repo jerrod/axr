@@ -13,16 +13,10 @@ mkdir -p "${PROOF_DIR:-.quality/proof}" && : >"${PROOF_DIR:-.quality/proof}/allo
 # Trap: always produce proof JSON, even on unexpected crash
 _write_crash_proof() {
   local exit_code=$?
-  cat >"$PROOF_DIR/lint.json" <<CRASHJSON
-{
-  "gate": "lint",
-  "sha": "$(git rev-parse HEAD 2>/dev/null || echo 'unknown')",
-  "status": "fail",
-  "error": "script crashed with exit code $exit_code",
-  "failures": [],
-  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-}
-CRASHJSON
+  local sha ts
+  sha=$(git rev-parse HEAD 2>/dev/null || echo 'unknown')
+  ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  printf '{"gate":"lint","sha":"%s","status":"fail","error":"script crashed with exit code %s","failures":[],"timestamp":"%s"}\n' "$sha" "$exit_code" "$ts" >"$PROOF_DIR/lint.json"
   cat "$PROOF_DIR/lint.json"
   echo "GATE FAILED: script crashed (exit $exit_code) — run with bash -x to debug" >&2
 }
@@ -32,6 +26,9 @@ RESULTS=()
 GATE_STATUS="pass"
 CHECKS_RAN=0
 
+# SECURITY: run_check evals $cmd. Callers MUST pass a static string literal
+# — never interpolate paths/filenames/git output. For dynamic dirs, pushd/popd
+# around a static command. For dynamic file lists, use run_check_files.
 run_check() {
   local name="$1"
   local cmd="$2"
@@ -210,34 +207,35 @@ if [ $BIN_HANDLED_LINT -eq 0 ] || [ $BIN_HANDLED_TYPECHECK -eq 0 ]; then
     sub_name=$(basename "$sub_root")
     pushd "$sub_root" >/dev/null 2>&1 || continue
 
+    # pushd above already cd'd into $sub_root; do NOT interpolate paths into run_check (eval injection).
     if [ $BIN_HANDLED_TYPECHECK -eq 0 ]; then
       if [ -f "tsconfig.json" ]; then
-        run_check "typecheck:$sub_name" "cd '$sub_root' && npx tsc --noEmit 2>&1"
+        run_check "typecheck:$sub_name" "npx tsc --noEmit 2>&1"
       fi
     fi
 
     if [ $BIN_HANDLED_LINT -eq 0 ]; then
       if [ -f "package.json" ]; then
         if grep -q '"lint"' package.json 2>/dev/null; then
-          run_check "lint:$sub_name" "cd '$sub_root' && npm run lint -- --max-warnings=0 2>&1"
+          run_check "lint:$sub_name" "npm run lint -- --max-warnings=0 2>&1"
         fi
         if grep -q '"biome"' package.json 2>/dev/null; then
-          run_check "biome:$sub_name" "cd '$sub_root' && npx biome check . 2>&1"
+          run_check "biome:$sub_name" "npx biome check . 2>&1"
         fi
       fi
       if [ -f "pyproject.toml" ] || [ -f "setup.cfg" ]; then
         if command -v ruff &>/dev/null; then
           ruff check --fix . 2>/dev/null || true
           ruff format . 2>/dev/null || true
-          run_check "ruff-lint:$sub_name" "cd '$sub_root' && ruff check . 2>&1"
+          run_check "ruff-lint:$sub_name" "ruff check . 2>&1"
         fi
       fi
       if [ -f "Gemfile" ] && bundle exec rubocop --version &>/dev/null 2>&1; then
         bundle exec rubocop --autocorrect 2>/dev/null || true
-        run_check "rubocop:$sub_name" "cd '$sub_root' && bundle exec rubocop --format simple 2>&1"
+        run_check "rubocop:$sub_name" "bundle exec rubocop --format simple 2>&1"
       elif ls ./*.rb &>/dev/null 2>&1 && command -v rubocop &>/dev/null; then
         rubocop --autocorrect 2>/dev/null || true
-        run_check "rubocop:$sub_name" "cd '$sub_root' && rubocop --format simple 2>&1"
+        run_check "rubocop:$sub_name" "rubocop --format simple 2>&1"
       fi
     fi
 
@@ -246,13 +244,19 @@ if [ $BIN_HANDLED_LINT -eq 0 ] || [ $BIN_HANDLED_TYPECHECK -eq 0 ]; then
 fi
 
 # Check for lint suppressions in changed code files (skip docs/config/shell to avoid false positives)
-FILTERED_SUPPRESSIONS=""; CURRENT_FILE=""; IS_CODE=0
-CODE_EXT_RE='\.(py|ts|tsx|js|jsx|rb|go|java|kt|rs|c|cpp|cc|h|hpp|m|mm|swift|scala)$'
+FILTERED_SUPPRESSIONS=""
+CURRENT_FILE=""
+IS_CODE=0
+CODE_EXT_RE='\.(py|ts|tsx|js|jsx|vue|svelte|rb|go|java|kt|rs|c|cpp|cc|h|hpp|m|mm|swift|scala)$'
+# Lint-suppression annotations that should never appear in source code
+SUPPRESSION_RE='@Suppress\(|@SuppressWarnings\(|eslint-disable|@ts-ignore'
+SUPPRESSION_RE+='|@ts-expect-error|@ts-nocheck|noqa|nolint|#nosec'
+SUPPRESSION_RE+='|rubocop:disable|NOLINT'
 while IFS= read -r line; do
   if [[ "$line" =~ ^\+\+\+\ b/(.*) ]]; then
     CURRENT_FILE="${BASH_REMATCH[1]}"
     if [[ "$CURRENT_FILE" =~ $CODE_EXT_RE ]]; then IS_CODE=1; else IS_CODE=0; fi
-  elif [[ "$IS_CODE" -eq 1 && "$line" =~ ^\+.*(@Suppress\(|@SuppressWarnings\(|eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|noqa|nolint|\#nosec|rubocop:disable|NOLINT) ]]; then
+  elif [[ "$IS_CODE" -eq 1 && "$line" =~ ^\+.*($SUPPRESSION_RE) ]]; then
     is_allowed "lint" "file=$CURRENT_FILE" || FILTERED_SUPPRESSIONS+="$line"$'\n'
   fi
 done < <(git diff "$SDLC_DEFAULT_BRANCH"...HEAD 2>/dev/null || true)
@@ -277,16 +281,9 @@ if [ ${#RESULTS[@]} -gt 0 ]; then
   RESULTS_JSON=$(printf '%s,' "${RESULTS[@]}" | sed 's/,$//')
 fi
 
-cat >"$PROOF_DIR/lint.json" <<ENDJSON
-{
-  "gate": "lint",
-  "sha": "$(git rev-parse HEAD)",
-  "status": "$GATE_STATUS",
-  "error": null,
-  "failures": [${RESULTS_JSON}],
-  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-}
-ENDJSON
+_sha=$(git rev-parse HEAD)
+_ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+printf '{"gate":"lint","sha":"%s","status":"%s","error":null,"failures":[%s],"timestamp":"%s"}\n' "$_sha" "$GATE_STATUS" "$RESULTS_JSON" "$_ts" >"$PROOF_DIR/lint.json"
 
 cat "$PROOF_DIR/lint.json"
 

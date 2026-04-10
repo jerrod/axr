@@ -25,7 +25,7 @@ Log skill invocation:
 
 Use `$PLUGIN_DIR` (already detected in Step 1 via `find . -name "run-gates.sh"`):
 
-- **Start:** `bash "$PLUGIN_DIR/../scripts/audit-trail.sh" log build sdlc:build started --context="$ARGUMENTS"`
+- **Start:** `bash "$PLUGIN_DIR/../scripts/audit-trail.sh" log build sdlc:build started --context "$ARGUMENTS"`
 - **End:** `bash "$PLUGIN_DIR/../scripts/audit-trail.sh" log build sdlc:build completed --context="<summary>"`
 
 ## Guiding Principle

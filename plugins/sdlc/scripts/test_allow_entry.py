@@ -31,3 +31,17 @@ def test_file_wins_over_pattern_when_both_present():
 def test_empty_file_falls_through_to_pattern():
     entry = {"file": "", "pattern": "x", "reason": "r"}
     assert allow_entry.entry_pattern(entry) == "x"
+
+
+def test_entry_key_excludes_reason():
+    assert allow_entry.entry_key({"file": "a.py", "reason": "legacy"}) == '{"file": "a.py"}'
+
+
+def test_entry_key_sorted_independent_of_insertion_order():
+    a = allow_entry.entry_key({"file": "x.py", "name": "n", "type": "var"})
+    b = allow_entry.entry_key({"type": "var", "name": "n", "file": "x.py"})
+    assert a == b == '{"file": "x.py", "name": "n", "type": "var"}'
+
+
+def test_entry_key_only_reason_is_empty_object():
+    assert allow_entry.entry_key({"reason": "r"}) == "{}"
