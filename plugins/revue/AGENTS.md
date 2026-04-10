@@ -4,7 +4,7 @@ Four specialized reviewers analyze pull request diffs: architecture, security, c
 
 ## Installation
 
-Install via the Codex plugin browser or add this repo as a plugin source.
+Point Codex at the repo-root `codex/` directory of `jerrod/agent-plugins`. That directory is a self-contained Codex marketplace (`.agents/plugins/marketplace.json` + `plugins/revue/`); the plugin will appear in the plugin browser from there.
 
 ## Available Skills
 

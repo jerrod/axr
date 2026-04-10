@@ -4,7 +4,7 @@ Scores repositories against a 100-point rubric across 12 dimensions with determi
 
 ## Installation
 
-Install via the Codex plugin browser or add this repo as a plugin source.
+Point Codex at the repo-root `codex/` directory of `jerrod/agent-plugins`. That directory is a self-contained Codex marketplace (`.agents/plugins/marketplace.json` + `plugins/axr/`); the plugin will appear in the plugin browser from there.
 
 ## Available Skills
 
