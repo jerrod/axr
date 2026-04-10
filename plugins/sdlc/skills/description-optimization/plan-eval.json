@@ -1,0 +1,20 @@
+[
+  {"query": "adopt this plan into the sdlc proof system", "should_trigger": true},
+  {"query": "I just exited plan mode, hook the plan up to sdlc", "should_trigger": true},
+  {"query": "find the plan for this branch and verify it", "should_trigger": true},
+  {"query": "set up the plan so build can use it with proof-anchored checkboxes", "should_trigger": true},
+  {"query": "I have a plan at ~/.claude/plans/ — adopt it for this branch", "should_trigger": true},
+  {"query": "convert my Claude plan into an sdlc plan with checkboxes", "should_trigger": true},
+  {"query": "resume the plan for this feature branch", "should_trigger": true},
+  {"query": "where's the plan? pair-build can't find it", "should_trigger": true},
+  {"query": "write a detailed implementation plan from the spec", "should_trigger": false},
+  {"query": "build the plan items", "should_trigger": false},
+  {"query": "brainstorm the feature", "should_trigger": false},
+  {"query": "create a plan from scratch for this feature", "should_trigger": false},
+  {"query": "break this spec into implementation tasks with code snippets", "should_trigger": false},
+  {"query": "what's the project status?", "should_trigger": false},
+  {"query": "review the code", "should_trigger": false},
+  {"query": "ship the PR", "should_trigger": false},
+  {"query": "I want to design a new feature before planning", "should_trigger": false},
+  {"query": "write the tests first, then implement", "should_trigger": false}
+]

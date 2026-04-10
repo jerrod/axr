@@ -1,17 +1,17 @@
 # CLAUDE.md — agent-plugins marketplace
 
-This repo is a Claude Code plugin marketplace named `agent-plugins`. It currently hosts `axr`, `revue`, and `therapist`, with room for more plugins.
+This repo is a Claude Code plugin marketplace named `agent-plugins`. It currently hosts `axr`, `revue`, `therapist`, and `sdlc`, with room for more plugins.
 
 ## Layout
 
 - `.claude-plugin/marketplace.json` — marketplace manifest listing all plugins
-- `plugins/<name>/` — each plugin self-contained (manifest, commands, scripts, docs, README, CLAUDE.md)
+- `plugins/<name>/` — each plugin self-contained (manifest, commands/skills/agents, scripts, docs, README, CLAUDE.md)
 - `bin/` — marketplace-level gate scripts that validate every plugin
-- `rq.config.json` — rq gate thresholds
+- `sdlc.config.json` — gate thresholds consumed by the sdlc plugin
 
 ## Workflow
 
-All work uses the rq plugin: `/rq:writing-plans` → `/rq:pair-build` → `/rq:review` → `/rq:ship`. Never commit directly to main. Every change goes on a feature branch with a plan.
+All work uses the sdlc plugin (a hard fork of upstream `rq` at v1.29.8): `/sdlc:writing-plans` → `/sdlc:pair-build` → `/sdlc:review` → `/sdlc:ship`. Never commit directly to main. Every change goes on a feature branch with a plan.
 
 ## Gates
 

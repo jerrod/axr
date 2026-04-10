@@ -1,0 +1,20 @@
+[
+  {"query": "fix the test quality — too many mocks pretending to be real tests", "should_trigger": true},
+  {"query": "the test-quality gate keeps failing, fix the disguised mocks", "should_trigger": true},
+  {"query": "replace the mocked tests with behavioral tests that actually test real code", "should_trigger": true},
+  {"query": "our tests are all faking — spyOn().mockImplementation everywhere, fix it", "should_trigger": true},
+  {"query": "audit the test suite for antipatterns and fix them", "should_trigger": true},
+  {"query": "if I delete the source file the tests still pass — that's broken, fix it", "should_trigger": true},
+  {"query": "fix test quality across the Python and TypeScript code", "should_trigger": true},
+  {"query": "the tests mock everything internally, they don't test real behavior", "should_trigger": true},
+  {"query": "my tests are slow, speed them up", "should_trigger": false},
+  {"query": "write tests for the new auth module", "should_trigger": false},
+  {"query": "the tests are failing, fix the bugs", "should_trigger": false},
+  {"query": "review the code for quality issues", "should_trigger": false},
+  {"query": "increase test coverage to 95%", "should_trigger": false},
+  {"query": "fix the flaky test that passes sometimes", "should_trigger": false},
+  {"query": "run the test suite and tell me if it passes", "should_trigger": false},
+  {"query": "add integration tests for the API endpoints", "should_trigger": false},
+  {"query": "audit the codebase performance", "should_trigger": false},
+  {"query": "the tests pass but the code is buggy in production", "should_trigger": false}
+]

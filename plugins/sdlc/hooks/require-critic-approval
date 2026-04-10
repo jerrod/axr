@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# PreToolUse hook for Bash(git commit*) commands.
+# Blocks commits unless a critic has reviewed and approved the changes.
+# Checks for .quality/proof/critic.json with verdict "approved".
+#
+# Skips enforcement when:
+#   - No .quality/ directory (not an sdlc-managed project)
+#   - Commit message starts with "chore:", "docs:", "style:", or "test:"
+#     (maintenance commits don't need critic review; fix: and refactor: do)
+
+INPUT=$(cat)
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
+
+# Skip if no .quality directory — not an sdlc-managed project
+if [ ! -d ".quality" ]; then
+  echo '{"decision": "allow"}'
+  exit 0
+fi
+
+# Skip for maintenance commits (chore/docs/style/test only)
+# fix: and refactor: routinely carry behavioral logic — they require critic review.
+#
+# Multi-flag -m handling: `git commit -m "feat: X" -m "chore: Y"` concatenates
+# the messages; the FIRST -m is the subject line. An attacker who can prepend
+# a maintenance prefix to a real feature commit via a second -m flag must not
+# bypass the critic check, so we extract ALL -m values and require EVERY one
+# to match a maintenance prefix (or none at all — message passed via -F, etc.)
+# before granting the bypass. Python handles shlex properly so mixed quoting
+# and escape sequences don't trick the regex.
+ALL_MSGS=$(printf '%s' "$COMMAND" | python3 -c '
+import sys, shlex, re
+cmd = sys.stdin.read()
+try:
+    tokens = shlex.split(cmd, comments=False, posix=True)
+except ValueError:
+    # Unbalanced quotes (heredoc, $()); fall through to critic check
+    sys.exit(0)
+msgs = []
+i = 0
+while i < len(tokens):
+    t = tokens[i]
+    if t == "-m" and i + 1 < len(tokens):
+        msgs.append(tokens[i + 1])
+        i += 2
+    elif t.startswith("-m") and len(t) > 2:
+        msgs.append(t[2:])
+        i += 1
+    else:
+        i += 1
+for m in msgs:
+    print(m)
+' 2>/dev/null)
+
+MAINTENANCE_PREFIXES="chore:|docs:|style:|test:"
+# Grant bypass only when there is at least one -m AND every -m message starts
+# with a maintenance prefix. `grep -c` prints the count to stdout regardless
+# of exit code; swallow the exit code and trust the stdout value.
+if [ -n "$ALL_MSGS" ]; then
+  NON_MAINT=$(echo "$ALL_MSGS" | grep -cvE "^($MAINTENANCE_PREFIXES)"; true)
+  if [ "${NON_MAINT:-1}" = "0" ]; then
+    echo '{"decision": "allow"}'
+    exit 0
+  fi
+fi
+
+# Check for critic approval
+CRITIC_PROOF=".quality/proof/critic.json"
+
+if [ ! -f "$CRITIC_PROOF" ]; then
+  jq -n '{
+    decision: "block",
+    reason: "BLOCKED: No critic review found. Dispatch a critic (sdlc:critic) to review your changes before committing. The critic writes .quality/proof/critic.json when done."
+  }'
+  exit 0
+fi
+
+VERDICT=$(jq -r '.verdict // "unknown"' "$CRITIC_PROOF" 2>/dev/null || echo "unknown")
+
+if [ "$VERDICT" = "approved" ]; then
+  # Consume the approval so it cannot be reused for subsequent commits.
+  # The next commit will require a fresh critic review.
+  rm -f "$CRITIC_PROOF"
+  echo '{"decision": "allow"}'
+  exit 0
+fi
+
+FINDINGS_COUNT=$(jq '.findings | length' "$CRITIC_PROOF" 2>/dev/null || echo "?")
+
+jq -n \
+  --arg count "$FINDINGS_COUNT" \
+  --arg verdict "$VERDICT" \
+  '{
+    decision: "block",
+    reason: ("BLOCKED: Critic verdict is \"" + $verdict + "\" with " + $count + " finding(s). Fix the findings and get critic approval before committing.")
+  }'

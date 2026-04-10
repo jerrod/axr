@@ -1,6 +1,6 @@
 {
   "name": "agent-plugins",
-  "version": "2.0",
+  "version": "2.1",
   "description": "Tools for agent-operated software engineering — readiness scoring, code review, and behavioral correction.",
   "owner": {
     "name": "jerrod"
@@ -16,6 +16,12 @@
       "name": "revue",
       "description": "Enterprise code review by a four-agent team (architect, security, correctness, style) running in parallel. Requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1.",
       "source": "./plugins/revue",
+      "category": "development"
+    },
+    {
+      "name": "sdlc",
+      "description": "Full development lifecycle with executable quality gates — brainstorm, plan, pair-build, review, ship. Every gate is a script, every claim is proven. Hard fork of arqu-co/rq v1.29.8.",
+      "source": "./plugins/sdlc",
       "category": "development"
     },
     {

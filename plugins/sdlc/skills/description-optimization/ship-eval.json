@@ -1,0 +1,20 @@
+[
+  {"query": "ship it — create the PR and get it merged", "should_trigger": true},
+  {"query": "I'm done with the feature, push and open a PR", "should_trigger": true},
+  {"query": "the review is complete, let's create the PR with proof", "should_trigger": true},
+  {"query": "push this branch and open a PR to main", "should_trigger": true},
+  {"query": "we're ready to ship — run final gates, push, open PR, watch CI", "should_trigger": true},
+  {"query": "update the PR description with the latest proof report", "should_trigger": true},
+  {"query": "CI is failing on the PR, fix it and re-push", "should_trigger": true},
+  {"query": "there are review comments on the PR, address them and push", "should_trigger": true},
+  {"query": "review my code on this branch", "should_trigger": false},
+  {"query": "build the next plan item", "should_trigger": false},
+  {"query": "brainstorm the notification feature", "should_trigger": false},
+  {"query": "merge the PR", "should_trigger": false},
+  {"query": "what's the status of this project?", "should_trigger": false},
+  {"query": "run the quality gates", "should_trigger": false},
+  {"query": "write tests for the auth module", "should_trigger": false},
+  {"query": "I'm done building, should I do a review or ship?", "should_trigger": false},
+  {"query": "fix the lint errors", "should_trigger": false},
+  {"query": "deploy this to production", "should_trigger": false}
+]

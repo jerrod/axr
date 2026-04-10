@@ -1,0 +1,20 @@
+[
+  {"query": "review my code before I open the PR", "should_trigger": true},
+  {"query": "can you do a code review on this branch? I want to make sure nothing is broken before we ship", "should_trigger": true},
+  {"query": "check my work on feat/user-auth — I finished implementing but want a second pair of eyes", "should_trigger": true},
+  {"query": "I just pushed 5 commits to this branch, can you go through the diff and find any issues?", "should_trigger": true},
+  {"query": "review the changes since main and flag anything problematic — bugs, naming, test coverage, the works", "should_trigger": true},
+  {"query": "is this code ready to merge? do a thorough review", "should_trigger": true},
+  {"query": "run the quality gates and tell me what's failing", "should_trigger": true},
+  {"query": "I need someone to review the branch before we ship to prod", "should_trigger": true},
+  {"query": "build the user authentication feature from the plan", "should_trigger": false},
+  {"query": "create a PR and push this branch", "should_trigger": false},
+  {"query": "fix the failing test in test_auth.py", "should_trigger": false},
+  {"query": "brainstorm how we should implement the notification system", "should_trigger": false},
+  {"query": "what's the status of this project? what should I work on next?", "should_trigger": false},
+  {"query": "refactor the database module to use connection pooling", "should_trigger": false},
+  {"query": "merge this PR, CI is green", "should_trigger": false},
+  {"query": "run the tests and tell me if they pass", "should_trigger": false},
+  {"query": "audit the performance of the API endpoints — they seem slow", "should_trigger": false},
+  {"query": "check if my test mocks are actually testing real behavior", "should_trigger": false}
+]

@@ -28,6 +28,12 @@ A CBT-adapted intervention framework for sessions where Claude repeatedly violat
 
 See `plugins/therapist/README.md` for details.
 
+### sdlc — Full development lifecycle with executable quality gates
+
+Enforces the brainstorm → plan → pair-build → review → ship workflow with 24 skills, 23 subagents, 8 lifecycle hooks, and executable gates at every checkpoint. File size, coverage, complexity, lint, and test-quality are all script-verified. PR descriptions embed proof artifacts any reviewer can independently re-run. Hard fork of [`arqu-co/rq`](https://github.com/arqu-co/claude-skills/tree/main/plugins/rq) at v1.29.8.
+
+See `plugins/sdlc/README.md` for details.
+
 ## Quickstart
 
 ```bash
@@ -62,4 +68,4 @@ The marketplace is structured as:
 
 Plugins may use any of `commands/`, `skills/`, or `agents/` as their entry point. `scripts/` is optional (agent-team plugins like revue have none).
 
-See `CLAUDE.md` for workflow conventions. All changes go through the rq workflow: plan → build → review → ship.
+See `CLAUDE.md` for workflow conventions. All changes go through the sdlc workflow: brainstorm → plan → pair-build → review → ship.

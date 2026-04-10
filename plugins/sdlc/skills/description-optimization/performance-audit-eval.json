@@ -1,0 +1,20 @@
+[
+  {"query": "the app is slow, can you audit the performance?", "should_trigger": true},
+  {"query": "find N+1 queries and other performance bottlenecks in this codebase", "should_trigger": true},
+  {"query": "audit the API for performance antipatterns", "should_trigger": true},
+  {"query": "check for missing caching, slow queries, and inefficient code", "should_trigger": true},
+  {"query": "performance review — identify bottlenecks across the backend", "should_trigger": true},
+  {"query": "our endpoints are taking 3+ seconds, figure out why", "should_trigger": true},
+  {"query": "run a performance audit on this Rails/Django/Express app", "should_trigger": true},
+  {"query": "find antipatterns and optimization opportunities", "should_trigger": true},
+  {"query": "my tests are slow, speed them up", "should_trigger": false},
+  {"query": "review the code for bugs", "should_trigger": false},
+  {"query": "build the feature", "should_trigger": false},
+  {"query": "optimize the test suite — too many slow fixtures", "should_trigger": false},
+  {"query": "fix the memory leak in the worker process", "should_trigger": false},
+  {"query": "add caching to this specific endpoint", "should_trigger": false},
+  {"query": "profile the database queries", "should_trigger": false},
+  {"query": "the CI pipeline is slow", "should_trigger": false},
+  {"query": "audit the UI design quality", "should_trigger": false},
+  {"query": "scale the infrastructure to handle more traffic", "should_trigger": false}
+]

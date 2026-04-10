@@ -1,0 +1,79 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-start\"",
+            "async": false
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if [ -d \".quality/checkpoints\" ]; then bash \"${CLAUDE_PLUGIN_ROOT}/scripts/checkpoint.sh\" drift 2>&1 || { echo \"BLOCKED: Quality checkpoints have drifted \u2014 run gates before committing\"; exit 1; }; fi'"
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/require-critic-approval\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(git push*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/run-gates.sh\" all 2>&1"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(gh pr create*)|Bash(gh pr edit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/enforce-review-before-pr\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(gh pr merge*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/block-merge-without-ci\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "prompt",
+            "model": "claude-sonnet-4-6",
+            "prompt": "<output-format>Respond with ONLY valid JSON matching this schema:\n{\"type\": \"object\", \"required\": [\"ok\"], \"properties\": {\"ok\": {\"type\": \"boolean\"}, \"reason\": {\"type\": \"string\", \"description\": \"Required when ok is false. One sentence.\"}}, \"additionalProperties\": false}\nNo markdown. No explanation. No code fences. Just the JSON object.</output-format>\n\n<task>Review code in $ARGUMENTS for quality violations.</task>\n\n<block-rules>\n- jest.mock()/vi.mock() targeting the module under test\n- spyOn().mockImplementation()/.mockReturnValue()/.mockResolvedValue() on internal functions\n- @patch()/unittest.mock.patch() on the function being tested\n- jest.fn().mockReturnValue() replacing internal functions\n- # noqa, # type: ignore, // eslint-disable, // eslint-disable-next-line, @ts-ignore, @ts-expect-error, or any lint suppression\n</block-rules>\n\n<allow-rules>\n- Mocking external boundaries (HTTP clients, third-party APIs, timers, Date.now())\n- Real spies with NO .mock*() chain\n- Documentation or comments explaining anti-patterns\n- The mock target is clearly an external dependency (fetch, axios, database client, SDK)\n</allow-rules>"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/enforce-fixes\""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# SessionStart hook for sdlc plugin
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+using_sdlc_content=$(cat "${PLUGIN_ROOT}/skills/using-sdlc/SKILL.md" 2>&1 || echo "Error reading using-sdlc skill")
+
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+using_sdlc_escaped=$(escape_for_json "$using_sdlc_content")
+
+# Read installed plugin version
+PLUGIN_VERSION=$(AT_PJ="${PLUGIN_ROOT}/.claude-plugin/plugin.json" python3 -c "import json, os; print(json.load(open(os.environ['AT_PJ']))['version'])" 2>/dev/null || echo "unknown")
+
+# Check latest available from GitHub (non-blocking, best-effort, 30min cache)
+VERSION_CACHE="$HOME/.claude/plugins/cache/sdlc-version-check.json"
+VERSION_TTL_SECONDS=1800
+LATEST_VERSION=""
+
+# Read cache first — skip GitHub call if checked recently
+if [ -f "$VERSION_CACHE" ]; then
+  LATEST_VERSION=$(VC_FILE="$VERSION_CACHE" VC_TTL="$VERSION_TTL_SECONDS" python3 -c "
+import json, os, datetime
+cache = json.load(open(os.environ['VC_FILE']))
+checked = cache.get('checked', '')
+if checked:
+    age = (datetime.datetime.utcnow() - datetime.datetime.strptime(checked, '%Y-%m-%dT%H:%M:%SZ')).total_seconds()
+    if age < int(os.environ['VC_TTL']):
+        print(cache.get('version', ''))
+" 2>/dev/null) || true
+fi
+
+# If no cached version (or cache expired), fetch from GitHub
+if [ -z "$LATEST_VERSION" ] && command -v gh >/dev/null 2>&1; then
+  LATEST_VERSION=$(
+    {
+      if command -v timeout >/dev/null 2>&1; then
+        timeout 5 gh api repos/arqu-co/claude-skills/contents/plugins/sdlc/.claude-plugin/plugin.json \
+          --jq '.content'
+      else
+        gh api repos/arqu-co/claude-skills/contents/plugins/sdlc/.claude-plugin/plugin.json \
+          --jq '.content'
+      fi
+    } 2>/dev/null | base64 -d 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin)['version'])" 2>/dev/null
+  ) || true
+
+  # Update cache on successful fetch
+  if [ -n "$LATEST_VERSION" ]; then
+    mkdir -p "$(dirname "$VERSION_CACHE")"
+    VC_VER="$LATEST_VERSION" VC_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)" VC_FILE="$VERSION_CACHE" \
+      python3 -c "import json, os; json.dump({'version': os.environ['VC_VER'], 'checked': os.environ['VC_TS']}, open(os.environ['VC_FILE'], 'w'))" 2>/dev/null || true
+  fi
+fi
+
+# Fall back to cached version if GitHub check failed
+if [ -z "$LATEST_VERSION" ] && [ -f "$VERSION_CACHE" ]; then
+  LATEST_VERSION=$(VC_FILE="$VERSION_CACHE" python3 -c "
+import json, os
+print(json.load(open(os.environ['VC_FILE'])).get('version', ''))
+" 2>/dev/null) || true
+fi
+
+# shellcheck source=plugins/sdlc/scripts/update-config.sh
+source "${PLUGIN_ROOT}/scripts/update-config.sh"
+
+UPDATE_CHECK=$(read_config update_check true)
+AUTO_UPDATE=$(read_config auto_update false)
+IS_SNOOZED="false"
+is_snoozed && IS_SNOOZED="true"
+
+# Decide what to do about updates
+UPDATE_SUMMARY=""
+VERSION_WARNING=""
+if [ -n "$LATEST_VERSION" ] && [ "$PLUGIN_VERSION" != "$LATEST_VERSION" ]; then
+  if [ "$UPDATE_CHECK" = "false" ]; then
+    # User disabled checks entirely
+    :
+  elif [ "$IS_SNOOZED" = "true" ]; then
+    # Snoozed — stay silent
+    :
+  elif [ "$AUTO_UPDATE" = "true" ]; then
+    # Auto-update enabled — run it
+    UPDATE_SCRIPT="${PLUGIN_ROOT}/scripts/sdlc-update.sh"
+    if [ -x "$UPDATE_SCRIPT" ]; then
+      UPDATE_OUTPUT=$(bash "$UPDATE_SCRIPT" 2>&1) || true
+      UPDATED_COUNT=$(echo "$UPDATE_OUTPUT" | grep -c '✓ updated' || true)
+      if [ "$UPDATED_COUNT" -gt 0 ]; then
+        UPDATE_SUMMARY="\\nAuto-updated ${UPDATED_COUNT} plugin(s). Run /reload-plugins to apply.\\n"
+      fi
+    fi
+  else
+    # Show banner — let user decide
+    VERSION_WARNING="\\nrq update available: v${PLUGIN_VERSION} -> v${LATEST_VERSION}\\n  Run: /sdlc-update | /sdlc-update --snooze | /sdlc-update --auto-on\\n"
+  fi
+fi
+
+# Build user-visible banner
+VISIBLE_BANNER="sdlc v${PLUGIN_VERSION} · skill routing active"
+if [ -n "$UPDATE_SUMMARY" ]; then
+  VISIBLE_BANNER="sdlc v${PLUGIN_VERSION} · plugins updated · run /reload-plugins"
+elif [ -n "$VERSION_WARNING" ]; then
+  VISIBLE_BANNER="sdlc v${PLUGIN_VERSION} · update available: v${LATEST_VERSION}"
+fi
+
+session_context="${VERSION_WARNING}${UPDATE_SUMMARY}<EXTREMELY_IMPORTANT>\nYou have sdlc.\n\n**Below is the full content of your 'sdlc:using-sdlc' skill - your introduction to using sdlc skills. For all other skills, use the 'Skill' tool:**\n\n${using_sdlc_escaped}\n</EXTREMELY_IMPORTANT>"
+
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  cat <<EOF
+{
+  "systemMessage": "${VISIBLE_BANNER}",
+  "hookSpecificOutput": {
+    "hookEventName": "SessionStart",
+    "additionalContext": "${session_context}"
+  }
+}
+EOF
+else
+  cat <<EOF
+{
+  "systemMessage": "${VISIBLE_BANNER}",
+  "additional_context": "${session_context}"
+}
+EOF
+fi
+
+exit 0

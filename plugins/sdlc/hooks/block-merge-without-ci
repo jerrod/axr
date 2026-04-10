@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# PreToolUse hook for Bash(gh pr merge*) commands.
+# Blocks PR merges when:
+#   1. CI checks are pending or failing
+#   2. PR has not been approved (or has requested changes)
+#
+# Input: JSON on stdin with tool_input.command
+# Output: JSON with decision (block/allow)
+
+INPUT=$(cat)
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
+
+# Extract PR number from command (supports "gh pr merge 123" or "gh pr merge" with no number)
+extract_pr_number() {
+  local cmd="$1"
+  local pr_num
+  # Extract bare number from anywhere after "gh pr merge", handling flags
+  # like --squash that may appear before or after the PR number.
+  # Strategy: strip "gh pr merge", then find the first standalone number.
+  pr_num=$(echo "$cmd" | sed 's/.*gh pr merge//' | grep -oE '(^|[[:space:]])[0-9]+([[:space:]]|$)' | grep -oE '[0-9]+' | head -1 || true)
+  echo "$pr_num"
+}
+
+TAB="$(printf '\t')"
+
+# Count lines matching a fixed string (returns 0 if none match)
+count_matching() {
+  local n
+  n=$(echo "$2" | grep -cF "$1" 2>/dev/null) || n=0
+  echo "$n"
+}
+
+# Filter lines matching a fixed string
+filter_matching() {
+  echo "$2" | grep -F "$1" 2>/dev/null || true
+}
+
+# Fetch and evaluate check status for a PR
+check_pr_status() {
+  local pr_arg="$1"
+  local checks_output
+
+  # gh exits non-zero when checks are failing, so capture output regardless.
+  checks_output=$(gh pr checks ${pr_arg:+"$pr_arg"} 2>&1) || true
+
+  if [ -z "$checks_output" ]; then
+    echo "BLOCKED: Could not retrieve PR checks. Ensure the PR exists and gh is authenticated."
+    return 1
+  fi
+
+  local failed pending
+  failed=$(count_matching "${TAB}fail" "$checks_output")
+  pending=$(count_matching "${TAB}pending" "$checks_output")
+
+  if [ "$failed" -gt 0 ]; then
+    echo "BLOCKED: $failed CI check(s) failing. Fix failures before merging."
+    echo ""
+    echo "Failing checks:"
+    filter_matching "${TAB}fail" "$checks_output"
+    return 1
+  fi
+
+  if [ "$pending" -gt 0 ]; then
+    echo "BLOCKED: $pending CI check(s) still pending. Wait for all checks to complete."
+    echo ""
+    echo "Pending checks:"
+    filter_matching "${TAB}pending" "$checks_output"
+    return 1
+  fi
+
+  return 0
+}
+
+# Check PR review/approval status
+check_pr_approval() {
+  local pr_arg="$1"
+  local review_json
+
+  if ! review_json=$(gh pr view ${pr_arg:+"$pr_arg"} --json reviewDecision,reviews 2>&1); then
+    echo "BLOCKED: Could not retrieve PR review status."
+    return 1
+  fi
+
+  local decision
+  decision=$(echo "$review_json" | jq -r '.reviewDecision // ""')
+
+  if [ "$decision" = "CHANGES_REQUESTED" ]; then
+    echo "BLOCKED: PR has requested changes. Address review feedback before merging."
+    return 1
+  fi
+
+  if [ "$decision" != "APPROVED" ]; then
+    echo "BLOCKED: PR is not approved (status: ${decision:-none}). Get approval before merging."
+    return 1
+  fi
+
+  return 0
+}
+
+PR_NUMBER=$(extract_pr_number "$COMMAND")
+
+# Check CI first, then approval
+if ! STATUS_MSG=$(check_pr_status "$PR_NUMBER"); then
+  : # CI failed — will block below
+elif ! STATUS_MSG=$(check_pr_approval "$PR_NUMBER"); then
+  : # Approval failed — will block below
+else
+  # All checks pass AND approved — allow the merge
+  echo '{"decision": "allow"}'
+  exit 0
+fi
+
+# Something failed — block with details
+{
+  REASON=$(echo "$STATUS_MSG" | head -1)
+  DETAILS=$(echo "$STATUS_MSG" | tail -n +2)
+
+  jq -n \
+    --arg reason "$REASON" \
+    --arg details "$DETAILS" \
+    '{
+      decision: "block",
+      reason: ($reason + "\n" + $details)
+    }'
+}
