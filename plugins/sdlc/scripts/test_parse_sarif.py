@@ -4,6 +4,9 @@ import json
 import os
 import tempfile
 
+import pytest
+
+import parse_sarif as parse_sarif_mod
 from parse_sarif import parse_sarif
 
 
@@ -59,6 +62,15 @@ def _write_sarif(data):
     return f.name
 
 
+def _run(data, rule_prefix=None):
+    """Write data, parse, clean up, return findings."""
+    path = _write_sarif(data)
+    try:
+        return parse_sarif(path, rule_prefix=rule_prefix)
+    finally:
+        os.unlink(path)
+
+
 def test_parse_all_findings():
     path = _write_sarif(SAMPLE_SARIF)
     try:
@@ -106,6 +118,132 @@ def test_finding_structure():
 def test_parse_no_matching_files():
     result = parse_sarif("/nonexistent/*.sarif")
     assert result == []
+
+
+def test_parse_empty_runs_array():
+    assert _run({"version": "2.1.0", "runs": []}) == []
+
+
+def test_parse_run_with_no_results():
+    assert _run({"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "t"}}}]}) == []
+
+
+def test_parse_result_missing_optional_fields():
+    # No level, message, ruleId, or locations — defaults should fill in.
+    result = _run({"version": "2.1.0", "runs": [{"results": [{}]}]})
+    assert result == [{"file": "", "line": 0, "level": "warning", "rule_id": "", "message": ""}]
+
+
+def test_parse_result_with_multiple_locations_uses_first():
+    result = _run({"version": "2.1.0", "runs": [{"results": [{
+        "ruleId": "r", "level": "error", "message": {"text": "boom"},
+        "locations": [
+            {"physicalLocation": {"artifactLocation": {"uri": "first.kt"}, "region": {"startLine": 1}}},
+            {"physicalLocation": {"artifactLocation": {"uri": "second.kt"}, "region": {"startLine": 99}}},
+        ],
+    }]}]})
+    assert result[0]["file"] == "first.kt"
+    assert result[0]["line"] == 1
+
+
+def test_parse_result_levels_preserved():
+    result = _run({"version": "2.1.0", "runs": [{"results": [
+        {"ruleId": "a", "level": "error", "message": {"text": "e"}},
+        {"ruleId": "b", "level": "note", "message": {"text": "n"}},
+        {"ruleId": "c", "level": "none", "message": {"text": "x"}},
+    ]}]})
+    assert [f["level"] for f in result] == ["error", "note", "none"]
+
+
+def test_parse_result_with_empty_locations_list():
+    result = _run({"version": "2.1.0", "runs": [{"results": [{
+        "ruleId": "r", "level": "warning", "message": {"text": "m"}, "locations": [],
+    }]}]})
+    assert result[0]["file"] == "" and result[0]["line"] == 0
+
+
+def test_parse_result_location_missing_physical_location():
+    result = _run({"version": "2.1.0", "runs": [{"results": [{
+        "ruleId": "r", "level": "warning", "message": {"text": "m"}, "locations": [{}],
+    }]}]})
+    assert result[0]["file"] == "" and result[0]["line"] == 0
+
+
+def test_parse_result_location_missing_region():
+    result = _run({"version": "2.1.0", "runs": [{"results": [{
+        "ruleId": "r", "level": "warning", "message": {"text": "m"},
+        "locations": [{"physicalLocation": {"artifactLocation": {"uri": "a.kt"}}}],
+    }]}]})
+    assert result[0]["file"] == "a.kt" and result[0]["line"] == 0
+
+
+def test_parse_missing_top_level_runs_key():
+    assert _run({"version": "2.1.0"}) == []
+
+
+def test_parse_invalid_json_raises():
+    f = tempfile.NamedTemporaryFile(mode="w", suffix=".sarif", delete=False)
+    f.write("{not valid json")
+    f.flush()
+    f.close()
+    try:
+        with pytest.raises(json.JSONDecodeError):
+            parse_sarif(f.name)
+    finally:
+        os.unlink(f.name)
+
+
+def test_rule_prefix_filter_skips_missing_rule_id():
+    # Result with no ruleId — should be filtered out when a prefix is given.
+    result = _run({"version": "2.1.0", "runs": [{"results": [
+        {"level": "warning", "message": {"text": "no rule"}},
+        {"ruleId": "keep/me", "level": "warning", "message": {"text": "yes"}},
+    ]}]}, rule_prefix="keep/")
+    assert len(result) == 1 and result[0]["rule_id"] == "keep/me"
+
+
+# --- __main__ entrypoint — exercised via runpy so coverage sees the real block ---
+_MODULE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(parse_sarif_mod.__file__)),
+    "parse_sarif.py",
+)
+
+
+def test_main_no_args_exits_with_usage(monkeypatch, capsys):
+    import runpy
+
+    monkeypatch.setattr("sys.argv", ["parse_sarif.py"])
+    with pytest.raises(SystemExit) as exc:
+        runpy.run_path(_MODULE_PATH, run_name="__main__")
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "Usage" in err
+
+
+def test_main_with_glob_prints_findings(tmp_path, monkeypatch, capsys):
+    import runpy
+
+    path = tmp_path / "report.sarif"
+    path.write_text(json.dumps(SAMPLE_SARIF))
+    monkeypatch.setattr("sys.argv", ["parse_sarif.py", str(path)])
+    runpy.run_path(_MODULE_PATH, run_name="__main__")
+    out = capsys.readouterr().out
+    parsed = json.loads(out)
+    assert len(parsed) == 3
+    assert all("rule_id" in f for f in parsed)
+
+
+def test_main_with_rule_prefix_filters(tmp_path, monkeypatch, capsys):
+    import runpy
+
+    path = tmp_path / "report.sarif"
+    path.write_text(json.dumps(SAMPLE_SARIF))
+    monkeypatch.setattr("sys.argv", ["parse_sarif.py", str(path), "complexity/"])
+    runpy.run_path(_MODULE_PATH, run_name="__main__")
+    out = capsys.readouterr().out
+    parsed = json.loads(out)
+    assert len(parsed) == 2
+    assert all(f["rule_id"].startswith("complexity/") for f in parsed)
 
 
 def test_parse_glob_multiple_files():

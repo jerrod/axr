@@ -4,58 +4,49 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 import inspect_pr_checks
 
 REPO = Path("/fake/repo")
+_build = inspect_pr_checks._build_check_base
+
 
 def make_cp(returncode=0, stdout="", stderr=""):
     return subprocess.CompletedProcess([], returncode, stdout=stdout, stderr=stderr)
 
 
 class TestBuildCheckBase:
-    def test_extracts_ids_from_actions_url(self):
-        check = {
-            "name": "CI",
-            "detailsUrl": "https://github.com/o/r/actions/runs/123/job/456",
-        }
-        base = inspect_pr_checks._build_check_base(check)
+    @pytest.mark.parametrize("key,url,run_id,job_id", [
+        ("detailsUrl", "https://github.com/o/r/actions/runs/123/job/456", "123", "456"),
+        ("detailsUrl", "https://example.com/runs/789", "789", None),
+        ("detailsUrl", "https://example.com/job/999", None, "999"),
+        ("detailsUrl", "https://external.com/check/abc", None, None),
+        ("link", "https://github.com/o/r/actions/runs/111/job/222", "111", "222"),
+    ])
+    def test_id_extraction(self, key, url, run_id, job_id):
+        base = _build({"name": "CI", key: url})
+        assert base["runId"] == run_id
+        assert base["jobId"] == job_id
+        assert base["detailsUrl"] == url
         assert base["name"] == "CI"
-        assert base["runId"] == "123"
-        assert base["jobId"] == "456"
-        assert base["detailsUrl"] == check["detailsUrl"]
 
-    def test_extracts_run_id_from_runs_pattern(self):
-        check = {"name": "X", "detailsUrl": "https://example.com/runs/789"}
-        base = inspect_pr_checks._build_check_base(check)
-        assert base["runId"] == "789"
-        assert base["jobId"] is None
-
-    def test_handles_missing_url(self):
-        check = {"name": "External"}
-        base = inspect_pr_checks._build_check_base(check)
-        assert base["runId"] is None
-        assert base["jobId"] is None
-
-    def test_uses_link_fallback(self):
-        check = {
-            "name": "CI",
-            "link": "https://github.com/o/r/actions/runs/111/job/222",
-        }
-        base = inspect_pr_checks._build_check_base(check)
-        assert base["runId"] == "111"
-        assert base["jobId"] == "222"
-
-    def test_no_ids_in_url(self):
-        base = inspect_pr_checks._build_check_base(
-            {"name": "Ext", "detailsUrl": "https://external.com/check/abc"},
-        )
+    def test_missing_url(self):
+        base = _build({"name": "X"})
         assert base["runId"] is None and base["jobId"] is None
 
-    def test_job_id_from_short_pattern(self):
-        base = inspect_pr_checks._build_check_base(
-            {"name": "X", "detailsUrl": "https://example.com/job/999"},
-        )
-        assert base["jobId"] == "999"
+
+class TestParseChecksJson:
+    def test_invalid_json(self, capsys):
+        assert inspect_pr_checks._parse_checks_json("not json{") is None
+        assert "parse" in capsys.readouterr().err
+
+    def test_non_list_shape(self, capsys):
+        assert inspect_pr_checks._parse_checks_json('{"x": 1}') is None
+        assert "shape" in capsys.readouterr().err
+
+    def test_empty_stdout_returns_empty_list(self):
+        assert inspect_pr_checks._parse_checks_json("") == []
 
 
 class TestFetchChecks:
@@ -86,6 +77,19 @@ class TestFetchChecks:
         mock_run.return_value = make_cp(returncode=1, stderr="bad error")
         result = inspect_pr_checks.fetch_checks("42", REPO)
         assert result is None
+
+    @patch("subprocess.run")
+    def test_retry_also_fails(self, mock_run, capsys):
+        error_msg = (
+            "Unknown field\nAvailable fields:\n"
+            "  name\n  state\n  bucket\n  link\n"
+        )
+        mock_run.side_effect = [
+            make_cp(returncode=1, stderr=error_msg),
+            make_cp(returncode=2, stderr="retry denied"),
+        ]
+        assert inspect_pr_checks.fetch_checks("42", REPO) is None
+        assert "retry denied" in capsys.readouterr().err
 
 
 class TestAssembleResult:
@@ -129,6 +133,9 @@ class TestAssembleResult:
         assert pending_result["status"] == "log_pending"
 
 
+CI_CHECK = {"name": "CI", "detailsUrl": "https://github.com/o/r/actions/runs/100"}
+
+
 class TestAnalyzeCheck:
     @patch("subprocess.run")
     def test_external_check(self, mock_run):
@@ -139,79 +146,58 @@ class TestAnalyzeCheck:
 
     @patch("subprocess.run")
     def test_pending_log(self, mock_run):
-        check = {
-            "name": "CI",
-            "detailsUrl": "https://github.com/o/r/actions/runs/100",
-        }
-        meta = {"conclusion": None, "status": "in_progress"}
         mock_run.side_effect = [
-            make_cp(stdout=json.dumps(meta)),
+            make_cp(stdout=json.dumps({"status": "in_progress"})),
             make_cp(returncode=1, stderr="Run still in progress"),
         ]
-        result = inspect_pr_checks.analyze_check(check, REPO, 160, 30)
+        result = inspect_pr_checks.analyze_check(CI_CHECK, REPO, 160, 30)
         assert result["status"] == "log_pending"
 
     @patch("subprocess.run")
     def test_ok_with_tier(self, mock_run):
-        check = {
-            "name": "CI",
-            "detailsUrl": "https://github.com/o/r/actions/runs/100",
-        }
-        meta = {"conclusion": "failure", "status": "completed"}
-        log_text = "running tests\nAssertionError: expected 1\ngot 2"
         mock_run.side_effect = [
-            make_cp(stdout=json.dumps(meta)),
-            make_cp(stdout=log_text),
+            make_cp(stdout=json.dumps({"conclusion": "failure"})),
+            make_cp(stdout="running\nAssertionError: expected 1\ngot 2"),
         ]
-        result = inspect_pr_checks.analyze_check(check, REPO, 160, 30)
+        result = inspect_pr_checks.analyze_check(CI_CHECK, REPO, 160, 30)
         assert result["status"] == "ok"
         assert result["tier"] == "test"
         assert "tierContext" in result
 
     @patch("subprocess.run")
     def test_log_unavailable(self, mock_run):
-        check = {
-            "name": "CI",
-            "detailsUrl": "https://github.com/o/r/actions/runs/100",
-        }
         mock_run.side_effect = [
             make_cp(stdout=json.dumps({"conclusion": "failure"})),
             make_cp(returncode=1, stderr="permission denied"),
         ]
-        result = inspect_pr_checks.analyze_check(check, REPO, 160, 30)
+        result = inspect_pr_checks.analyze_check(CI_CHECK, REPO, 160, 30)
         assert result["status"] == "log_unavailable"
         assert "permission denied" in result["error"]
 
 
 class TestRenderText:
     def test_renders_failing_checks(self, capsys):
-        results = [{
+        inspect_pr_checks.render_text("42", [{
             "name": "CI", "status": "ok",
             "detailsUrl": "https://github.com/o/r/actions/runs/1",
             "logSnippet": "ERROR: test failed", "tier": "test",
-        }]
-        inspect_pr_checks.render_text("42", results)
-        output = capsys.readouterr().out
-        assert "PR #42" in output
-        assert "CI" in output
-        assert "ERROR: test failed" in output
-        assert "test" in output
+        }])
+        out = capsys.readouterr().out
+        assert "PR #42" in out and "CI" in out
+        assert "ERROR: test failed" in out and "test" in out
 
     def test_renders_external_check(self, capsys):
-        results = [{
-            "name": "Codecov", "status": "external",
-            "note": "No GitHub Actions run ID in URL.",
-        }]
-        inspect_pr_checks.render_text("10", results)
-        output = capsys.readouterr().out
-        assert "Codecov" in output
-        assert "external" in output
+        inspect_pr_checks.render_text("10", [{
+            "name": "Codecov", "status": "external", "note": "No run ID.",
+        }])
+        out = capsys.readouterr().out
+        assert "Codecov" in out and "external" in out
 
     def test_renders_error_check(self, capsys):
-        results = [{"name": "CI", "status": "log_unavailable", "error": "denied"}]
-        inspect_pr_checks.render_text("5", results)
-        output = capsys.readouterr().out
-        assert "denied" in output
+        inspect_pr_checks.render_text(
+            "5", [{"name": "CI", "status": "log_unavailable", "error": "denied"}],
+        )
+        assert "denied" in capsys.readouterr().out
 
 
 class TestMainSetup:
@@ -241,6 +227,18 @@ class TestMainSetup:
 
     @patch("shutil.which", return_value="/usr/bin/gh")
     @patch("subprocess.run")
+    def test_checks_fetch_none_returns_1(self, mock_run, _mock_which):
+        mock_run.side_effect = [
+            make_cp(stdout="/fake/repo\n"),
+            make_cp(returncode=0),
+            make_cp(stdout=json.dumps({"number": 42})),
+            make_cp(returncode=1, stderr="api error"),
+        ]
+        with patch("sys.argv", ["prog"]):
+            assert inspect_pr_checks.main() == 1
+
+    @patch("shutil.which", return_value="/usr/bin/gh")
+    @patch("subprocess.run")
     def test_no_failing_returns_0(self, mock_run, _mock_which):
         checks = [{"name": "CI", "conclusion": "success"}]
         mock_run.side_effect = [
@@ -253,25 +251,26 @@ class TestMainSetup:
             assert inspect_pr_checks.main() == 0
 
 
+def _failing_main_effects(log):
+    checks = [{"name": "CI", "conclusion": "failure",
+               "detailsUrl": "https://github.com/o/r/actions/runs/1"}]
+    return [
+        make_cp(stdout="/fake/repo\n"),
+        make_cp(returncode=0),
+        make_cp(stdout=json.dumps({"number": 42})),
+        make_cp(stdout=json.dumps(checks)),
+        make_cp(stdout=json.dumps({"conclusion": "failure"})),
+        make_cp(stdout=log),
+    ]
+
+
 class TestMainOutput:
     @patch("shutil.which", return_value="/usr/bin/gh")
     @patch("subprocess.run")
     def test_failing_checks_json(self, mock_run, _mock_which, capsys):
-        checks = [{"name": "CI", "conclusion": "failure",
-                    "detailsUrl": "https://github.com/o/r/actions/runs/1"}]
-        meta = {"conclusion": "failure", "status": "completed"}
-        log = "ERROR: something broke"
-        mock_run.side_effect = [
-            make_cp(stdout="/fake/repo\n"),
-            make_cp(returncode=0),
-            make_cp(stdout=json.dumps({"number": 42})),
-            make_cp(stdout=json.dumps(checks)),
-            make_cp(stdout=json.dumps(meta)),
-            make_cp(stdout=log),
-        ]
+        mock_run.side_effect = _failing_main_effects("ERROR: something broke")
         with patch("sys.argv", ["prog", "--json"]):
-            code = inspect_pr_checks.main()
-        assert code == 1
+            assert inspect_pr_checks.main() == 1
         output = json.loads(capsys.readouterr().out)
         assert output["pr"] == "42"
         assert len(output["results"]) == 1
@@ -280,21 +279,8 @@ class TestMainOutput:
     @patch("shutil.which", return_value="/usr/bin/gh")
     @patch("subprocess.run")
     def test_failing_checks_text(self, mock_run, _mock_which, capsys):
-        checks = [{"name": "CI", "conclusion": "failure",
-                    "detailsUrl": "https://github.com/o/r/actions/runs/1"}]
-        meta = {"conclusion": "failure"}
-        log = "FAIL: test_something"
-        mock_run.side_effect = [
-            make_cp(stdout="/fake/repo\n"),
-            make_cp(returncode=0),
-            make_cp(stdout=json.dumps({"number": 42})),
-            make_cp(stdout=json.dumps(checks)),
-            make_cp(stdout=json.dumps(meta)),
-            make_cp(stdout=log),
-        ]
+        mock_run.side_effect = _failing_main_effects("FAIL: test_something")
         with patch("sys.argv", ["prog"]):
-            code = inspect_pr_checks.main()
-        assert code == 1
-        output = capsys.readouterr().out
-        assert "CI" in output
-        assert "FAIL: test_something" in output
+            assert inspect_pr_checks.main() == 1
+        out = capsys.readouterr().out
+        assert "CI" in out and "FAIL: test_something" in out

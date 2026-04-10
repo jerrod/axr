@@ -1,8 +1,12 @@
 """Tests for parse_jacoco.py — JaCoCo XML coverage report parser."""
 
+import json
 import os
 import tempfile
 
+import pytest
+
+import parse_jacoco as parse_jacoco_mod
 from parse_jacoco import parse_jacoco
 
 
@@ -111,3 +115,111 @@ def test_parse_zero_lines():
 def test_parse_no_matching_files():
     result = parse_jacoco("/nonexistent/path/*.xml")
     assert result == {}
+
+
+def test_parse_sourcefile_without_line_counter_is_skipped():
+    # A sourcefile that only has BRANCH/METHOD counters (no LINE) must be
+    # skipped entirely — _extract_line_pct returns None.
+    xml = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<report name="no-line">
+  <package name="com/example">
+    <sourcefile name="NoLine.kt">
+      <counter type="BRANCH" missed="1" covered="2"/>
+      <counter type="METHOD" missed="0" covered="3"/>
+    </sourcefile>
+    <sourcefile name="HasLine.kt">
+      <counter type="LINE" missed="0" covered="10"/>
+    </sourcefile>
+  </package>
+</report>
+"""
+    path = _write_xml(xml)
+    try:
+        result = parse_jacoco(path)
+        assert "com/example/NoLine.kt" not in result
+        assert result["com/example/HasLine.kt"]["lines"]["pct"] == 100.0
+    finally:
+        os.unlink(path)
+
+
+def test_parse_rejects_xml_with_entity_declarations():
+    # Billion-laughs / XXE guard: presence of "<!ENTITY" must raise.
+    xml = """\
+<?xml version="1.0"?>
+<!DOCTYPE report [
+  <!ENTITY lol "lol">
+]>
+<report name="evil">
+  <package name="com/example">
+    <sourcefile name="Evil.kt">
+      <counter type="LINE" missed="0" covered="1"/>
+    </sourcefile>
+  </package>
+</report>
+"""
+    path = _write_xml(xml)
+    try:
+        with pytest.raises(ValueError, match="entity declarations"):
+            parse_jacoco(path)
+    finally:
+        os.unlink(path)
+
+
+def test_parse_sourcefile_without_package_name_uses_bare_filename():
+    # When package name is empty, the file key should be just the sourcefile name
+    # (not prefixed with "/"). Exercises the `file_key = fname` branch.
+    xml = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<report name="rootless">
+  <package name="">
+    <sourcefile name="Root.kt">
+      <counter type="LINE" missed="0" covered="4"/>
+    </sourcefile>
+  </package>
+</report>
+"""
+    path = _write_xml(xml)
+    try:
+        result = parse_jacoco(path)
+        assert result["Root.kt"]["lines"]["pct"] == 100.0
+    finally:
+        os.unlink(path)
+
+
+# --- __main__ entrypoint ---
+_MODULE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(parse_jacoco_mod.__file__)),
+    "parse_jacoco.py",
+)
+
+
+def test_main_no_args_exits_with_usage_error(monkeypatch, capsys):
+    import runpy
+
+    monkeypatch.setattr("sys.argv", ["parse_jacoco.py"])
+    with pytest.raises(SystemExit) as exc:
+        runpy.run_path(_MODULE_PATH, run_name="__main__")
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "Usage" in err
+
+
+def test_main_with_arg_prints_parsed_json(monkeypatch, capsys):
+    import runpy
+
+    path = _write_xml(SAMPLE_JACOCO)
+    try:
+        monkeypatch.setattr("sys.argv", ["parse_jacoco.py", path])
+        runpy.run_path(_MODULE_PATH, run_name="__main__")
+        out = capsys.readouterr().out.strip()
+        parsed = json.loads(out)
+        assert parsed["co/arqu/core/service/FooService.kt"] == {
+            "lines": {"pct": 80.0}
+        }
+        assert parsed["co/arqu/core/service/BarService.kt"] == {
+            "lines": {"pct": 100.0}
+        }
+        assert parsed["co/arqu/core/model/User.kt"] == {"lines": {"pct": 50.0}}
+    finally:
+        os.unlink(path)

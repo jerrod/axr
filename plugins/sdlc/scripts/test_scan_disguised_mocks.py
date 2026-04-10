@@ -190,6 +190,43 @@ def test_ruby_expect_receive_not_flagged():
     assert len(violations) == 0
 
 
+# --- Java/Kotlin: should detect ---
+
+
+def test_java_mockito_mock():
+    violations = _scan("UserService svc = Mockito.mock(UserService.class);", suffix="Test.java")
+    assert len(violations) == 1
+    assert violations[0]["pattern"] == "Mockito.mock() on internal class"
+
+
+def test_kotlin_mockk_internal():
+    violations = _scan("val svc = mockk<UserService>()", suffix="Test.kt")
+    assert len(violations) == 1
+    assert violations[0]["pattern"] == "mockk<>() on internal class"
+
+
+# --- Go: should detect ---
+
+
+def test_go_mock_mock():
+    violations = _scan("type FakeRepo struct { mock.Mock }", suffix="_test.go")
+    assert len(violations) == 1
+    assert violations[0]["pattern"] == "mock.Mock on own interface"
+
+
+# --- Unknown extension: empty pattern list ---
+
+
+def test_unknown_extension_returns_no_violations():
+    # Files with unsupported extensions should produce zero violations
+    # regardless of content (exercises the default return [] branch).
+    violations = _scan(
+        "vi.spyOn(mod, 'fn').mockImplementation(() => fake);",
+        suffix=".txt",
+    )
+    assert violations == []
+
+
 # --- Line numbers ---
 
 

@@ -123,6 +123,13 @@ class TestResolvePr:
         )
         assert gh_client.resolve_pr(None, REPO_ROOT) is None
 
+    @patch("subprocess.run")
+    def test_none_when_number_missing(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=json.dumps({}), stderr=""
+        )
+        assert gh_client.resolve_pr(None, REPO_ROOT) is None
+
 
 class TestFetchRunMetadata:
     @patch("subprocess.run")
@@ -148,6 +155,13 @@ class TestFetchRunMetadata:
         )
         assert gh_client.fetch_run_metadata("123", REPO_ROOT) is None
 
+    @patch("subprocess.run")
+    def test_none_when_payload_not_dict(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=json.dumps([1, 2, 3]), stderr=""
+        )
+        assert gh_client.fetch_run_metadata("123", REPO_ROOT) is None
+
 
 class TestFetchRunLog:
     @patch("subprocess.run")
@@ -169,47 +183,36 @@ class TestFetchRunLog:
         assert "run not found" in error
 
 
-class TestFetchJobLog:
-    @patch("subprocess.run")
-    def test_returns_decoded_text(self, mock_run):
-        def side_effect(args, **kwargs):
-            if "repo" in args and "view" in args:
-                return subprocess.CompletedProcess(
-                    args=args,
-                    returncode=0,
-                    stdout=json.dumps({"nameWithOwner": "org/repo"}),
-                    stderr="",
-                )
+def _job_log_side_effect(api_returncode=0, api_stdout=b"", api_stderr=b""):
+    def side_effect(args, **kwargs):
+        if "repo" in args and "view" in args:
             return subprocess.CompletedProcess(
                 args=args,
                 returncode=0,
-                stdout=b"job log content",
-                stderr=b"",
+                stdout=json.dumps({"nameWithOwner": "org/repo"}),
+                stderr="",
             )
+        return subprocess.CompletedProcess(
+            args=args,
+            returncode=api_returncode,
+            stdout=api_stdout,
+            stderr=api_stderr,
+        )
 
-        mock_run.side_effect = side_effect
+    return side_effect
+
+
+class TestFetchJobLog:
+    @patch("subprocess.run")
+    def test_returns_decoded_text(self, mock_run):
+        mock_run.side_effect = _job_log_side_effect(api_stdout=b"job log content")
         text, error = gh_client.fetch_job_log("789", REPO_ROOT)
         assert text == "job log content"
         assert error == ""
 
     @patch("subprocess.run")
     def test_error_on_zip_payload(self, mock_run):
-        def side_effect(args, **kwargs):
-            if "repo" in args and "view" in args:
-                return subprocess.CompletedProcess(
-                    args=args,
-                    returncode=0,
-                    stdout=json.dumps({"nameWithOwner": "org/repo"}),
-                    stderr="",
-                )
-            return subprocess.CompletedProcess(
-                args=args,
-                returncode=0,
-                stdout=b"PK\x03\x04zipdata",
-                stderr=b"",
-            )
-
-        mock_run.side_effect = side_effect
+        mock_run.side_effect = _job_log_side_effect(api_stdout=b"PK\x03\x04zipdata")
         text, error = gh_client.fetch_job_log("789", REPO_ROOT)
         assert text == ""
         assert "zip" in error.lower()
@@ -222,6 +225,22 @@ class TestFetchJobLog:
         text, error = gh_client.fetch_job_log("789", REPO_ROOT)
         assert text == ""
         assert error != ""
+
+    @patch("subprocess.run")
+    def test_error_decodes_stderr_bytes(self, mock_run):
+        mock_run.side_effect = _job_log_side_effect(
+            api_returncode=1, api_stderr=b"HTTP 403: rate limit exceeded"
+        )
+        text, error = gh_client.fetch_job_log("789", REPO_ROOT)
+        assert text == ""
+        assert "rate limit" in error
+
+    @patch("subprocess.run")
+    def test_error_fallback_message_when_empty_stderr(self, mock_run):
+        mock_run.side_effect = _job_log_side_effect(api_returncode=1)
+        text, error = gh_client.fetch_job_log("789", REPO_ROOT)
+        assert text == ""
+        assert "gh api job logs failed" in error
 
 
 class TestFetchRepoSlug:
@@ -239,5 +258,19 @@ class TestFetchRepoSlug:
     def test_none_on_failure(self, mock_run):
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=1, stdout="", stderr="error"
+        )
+        assert gh_client.fetch_repo_slug(REPO_ROOT) is None
+
+    @patch("subprocess.run")
+    def test_none_on_bad_json(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="not json at all", stderr=""
+        )
+        assert gh_client.fetch_repo_slug(REPO_ROOT) is None
+
+    @patch("subprocess.run")
+    def test_none_when_name_with_owner_missing(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=json.dumps({}), stderr=""
         )
         assert gh_client.fetch_repo_slug(REPO_ROOT) is None

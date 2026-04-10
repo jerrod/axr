@@ -14,6 +14,28 @@ from validate_proof import validate_gate_proof, validate_metrics_event
 SCHEMA_DIR = os.path.join(os.path.dirname(__file__), "schemas")
 
 
+def _metrics_event(**overrides):
+    base = {
+        "schema_version": 1, "repo": "test", "branch": "main",
+        "sha": "abc123", "user": "dev",
+        "timestamp": "2026-03-21T00:00:00Z",
+        "phase": "all", "run_number": 1, "gate_name": None,
+        "critic_verdict": "unknown", "critic_findings_count": 0,
+        "critic_findings_by_rule": {}, "critic_findings": [],
+        "gates_first_pass": True, "gate_failures_after_critic": 0,
+        "missed_gates": [], "gates_run": [],
+        "gates": {}, "duration_seconds": None,
+    }
+    base.update(overrides)
+    return base
+
+
+_FILESIZE_GATES = {"gates_run": ["filesize"], "gates": {
+    "filesize": {"status": "pass",
+                 "gate_timestamp": "2026-03-21T00:00:00Z",
+                 "duration_ms": 0}}}
+
+
 class TestProofFilesizeLint:
     def test_valid_filesize_proof(self):
         proof = {
@@ -153,78 +175,42 @@ class TestProofAdvancedGates:
 
 class TestMetricsEventValid:
     def test_valid_summary_event(self):
-        event = {
-            "schema_version": 1, "repo": "test", "branch": "main",
-            "sha": "abc123", "user": "dev",
-            "timestamp": "2026-03-21T00:00:00Z",
-            "phase": "all", "run_number": 1, "gate_name": None,
-            "critic_verdict": "unknown", "critic_findings_count": 0,
-            "critic_findings_by_rule": {}, "critic_findings": [],
-            "gates_first_pass": True, "gate_failures_after_critic": 0,
-            "missed_gates": [], "gates_run": ["filesize"],
-            "gates": {
-                "filesize": {
-                    "status": "pass",
-                    "gate_timestamp": "2026-03-21T00:00:00Z",
-                    "duration_ms": 0,
-                },
-            },
-            "duration_seconds": None
-        }
+        event = _metrics_event(**_FILESIZE_GATES)
         assert validate_metrics_event(event, SCHEMA_DIR) is True
 
     def test_valid_per_gate_event(self):
-        event = {
-            "schema_version": 1, "repo": "test", "branch": "main",
-            "sha": "abc123", "user": "dev",
-            "timestamp": "2026-03-21T00:00:00Z",
-            "phase": "all", "run_number": 1, "gate_name": "filesize",
-            "critic_verdict": "unknown", "critic_findings_count": 0,
-            "critic_findings_by_rule": {}, "critic_findings": [],
-            "gates_first_pass": True, "gate_failures_after_critic": 0,
-            "missed_gates": [], "gates_run": ["filesize"],
-            "gates": {
-                "filesize": {
-                    "status": "pass",
-                    "gate_timestamp": "2026-03-21T00:00:00Z",
-                    "duration_ms": 0,
-                },
-            },
-            "duration_seconds": None
-        }
+        event = _metrics_event(gate_name="filesize", **_FILESIZE_GATES)
         assert validate_metrics_event(event, SCHEMA_DIR) is True
 
 
 class TestMetricsEventInvalid:
     def test_missing_schema_version_raises(self):
-        event = {
-            "repo": "test", "branch": "main", "sha": "abc123",
-            "user": "dev", "timestamp": "2026-03-21T00:00:00Z",
-            "phase": "all", "run_number": 1, "gate_name": None,
-            "critic_verdict": "unknown", "critic_findings_count": 0,
-            "critic_findings_by_rule": {}, "critic_findings": [],
-            "gates_first_pass": True, "gate_failures_after_critic": 0,
-            "missed_gates": [], "gates_run": [],
-            "gates": {}, "duration_seconds": None
-        }
+        event = _metrics_event()
+        del event["schema_version"]
         with pytest.raises(Exception):
             validate_metrics_event(event, SCHEMA_DIR)
 
     def test_extra_field_raises(self):
-        event = {
-            "schema_version": 1, "repo": "test", "branch": "main",
-            "sha": "abc123", "user": "dev",
-            "timestamp": "2026-03-21T00:00:00Z",
-            "phase": "all", "run_number": 1, "gate_name": None,
-            "critic_verdict": "unknown", "critic_findings_count": 0,
-            "critic_findings_by_rule": {}, "critic_findings": [],
-            "gates_first_pass": True, "gate_failures_after_critic": 0,
-            "missed_gates": [], "gates_run": [],
-            "gates": {}, "duration_seconds": None,
-            "bogus_field": "should fail"
-        }
+        event = _metrics_event(bogus_field="should fail")
         with pytest.raises(Exception):
             validate_metrics_event(event, SCHEMA_DIR)
+
+
+def _run_cli(proof, *extra):
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False
+    ) as f:
+        json.dump(proof, f)
+        f.flush()
+        name = f.name
+    try:
+        return subprocess.run(
+            [sys.executable, "validate_proof.py", name, *extra],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(__file__),
+        )
+    finally:
+        os.unlink(name)
 
 
 class TestCliEntryPoint:
@@ -234,37 +220,39 @@ class TestCliEntryPoint:
             "timestamp": "2026-03-21T00:00:00Z", "error": None,
             "files_checked": 10, "violations": [],
         }
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
-            json.dump(proof, f)
-            f.flush()
-            result = subprocess.run(
-                [sys.executable, "validate_proof.py",
-                 f.name, "filesize", SCHEMA_DIR],
-                capture_output=True, text=True,
-                cwd=os.path.dirname(__file__),
-            )
-        os.unlink(f.name)
+        result = _run_cli(proof, "filesize", SCHEMA_DIR)
         assert result.returncode == 0
         assert "VALID" in result.stdout
 
     def test_invalid_proof_via_cli(self):
         proof = {"gate": "filesize", "sha": "abc123", "status": "pass"}
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
-            json.dump(proof, f)
-            f.flush()
-            result = subprocess.run(
-                [sys.executable, "validate_proof.py",
-                 f.name, "filesize", SCHEMA_DIR],
-                capture_output=True, text=True,
-                cwd=os.path.dirname(__file__),
-            )
-        os.unlink(f.name)
+        result = _run_cli(proof, "filesize", SCHEMA_DIR)
         assert result.returncode == 1
         assert "INVALID" in result.stderr
+
+    def test_cli_usage_on_missing_args(self):
+        result = subprocess.run(
+            [sys.executable, "validate_proof.py"],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(__file__),
+        )
+        assert result.returncode == 2
+        assert "Usage" in result.stderr
+
+
+class TestImportFallback:
+    def test_import_without_jsonschema(self, monkeypatch):
+        import importlib
+        monkeypatch.setitem(sys.modules, "jsonschema", None)
+        monkeypatch.setitem(sys.modules, "referencing", None)
+        importlib.reload(vp)
+        try:
+            assert vp._HAS_JSONSCHEMA is False
+            assert vp.validate_gate_proof({}, "x") is True
+            assert vp.validate_metrics_event({}) is True
+        finally:
+            monkeypatch.undo()
+            importlib.reload(vp)
 
 
 class TestNoJsonschema:
@@ -287,14 +275,4 @@ class TestDefaultSchemaDir:
         assert validate_gate_proof(proof, "filesize") is True
 
     def test_metrics_event_uses_default_schema_dir(self):
-        event = {
-            "schema_version": 1, "repo": "t", "branch": "m",
-            "sha": "a", "user": "d", "timestamp": "2026-03-21T00:00:00Z",
-            "phase": "all", "run_number": 1, "gate_name": None,
-            "critic_verdict": "u", "critic_findings_count": 0,
-            "critic_findings_by_rule": {}, "critic_findings": [],
-            "gates_first_pass": True, "gate_failures_after_critic": 0,
-            "missed_gates": [], "gates_run": [],
-            "gates": {}, "duration_seconds": None,
-        }
-        assert validate_metrics_event(event) is True
+        assert validate_metrics_event(_metrics_event()) is True

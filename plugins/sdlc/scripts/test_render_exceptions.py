@@ -1,252 +1,299 @@
-"""Tests for render_exceptions.py.
-
-Tests invoke the script via subprocess using tempfile-based PROOF_DIR and
-config fixtures. No mocking of internal module state.
-"""
-
+"""Tests for render_exceptions.py — every function, every branch, in-process."""
 import json
-import os
-import subprocess
-import sys
-import tempfile
-from pathlib import Path
 
-SCRIPT = Path(__file__).parent / "render_exceptions.py"
-
-
-def _run(proof_dir: str, config_file: str = "") -> str:
-    """Run the script and return stdout."""
-    env = os.environ.copy()
-    env["PROOF_DIR"] = proof_dir
-    env["SDLC_CONFIG_FILE"] = config_file
-    result = subprocess.run(
-        [sys.executable, str(SCRIPT)],
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-        cwd=tempfile.gettempdir(),
-    )
-    return result.stdout
+import render_exceptions
+from render_exceptions import (
+    _collect_active, _entry_key, _find_stale, _load_config,
+    _print_table, _resolve_config_file, _stale_for_gate, main,
+)
 
 
-def _entry_key(**fields) -> str:
-    """Produce the canonical entry_key the same way is_allowed_check.py does."""
-    return json.dumps(fields, sort_keys=True)
-
-
-def _write_jsonl(path: str, records: list[dict]) -> None:
+def _write_jsonl(path, records):
     with open(path, "w") as f:
         for rec in records:
-            # Auto-populate entry_key from the record if not provided,
-            # so test fixtures don't have to repeat canonical JSON by hand.
-            if "entry_key" not in rec:
-                rec = {
-                    **rec,
-                    "entry_key": _entry_key(
-                        file=rec.get("pattern", "")
-                    ),
-                }
             f.write(json.dumps(rec) + "\n")
 
 
-def _write_config(path: str, allow: dict) -> None:
+def test_entry_key_excludes_reason_field():
+    assert _entry_key({"file": "foo.py", "reason": "legacy"}) == '{"file": "foo.py"}'
+
+
+def test_entry_key_sorted_canonical_independent_of_insertion_order():
+    a = _entry_key({"file": "x.py", "name": "bar", "type": "var"})
+    b = _entry_key({"type": "var", "name": "bar", "file": "x.py"})
+    assert a == b == '{"file": "x.py", "name": "bar", "type": "var"}'
+
+
+def test_entry_key_with_only_reason_is_empty_object():
+    assert _entry_key({"reason": "r"}) == "{}"
+
+
+def test_load_config_empty_path_returns_empty_dict():
+    assert _load_config("") == {}
+
+
+def test_load_config_nonexistent_file_returns_empty_dict(tmp_path):
+    assert _load_config(str(tmp_path / "missing.json")) == {}
+
+
+def test_load_config_directory_path_returns_empty_dict(tmp_path):
+    # os.path.isfile() is False for directories → returns {}.
+    assert _load_config(str(tmp_path)) == {}
+
+
+def test_load_config_happy_path(tmp_path):
+    path = tmp_path / "cfg.json"
+    payload = {"allow": {"filesize": [{"file": "big.py", "reason": "legacy"}]}}
+    path.write_text(json.dumps(payload))
+    assert _load_config(str(path)) == payload
+
+
+def test_load_config_malformed_json_returns_empty_dict(tmp_path):
+    path = tmp_path / "bad.json"
+    path.write_text("{not valid json")
+    assert _load_config(str(path)) == {}
+
+
+def test_collect_active_empty_dir_returns_empty(tmp_path):
+    assert _collect_active(str(tmp_path)) == ([], {})
+
+
+def test_collect_active_dedupes_repeated_entry_keys_across_multiple_gates(tmp_path):
+    dup = {"entry_key": '{"file": "a.py"}', "file": "a.py", "reason": "r1"}
+    _write_jsonl(tmp_path / "allow-tracking-filesize.jsonl", [dup, dup])
+    _write_jsonl(
+        tmp_path / "allow-tracking-complexity.jsonl",
+        [{"entry_key": '{"file": "hard.py"}', "file": "hard.py"}],
+    )
+    active, matched = _collect_active(str(tmp_path))
+    assert len(active) == 2
+    assert {r["file"] for r in active} == {"a.py", "hard.py"}
+    assert matched == {
+        "filesize": {'{"file": "a.py"}'},
+        "complexity": {'{"file": "hard.py"}'},
+    }
+
+
+def test_collect_active_skips_malformed_json_lines(tmp_path):
+    path = tmp_path / "allow-tracking-filesize.jsonl"
     with open(path, "w") as f:
-        json.dump({"allow": allow}, f)
+        f.write("{not json\n")
+        f.write(json.dumps({"entry_key": '{"file": "ok.py"}', "file": "ok.py"}) + "\n")
+        f.write("also garbage\n")
+    active, matched = _collect_active(str(tmp_path))
+    assert [r["file"] for r in active] == ["ok.py"]
+    assert matched == {"filesize": {'{"file": "ok.py"}'}}
 
 
-def test_jsonl_dedup_within_gate(tmp_path):
-    """Same pattern appearing twice in a gate file should appear once in active."""
-    pd = tmp_path / "proof"
-    pd.mkdir()
-    _write_jsonl(
-        str(pd / "allow-tracking-filesize.jsonl"),
-        [
-            {"gate": "filesize", "pattern": "foo.py", "reason": "legacy"},
-            {"gate": "filesize", "pattern": "foo.py", "reason": "legacy"},
-            {"gate": "filesize", "pattern": "bar.py", "reason": "other"},
-        ],
+def test_collect_active_record_without_entry_key_tracked_in_matched_only(tmp_path):
+    # Missing entry_key → key is "", added to matched but skipped for active
+    # (the `if key and key not in seen_keys` short-circuits on empty string).
+    _write_jsonl(tmp_path / "allow-tracking-filesize.jsonl", [{"file": "orphan.py"}])
+    active, matched = _collect_active(str(tmp_path))
+    assert active == []
+    assert matched == {"filesize": {""}}
+
+
+def test_collect_active_unreadable_file_skipped(tmp_path, monkeypatch):
+    # Force open() to raise for this specific tracking file so the OSError
+    # branch in _collect_active is exercised.
+    target = tmp_path / "allow-tracking-filesize.jsonl"
+    target.write_text("")
+    real_open = open
+
+    def fake_open(path, *a, **kw):
+        if str(path) == str(target):
+            raise OSError("permission denied")
+        return real_open(path, *a, **kw)
+
+    monkeypatch.setattr("builtins.open", fake_open)
+    active, matched = _collect_active(str(tmp_path))
+    # Gate key was initialized before the OSError; active is empty.
+    assert active == []
+    assert matched == {"filesize": set()}
+
+
+def test_stale_for_gate_matched_entry_excluded():
+    entries = [{"file": "matched.py", "reason": "live"}]
+    assert _stale_for_gate("filesize", entries, {_entry_key(entries[0])}) == []
+
+
+def test_stale_for_gate_uses_file_key_first():
+    entries = [{"file": "stale.py", "reason": "old"}]
+    assert _stale_for_gate("filesize", entries, set()) == [
+        {"gate": "filesize", "pattern": "stale.py", "reason": "old"}
+    ]
+
+
+def test_stale_for_gate_falls_back_to_pattern_key():
+    entries = [{"pattern": "**/*.legacy", "reason": "decommissioned"}]
+    assert _stale_for_gate("lint", entries, set()) == [
+        {"gate": "lint", "pattern": "**/*.legacy", "reason": "decommissioned"}
+    ]
+
+
+def test_stale_for_gate_falls_back_to_type_key():
+    entries = [{"type": "unused_variable", "reason": "ignore"}]
+    assert _stale_for_gate("dead-code", entries, set()) == [
+        {"gate": "dead-code", "pattern": "unused_variable", "reason": "ignore"}
+    ]
+
+
+def test_stale_for_gate_entry_without_identifiable_field_is_dropped():
+    # No file / pattern / type → pattern is "" → skipped.
+    assert _stale_for_gate("lint", [{"reason": "mystery"}], set()) == []
+
+
+def test_stale_for_gate_mixed_matched_and_stale():
+    entries = [
+        {"file": "live.py", "reason": "active"},
+        {"file": "dead.py", "reason": "stale"},
+    ]
+    result = _stale_for_gate("filesize", entries, {_entry_key(entries[0])})
+    assert result == [{"gate": "filesize", "pattern": "dead.py", "reason": "stale"}]
+
+
+def test_stale_for_gate_missing_reason_defaults_to_empty_string():
+    assert _stale_for_gate("filesize", [{"file": "x.py"}], set()) == [
+        {"gate": "filesize", "pattern": "x.py", "reason": ""}
+    ]
+
+
+def test_find_stale_no_config_file_returns_empty(tmp_path):
+    assert _find_stale(str(tmp_path / "missing.json"), {"filesize": set()}) == []
+
+
+def test_find_stale_gate_not_in_matched_is_skipped(tmp_path):
+    path = tmp_path / "cfg.json"
+    path.write_text(json.dumps({"allow": {"filesize": [{"file": "x.py"}]}}))
+    assert _find_stale(str(path), {"lint": set()}) == []
+
+
+def test_find_stale_returns_unmatched_entries(tmp_path):
+    live = {"file": "live.py", "reason": "a"}
+    dead = {"file": "dead.py", "reason": "b"}
+    path = tmp_path / "cfg.json"
+    path.write_text(json.dumps({"allow": {"filesize": [live, dead]}}))
+    matched = {"filesize": {_entry_key(live)}}
+    assert _find_stale(str(path), matched) == [
+        {"gate": "filesize", "pattern": "dead.py", "reason": "b"}
+    ]
+
+
+def test_find_stale_config_without_allow_key(tmp_path):
+    path = tmp_path / "cfg.json"
+    path.write_text(json.dumps({"other": "data"}))
+    assert _find_stale(str(path), {"filesize": set()}) == []
+
+
+def test_print_table_empty_rows_prints_nothing(capsys):
+    _print_table("Title", "desc", [])
+    assert capsys.readouterr().out == ""
+
+
+def test_print_table_renders_header_count_description_and_row(capsys):
+    _print_table(
+        "Active",
+        "Desc here.",
+        [{"gate": "filesize", "pattern": "big.py", "reason": "legacy"}],
     )
-    out = _run(str(pd))
-    assert out.count("foo.py") == 1
-    assert "bar.py" in out
-    assert "Active Exceptions (2)" in out
+    out = capsys.readouterr().out
+    assert "## Active (1)" in out
+    assert "Desc here." in out
+    assert "| Gate | Pattern | Reason |" in out
+    assert "|------|---------|--------|" in out
+    assert "| filesize | `big.py` | legacy |" in out
 
 
-def test_stale_detection(tmp_path):
-    """Entry in config but not matched should appear as stale."""
-    pd = tmp_path / "proof"
-    pd.mkdir()
-    _write_jsonl(
-        str(pd / "allow-tracking-filesize.jsonl"),
-        [{"gate": "filesize", "pattern": "used.py", "reason": "ok"}],
-    )
-    cfg = tmp_path / "sdlc.config.json"
-    _write_config(
-        str(cfg),
-        {
-            "filesize": [
-                {"file": "used.py", "reason": "ok"},
-                {"file": "unused.py", "reason": "obsolete"},
-            ]
-        },
-    )
-    out = _run(str(pd), str(cfg))
-    assert "Stale Exceptions (1)" in out
-    assert "unused.py" in out
-    assert "obsolete" in out
-
-
-def test_pipe_escaping(tmp_path):
-    """Pipes in pattern and reason must be escaped for markdown tables."""
-    pd = tmp_path / "proof"
-    pd.mkdir()
-    _write_jsonl(
-        str(pd / "allow-tracking-lint.jsonl"),
-        [{"gate": "lint", "pattern": "a|b.py", "reason": "x|y"}],
-    )
-    out = _run(str(pd))
-    assert "a\\|b.py" in out
+def test_print_table_escapes_pipe_characters(capsys):
+    _print_table("T", "D", [{"gate": "g", "pattern": "a|b", "reason": "x|y"}])
+    out = capsys.readouterr().out
+    assert "`a\\|b`" in out
     assert "x\\|y" in out
 
 
-def test_missing_proof_dir(tmp_path):
-    """Nonexistent PROOF_DIR produces empty output (no sections)."""
-    missing = tmp_path / "does-not-exist"
-    out = _run(str(missing))
-    assert "Active Exceptions" not in out
-    assert "Stale Exceptions" not in out
+def test_print_table_missing_pattern_and_reason_render_empty(capsys):
+    _print_table("T", "D", [{"gate": "g"}])
+    assert "| g | `` |  |" in capsys.readouterr().out
 
 
-def test_missing_config_file(tmp_path):
-    """No config file means no stale section, but active still prints."""
-    pd = tmp_path / "proof"
-    pd.mkdir()
-    _write_jsonl(
-        str(pd / "allow-tracking-filesize.jsonl"),
-        [{"gate": "filesize", "pattern": "foo.py", "reason": "r"}],
+def test_print_table_row_count_reflects_row_length(capsys):
+    rows = [{"gate": f"g{i}", "pattern": "p", "reason": "r"} for i in range(3)]
+    _print_table("Many", "D", rows)
+    assert "## Many (3)" in capsys.readouterr().out
+
+
+def test_resolve_config_file_from_env(monkeypatch):
+    monkeypatch.setenv("SDLC_CONFIG_FILE", "/path/to/custom.json")
+    assert _resolve_config_file() == "/path/to/custom.json"
+
+
+def test_resolve_config_file_prefers_sdlc_over_dot_sdlc(tmp_path, monkeypatch):
+    monkeypatch.delenv("SDLC_CONFIG_FILE", raising=False)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "sdlc.config.json").write_text("{}")
+    (tmp_path / ".sdlc.config.json").write_text("{}")
+    assert _resolve_config_file() == "sdlc.config.json"
+
+
+def test_resolve_config_file_finds_dot_sdlc_when_no_plain(tmp_path, monkeypatch):
+    monkeypatch.delenv("SDLC_CONFIG_FILE", raising=False)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".sdlc.config.json").write_text("{}")
+    assert _resolve_config_file() == ".sdlc.config.json"
+
+
+def test_resolve_config_file_no_candidates_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.delenv("SDLC_CONFIG_FILE", raising=False)
+    monkeypatch.chdir(tmp_path)
+    assert _resolve_config_file() == ""
+
+
+def test_main_empty_proof_dir_prints_nothing(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PROOF_DIR", str(tmp_path))
+    monkeypatch.delenv("SDLC_CONFIG_FILE", raising=False)
+    main()
+    assert capsys.readouterr().out == ""
+
+
+def test_main_default_proof_dir_when_env_unset(tmp_path, monkeypatch, capsys):
+    # Default ".quality/proof" doesn't exist inside tmp_path → empty output.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("PROOF_DIR", raising=False)
+    monkeypatch.delenv("SDLC_CONFIG_FILE", raising=False)
+    main()
+    assert capsys.readouterr().out == ""
+
+
+def test_main_active_and_stale_both_rendered(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    proof_dir = tmp_path / "proof"
+    proof_dir.mkdir()
+    live = {"file": "live.py", "reason": "active"}
+    dead = {"file": "dead.py", "reason": "obsolete"}
+    tracking = {"gate": "filesize", "pattern": "live.py",
+                "entry_key": _entry_key(live), **live}
+    _write_jsonl(proof_dir / "allow-tracking-filesize.jsonl", [tracking])
+    (tmp_path / "sdlc.config.json").write_text(
+        json.dumps({"allow": {"filesize": [live, dead]}})
     )
-    out = _run(str(pd), str(tmp_path / "nonexistent.json"))
-    assert "Active Exceptions (1)" in out
-    assert "Stale Exceptions" not in out
+    monkeypatch.setenv("PROOF_DIR", str(proof_dir))
+    monkeypatch.delenv("SDLC_CONFIG_FILE", raising=False)
+    main()
+    out = capsys.readouterr().out
+    assert "## Active Exceptions (1)" in out
+    assert "live.py" in out
+    assert "## Stale Exceptions (1)" in out
+    assert "dead.py" in out
+    assert "obsolete" in out
 
 
-def test_invalid_json_lines_skipped(tmp_path):
-    """Bad JSON lines are skipped; valid lines still render."""
-    pd = tmp_path / "proof"
-    pd.mkdir()
-    with open(pd / "allow-tracking-lint.jsonl", "w") as f:
-        f.write("not json\n")
-        rec = {
-            "gate": "lint",
-            "pattern": "ok.py",
-            "reason": "r",
-            "entry_key": _entry_key(file="ok.py"),
-        }
-        f.write(json.dumps(rec) + "\n")
-        f.write("{broken\n")
-    out = _run(str(pd))
-    assert "Active Exceptions (1)" in out
-    assert "ok.py" in out
-
-
-def test_gates_not_in_matched_excluded_from_stale(tmp_path):
-    """Config gate with no tracking file should not produce stale entries."""
-    pd = tmp_path / "proof"
-    pd.mkdir()
-    # No tracking file written → matched_patterns_per_gate is empty.
-    cfg = tmp_path / "sdlc.config.json"
-    _write_config(
-        str(cfg),
-        {"filesize": [{"file": "x.py", "reason": "r"}]},
-    )
-    out = _run(str(pd), str(cfg))
-    assert "Stale Exceptions" not in out
-
-
-def test_entry_shape_fallback(tmp_path):
-    """Stale detection honors file → pattern → type priority."""
-    pd = tmp_path / "proof"
-    pd.mkdir()
-    # Register the gate so it's in matched_patterns_per_gate.
-    _write_jsonl(
-        str(pd / "allow-tracking-complexity.jsonl"),
-        [{"gate": "complexity", "pattern": "matched.py", "reason": "r"}],
-    )
-    cfg = tmp_path / "sdlc.config.json"
-    _write_config(
-        str(cfg),
-        {
-            "complexity": [
-                {"file": "f.py", "reason": "via-file"},
-                {"pattern": "p.py", "reason": "via-pattern"},
-                {"type": "t.py", "reason": "via-type"},
-                {"reason": "no-key"},
-            ]
-        },
-    )
-    out = _run(str(pd), str(cfg))
-    assert "via-file" in out
-    assert "via-pattern" in out
-    assert "via-type" in out
-    # Entry with no identifying key is skipped.
-    assert "no-key" not in out
-
-
-def test_multi_field_entries_distinguished_by_entry_key(tmp_path):
-    """Dead-code entries sharing a file but differing by name must be tracked
-    independently — one matched, the other stale."""
-    pd = tmp_path / "proof"
-    pd.mkdir()
-    matched_key = _entry_key(file="a.py", name="foo", type="unused_import")
-    with open(pd / "allow-tracking-dead-code.jsonl", "w") as f:
-        f.write(
-            json.dumps(
-                {
-                    "gate": "dead-code",
-                    "pattern": "a.py",
-                    "reason": "r1",
-                    "entry_key": matched_key,
-                }
-            )
-            + "\n"
-        )
-    cfg = tmp_path / "sdlc.config.json"
-    _write_config(
-        str(cfg),
-        {
-            "dead-code": [
-                {
-                    "file": "a.py",
-                    "name": "foo",
-                    "type": "unused_import",
-                    "reason": "r1 matched",
-                },
-                {
-                    "file": "a.py",
-                    "name": "bar",
-                    "type": "unused_import",
-                    "reason": "r2 should be stale",
-                },
-            ]
-        },
-    )
-    out = _run(str(pd), str(cfg))
-    assert "Stale Exceptions (1)" in out
-    assert "r2 should be stale" in out
-    assert "r1 matched" not in out
-
-
-def test_invalid_config_json(tmp_path):
-    """Invalid JSON in config file is tolerated (no stale section)."""
-    pd = tmp_path / "proof"
-    pd.mkdir()
-    _write_jsonl(
-        str(pd / "allow-tracking-lint.jsonl"),
-        [{"gate": "lint", "pattern": "ok.py", "reason": "r"}],
-    )
-    cfg = tmp_path / "sdlc.config.json"
-    cfg.write_text("{not valid json")
-    out = _run(str(pd), str(cfg))
-    assert "Active Exceptions (1)" in out
-    assert "Stale Exceptions" not in out
+def test_module_runs_as_main(tmp_path, monkeypatch, capsys):
+    import runpy
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PROOF_DIR", str(tmp_path))
+    monkeypatch.delenv("SDLC_CONFIG_FILE", raising=False)
+    monkeypatch.setattr("sys.argv", ["render_exceptions.py"])
+    runpy.run_path(render_exceptions.__file__, run_name="__main__")
+    assert capsys.readouterr().out == ""
