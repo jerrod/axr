@@ -1,6 +1,6 @@
-# CLAUDE.md — axr marketplace
+# CLAUDE.md — agent-plugins marketplace
 
-This repo is a Claude Code plugin marketplace. It currently hosts `axr` with room for more plugins.
+This repo is a Claude Code plugin marketplace named `agent-plugins`. It currently hosts `axr`, `revue`, and `therapist`, with room for more plugins.
 
 ## Layout
 
@@ -25,10 +25,11 @@ Always use the `bin/` scripts — never run the underlying tools directly.
 
 All paths here are **repo-root-relative** (paths inside a plugin's own docs are plugin-root-relative).
 
-1. Create `plugins/<new-name>/` with its own `.claude-plugin/plugin.json`, `commands/`, `scripts/`, `docs/`, `README.md`, `CLAUDE.md`.
-2. Add an entry to `.claude-plugin/marketplace.json` under `plugins[]` including `name`, `description`, `source` (relative path starting `./`), and `category`.
-3. If the plugin needs schema checks the marketplace validator doesn't cover (e.g., rubric integrity), add an executable `plugins/<new-name>/bin/validate` — marketplace `bin/validate` will invoke it automatically.
-4. Run `bin/validate` at repo root to confirm the new plugin integrates.
+1. Create `plugins/<new-name>/` with its own `.claude-plugin/plugin.json` (`name`, `version`, `description` required), a `README.md`, and a `CLAUDE.md`.
+2. Add **at least one entry-point directory** — any of `commands/`, `skills/`, or `agents/`. The marketplace validator requires at least one. `scripts/`, `docs/`, and `examples/` are optional and only relevant if the plugin uses them (e.g. `axr` and `therapist` ship bash scripts; `revue` is pure agent orchestration with neither). See `plugins/revue/` for the canonical agent-only layout.
+3. Add an entry to `.claude-plugin/marketplace.json` under `plugins[]` including `name`, `description`, `source` (relative path starting `./`), and `category`.
+4. If the plugin needs schema checks the marketplace validator doesn't cover (e.g., rubric integrity), add an executable `plugins/<new-name>/bin/validate` — marketplace `bin/validate` will invoke it automatically.
+5. Run `bin/validate` at repo root to confirm the new plugin integrates.
 
 ## Agent Boundaries
 

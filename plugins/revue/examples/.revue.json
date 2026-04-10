@@ -1,0 +1,25 @@
+{
+  "instructions": "This is a Python FastAPI project using SQLAlchemy async sessions. We follow clean architecture: business logic in /services, DB access in /repository.",
+  "docs": [
+    "https://docs.example.com/api-guidelines",
+    "https://docs.example.com/security-policy"
+  ],
+  "ignore": [
+    "*.generated.ts",
+    "vendor/**",
+    "db/migrations/**",
+    "*.lock"
+  ],
+  "agents": {
+    "enabled": ["architect", "security", "correctness", "style"],
+    "architect": {
+      "instructions": "We use hexagonal architecture. Flag any direct DB access outside /repository."
+    },
+    "security": {
+      "instructions": "Auth is via API key (X-API-Key header). Check for missing auth on new endpoints."
+    }
+  },
+  "severity_threshold": "low",
+  "auto_approve": false,
+  "max_inline_comments": 25
+}

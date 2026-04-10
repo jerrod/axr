@@ -1,0 +1,16 @@
+{
+  "name": "revue",
+  "version": "1.0.0",
+  "description": "Enterprise code review agent team — 4 specialized reviewers analyze PRs in parallel",
+  "author": {
+    "name": "arqu-co"
+  },
+  "keywords": [
+    "code-review",
+    "security",
+    "architecture",
+    "correctness",
+    "style",
+    "agents"
+  ]
+}

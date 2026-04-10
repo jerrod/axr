@@ -1,24 +1,23 @@
 #!/usr/bin/env bash
-# bin/validate — structural integrity checks for the jerrod/axr marketplace.
+# bin/validate — structural integrity checks for the agent-plugins marketplace.
 #
-# Checks:
-#   1. Every *.json file parses with jq.
-#   2. .claude-plugin/marketplace.json has name + owner + plugins[] with
-#      name/description/source/category on every entry, relative sources.
-#   3. For each plugin under plugins/*/ (containment-checked against repo root):
-#        a. .claude-plugin/plugin.json has name, version, description (Claude
-#           Code auto-discovers commands from commands/*.md — no manifest
-#           registration needed, and including a `commands` field fails
-#           Claude Code's plugin-install schema validation).
-#        b. commands/ directory present with at least one *.md, each having
-#           closed YAML frontmatter with description:.
-#        c. scripts/ directory present with at least one *.sh, all executable.
-#        d. If bin/validate exists and is executable, invoke it (plugin-local
-#           validation hook — e.g., rubric schema checks).
-#        e. If agents/ directory exists, every *.md (except SCHEMA.md/README.md)
-#           must have closed YAML frontmatter with a description: field.
+# Checks: (1) every *.json parses; (2) marketplace.json manifest fields and
+# relative source paths; (3) per-plugin: plugin.json fields, at least one
+# entry-point dir (commands/|skills/|agents/), frontmatter on each, optional
+# scripts/ executability, and plugin-local bin/validate hook.
 
 set -uo pipefail
+
+ERRORS=()
+
+pass() { printf '  ✓ %s\n' "$1"; }
+fail() { printf '  ✗ %s\n' "$1"; ERRORS+=("$1"); }
+section() { printf '\n%s\n' "$1"; }
+
+# sanitize — strip shell-unsafe chars (including newlines and tabs) from
+# strings flowing into error output so a malicious marketplace.json cannot
+# inject fake pass/fail lines via embedded control characters.
+sanitize() { printf '%s' "$1" | tr -d "\$()\`\n\r\t<>&|"; }
 
 cd_repo_root() {
     local root
@@ -35,19 +34,57 @@ has_closed_frontmatter() {
     awk 'FNR>1 && /^---$/ {found=1; exit} END{exit !found}' "$file"
 }
 
-# sanitize — strip shell-unsafe chars from strings flowing into error output.
-sanitize() { printf '%s' "$1" | tr -d "\$()\`"; }
+# validate_frontmatter_dir <plugin_name> <label> <root> <name_glob> [mindepth] [maxdepth]
+# Iterates *.md under $root at the given depth bounds and asserts closed YAML
+# frontmatter with a description: field on each. SCHEMA.md and README.md are
+# basename-exempted (agents/ ports may carry these). Named positional args
+# instead of variadic — restricts callers to safe find usage.
+validate_frontmatter_dir() {
+    local plugin_name="$1" label="$2" root="$3" name_glob="$4"
+    local mindepth="${5:-}" maxdepth="${6:-}"
+
+    # find args in POSIX order: global opts (-P, -mindepth, -maxdepth) BEFORE
+    # predicates (-type, -name). GNU find warns otherwise.
+    local find_args=(-P "$root")
+    [ -n "$mindepth" ] && find_args+=(-mindepth "$mindepth")
+    [ -n "$maxdepth" ] && find_args+=(-maxdepth "$maxdepth")
+    find_args+=(-type f -not -type l -name "$name_glob")
+
+    local files=() found_any=false f base fm
+    while IFS= read -r -d '' f; do
+        found_any=true
+        base=$(basename "$f")
+        case "$base" in SCHEMA.md|README.md) continue ;; esac
+        files+=("$f")
+    done < <(find "${find_args[@]}" -print0 2>/dev/null)
+
+    if [ ${#files[@]} -eq 0 ]; then
+        if $found_any; then
+            fail "$plugin_name: $root contains only exempted files (SCHEMA.md/README.md) — no $label files"
+        else
+            fail "$plugin_name: $root exists but has no $label files"
+        fi
+        return 0
+    fi
+
+    for f in "${files[@]}"; do
+        if ! has_closed_frontmatter "$f"; then
+            fail "$plugin_name: $f missing or unclosed YAML frontmatter"
+            continue
+        fi
+        fm=$(awk 'NR==1 && /^---$/ {inside=1; next} inside && /^---$/ {exit} inside {print}' "$f")
+        if printf '%s\n' "$fm" | grep -Eq '^[[:space:]]*description:[[:space:]]*.+'; then
+            pass "$plugin_name: $f frontmatter has description"
+        else
+            fail "$plugin_name: $f frontmatter missing description:"
+        fi
+    done
+}
 
 cd_repo_root
 
 REPO_ROOT_REAL="$(pwd -P)" || { printf 'bin/validate: fatal: pwd -P failed\n' >&2; exit 1; }
 [ -n "$REPO_ROOT_REAL" ] || { printf 'bin/validate: fatal: REPO_ROOT_REAL is empty\n' >&2; exit 1; }
-
-ERRORS=()
-
-pass() { printf '  ✓ %s\n' "$1"; }
-fail() { printf '  ✗ %s\n' "$1"; ERRORS+=("$1"); }
-section() { printf '\n%s\n' "$1"; }
 
 # ---------------------------------------------------------------------------
 # Check 1: All *.json files parse
@@ -150,44 +187,49 @@ else
             done
         fi
 
-        # 3b. commands/ directory with at least one valid *.md
-        if [ ! -d "$plugin_dir/commands" ]; then
-            fail "$plugin_name: commands/ directory missing"
-        else
-            CMD_FILES=()
-            while IFS= read -r -d '' f; do
-                CMD_FILES+=("$f")
-            done < <(find -P "$plugin_dir/commands" -maxdepth 1 -type f -not -type l -name '*.md' -print0 2>/dev/null)
-
-            if [ ${#CMD_FILES[@]} -eq 0 ]; then
-                fail "$plugin_name: commands/ has no *.md files"
-            else
-                for f in "${CMD_FILES[@]}"; do
-                    if ! has_closed_frontmatter "$f"; then
-                        fail "$plugin_name: $f missing or unclosed YAML frontmatter"
-                        continue
-                    fi
-                    FM=$(awk 'NR==1 && /^---$/ {inside=1; next} inside && /^---$/ {exit} inside {print}' "$f")
-                    if printf '%s\n' "$FM" | grep -Eq '^[[:space:]]*description:[[:space:]]*.+'; then
-                        pass "$plugin_name: $f frontmatter has description"
-                    else
-                        fail "$plugin_name: $f frontmatter missing description:"
-                    fi
-                done
-            fi
+        # 3b. Entry-point requirement — plugin MUST have at least one of
+        # commands/, skills/, or agents/. Pure scripts-only plugins are not
+        # a supported Claude Code plugin shape.
+        has_commands=false; has_skills=false; has_agents=false
+        [ -d "$plugin_dir/commands" ] && has_commands=true
+        [ -d "$plugin_dir/skills" ]   && has_skills=true
+        [ -d "$plugin_dir/agents" ]   && has_agents=true
+        if ! $has_commands && ! $has_skills && ! $has_agents; then
+            fail "$plugin_name: no entry point — need at least one of commands/, skills/, agents/"
         fi
 
-        # 3c. scripts/ directory with executable *.sh files
-        if [ ! -d "$plugin_dir/scripts" ]; then
-            fail "$plugin_name: scripts/ directory missing"
-        else
+        # 3c. commands/ (optional) — flat *.md with description: frontmatter.
+        if $has_commands; then
+            validate_frontmatter_dir "$plugin_name" "command" \
+                "$plugin_dir/commands" '*.md' '' 1
+        fi
+
+        # 3d. skills/ (optional) — skills/<name>/SKILL.md with description:
+        # frontmatter. Assumes the standard skills/<name>/SKILL.md layout;
+        # nested sub-skills (skills/<name>/<sub>/SKILL.md) are not validated.
+        if $has_skills; then
+            validate_frontmatter_dir "$plugin_name" "skill" \
+                "$plugin_dir/skills" 'SKILL.md' 2 2
+        fi
+
+        # 3e. agents/ (optional) — recurses to support both flat (agents/foo.md)
+        # and nested (agents/foo/foo.md) layouts. SCHEMA.md / README.md exempt
+        # via validate_frontmatter_dir's basename filter.
+        if $has_agents; then
+            validate_frontmatter_dir "$plugin_name" "agent" \
+                "$plugin_dir/agents" '*.md'
+        fi
+
+        # 3f. scripts/ (optional) — if present, every *.sh must be executable.
+        # Agent-team plugins with no bash scripts are allowed.
+        if [ -d "$plugin_dir/scripts" ]; then
             SH_FILES=()
             while IFS= read -r -d '' f; do
                 SH_FILES+=("$f")
             done < <(find -P "$plugin_dir/scripts" -type f -not -type l -name '*.sh' -print0 2>/dev/null)
 
             if [ ${#SH_FILES[@]} -eq 0 ]; then
-                fail "$plugin_name: scripts/ has no *.sh files"
+                fail "$plugin_name: scripts/ exists but has no *.sh files"
             else
                 for f in "${SH_FILES[@]}"; do
                     if [ -x "$f" ]; then
@@ -199,35 +241,7 @@ else
             fi
         fi
 
-        # 3d. agents/ directory (optional) — if present, every *.md must have
-        # closed YAML frontmatter with description: (same rules as commands).
-        # SCHEMA.md and other non-agent docs are exempt (no frontmatter expected).
-        if [ -d "$plugin_dir/agents" ]; then
-            AGENT_FILES=()
-            while IFS= read -r -d '' f; do
-                AGENT_FILES+=("$f")
-            done < <(find -P "$plugin_dir/agents" -maxdepth 1 -type f -not -type l -name '*.md' -print0 2>/dev/null)
-
-            for f in "${AGENT_FILES[@]}"; do
-                base=$(basename "$f")
-                # Skip docs files that aren't agent definitions.
-                case "$base" in
-                    SCHEMA.md|README.md) continue ;;
-                esac
-                if ! has_closed_frontmatter "$f"; then
-                    fail "$plugin_name: $f missing or unclosed YAML frontmatter"
-                    continue
-                fi
-                FM=$(awk 'NR==1 && /^---$/ {inside=1; next} inside && /^---$/ {exit} inside {print}' "$f")
-                if printf '%s\n' "$FM" | grep -Eq '^[[:space:]]*description:[[:space:]]*.+'; then
-                    pass "$plugin_name: $f frontmatter has description"
-                else
-                    fail "$plugin_name: $f frontmatter missing description:"
-                fi
-            done
-        fi
-
-        # 3e. plugin-local validate hook — refuse symlinks entirely, then
+        # 3g. plugin-local validate hook — refuse symlinks entirely, then
         # containment-check the resolved parent dir. Rejecting symlinked
         # validate files eliminates the symlink-escape bypass and also
         # narrows the TOCTOU window by doing -L + exec back-to-back.

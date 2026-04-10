@@ -1,22 +1,40 @@
-# axr
+# agent-plugins
 
-Claude Code plugin marketplace by [jerrod](https://github.com/jerrod).
+Claude Code plugin marketplace by [jerrod](https://github.com/jerrod). Tools for agent-operated software engineering — readiness scoring, code review, and behavioral correction.
 
 ## Plugins
 
-### axr
+### axr — Agent eXecution Readiness scoring
 
-Agent eXecution Readiness scoring. Grades a repository against a 100-point rubric across 9 dimensions (tests & CI, docs, change surface, safety rails, structure, tooling, execution visibility, workflow realism) using deterministic bash checkers and judgment subagents. Produces a machine-readable JSON report and a human-readable markdown report per run.
+Grades a repository against a 100-point rubric across 12 dimensions using deterministic bash checkers and judgment subagents. Produces a machine-readable JSON report and a human-readable markdown report per run.
 
 See `plugins/axr/README.md` for details.
+
+### revue — Enterprise code review by a four-agent team
+
+Runs four specialized reviewers — **architect**, **security**, **correctness**, **style** — against a pull request diff in parallel, then aggregates findings into a single verdict with deduplication and severity sorting.
+
+> **⚠ Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`.** revue depends on Claude Code's experimental agent-team feature to spawn its four reviewers concurrently. Without this env var set, the `review-pr` skill cannot dispatch subagents. Add the export to your shell profile so every session has it:
+>
+> ```bash
+> export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+> ```
+
+See `plugins/revue/README.md` for details.
+
+### therapist — Diagnose and fix persistent rationalization patterns
+
+A CBT-adapted intervention framework for sessions where Claude repeatedly violates explicit rules. Bundles a `/therapist` slash command, ambient hooks that catch rationalization phrases live at `Write`/`Edit`/`Bash` tool use, and a reference toolbox of eleven techniques.
+
+See `plugins/therapist/README.md` for details.
 
 ## Quickstart
 
 ```bash
 # Install the marketplace in Claude Code
-# /plugin → Add Marketplace → jerrod/axr
+# /plugin → Add Marketplace → jerrod/agent-plugins
 
-# Validate the plugin structure
+# Validate the marketplace + every plugin
 bin/validate
 
 # Run linting (shellcheck + JSON + frontmatter)
@@ -30,15 +48,18 @@ bin/test
 
 In Claude Code:
 
-1. `/plugin` → Add Marketplace → `jerrod/axr`
+1. `/plugin` → Add Marketplace → `jerrod/agent-plugins`
 2. Choose the plugin(s) you want to install
+3. **For revue:** also set `export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in your shell profile
 
 ## For contributors
 
 The marketplace is structured as:
 
-- `plugins/<name>/` — each plugin self-contained
-- `bin/` — marketplace-level gate scripts
+- `plugins/<name>/` — each plugin self-contained (manifest, commands/skills/agents, scripts, docs, README, CLAUDE.md)
+- `bin/` — marketplace-level gate scripts that validate every plugin
 - `.claude-plugin/marketplace.json` — marketplace manifest
+
+Plugins may use any of `commands/`, `skills/`, or `agents/` as their entry point. `scripts/` is optional (agent-team plugins like revue have none).
 
 See `CLAUDE.md` for workflow conventions. All changes go through the rq workflow: plan → build → review → ship.
