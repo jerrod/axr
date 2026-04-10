@@ -237,17 +237,22 @@ else
                     elif [ ! -f "$build_stamp" ]; then
                         fail "$plugin_name: dist/codex/ missing .build-stamp — run bin/build-codex"
                     else
+                        # Staleness check: compare build-stamp content (ISO timestamp)
+                        # against the latest commit timestamp of watched source files.
+                        # Using git log instead of filesystem mtime because CI clones
+                        # set all mtimes to checkout time, making -newer unreliable.
                         stale=false
-                        if [ -n "$(find -P "$plugin_dir" \
-                            -not -path "$plugin_dir/dist/*" \
-                            \( \( -path "$plugin_dir/agents/*" -name '*.md' \) \
-                            -o \( -path "$plugin_dir/skills/*" -name 'SKILL.md' \) \
-                            -o \( -path "$plugin_dir/commands/*" -name '*.md' \) \
-                            -o \( -name "hooks.json" -path "$plugin_dir/hooks/*" \) \
-                            -o \( -name "plugin.json" -path "$plugin_dir/.claude-plugin/*" \) \
-                            -o \( -name "codex-hook-overrides.json" -path "$plugin_dir/*" \) \
-                            -o \( -name "AGENTS.md" -path "$plugin_dir/*" \) \) \
-                            -newer "$build_stamp" -print -quit 2>/dev/null)" ]; then
+                        build_ts=$(cat "$build_stamp")
+                        latest_source_ts=$(git log -1 --format=%aI -- \
+                            "$plugin_dir/agents" \
+                            "$plugin_dir/skills" \
+                            "$plugin_dir/commands" \
+                            "$plugin_dir/hooks/hooks.json" \
+                            "$plugin_dir/.claude-plugin/plugin.json" \
+                            "$plugin_dir/codex-hook-overrides.json" \
+                            "$plugin_dir/AGENTS.md" \
+                            2>/dev/null || echo "")
+                        if [ -n "$latest_source_ts" ] && [[ "$latest_source_ts" > "$build_ts" ]]; then
                             stale=true
                         fi
                         if $stale; then
