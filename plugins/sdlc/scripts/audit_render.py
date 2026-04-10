@@ -168,8 +168,8 @@ def _render_report():
     audit_dir = os.environ.get("AT_AUDIT_DIR", "")
 
     task = _read_task(audit_dir)
-    plan = _load(os.environ["AT_PLAN_FILE"]) if has_plan else None
-    trail = _load(os.environ["AT_TRAIL_FILE"]) if has_trail else None
+    plan = _load(os.environ.get("AT_PLAN_FILE", "")) if has_plan else None
+    trail = _load(os.environ.get("AT_TRAIL_FILE", "")) if has_trail else None
     entries = _entries(trail)
     plugin_version = trail.get("plugin_version", "unknown") if trail else "unknown"
 
@@ -187,7 +187,7 @@ def _render_report():
 
 
 def _render_show():
-    trail = _load(os.environ["AT_TRAIL_FILE"]) or {}
+    trail = _load(os.environ.get("AT_TRAIL_FILE", "")) or {}
     task = os.environ.get("AT_TASK", "")
     entries = trail.get("entries", [])
 

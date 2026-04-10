@@ -182,10 +182,18 @@ print(json.dumps(entry))
   # Append with lock if flock is available; otherwise write per-entry files
   if command -v flock >/dev/null 2>&1; then
     AT_TRAIL_FILE="$TRAIL_FILE" flock "$LOCK_FILE" python3 -c "
-import json, sys, os
-trail = json.load(open(os.environ['AT_TRAIL_FILE']))
+import json, os, sys, tempfile
+path = os.environ['AT_TRAIL_FILE']
+with open(path) as fh:
+    trail = json.load(fh)
 trail['entries'].append(json.loads(sys.stdin.read()))
-json.dump(trail, open(os.environ['AT_TRAIL_FILE'], 'w'), indent=2)
+# Atomic write: tmp file in same dir, then os.replace. Prevents a truncated
+# trail.json on SIGKILL mid-write (data integrity during CI cancellation).
+dir_ = os.path.dirname(path) or '.'
+with tempfile.NamedTemporaryFile('w', dir=dir_, delete=False, suffix='.tmp') as fh:
+    json.dump(trail, fh, indent=2)
+    tmp = fh.name
+os.replace(tmp, path)
 " <<<"$entry_json" || true
   else
     # No flock — write per-entry file to avoid concurrent write corruption
